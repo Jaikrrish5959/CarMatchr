@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Zap, Award, ArrowRight, Star,
   MapPin, SlidersHorizontal, Heart, Fuel, Gauge,
-  Phone, Mail, X, ChevronLeft, ChevronRight
+  Phone, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/useAuth';
 import { useData } from '../contexts/useData';
