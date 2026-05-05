@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cities } from '../data/carDatabase';
 
@@ -13,35 +13,70 @@ const Register: React.FC = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '' });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    setError('');
+  };
+
+  const validate = (): string | null => {
+    if (role === 'buyer' && !form.name.trim()) return 'Please enter your full name.';
+    if (role === 'broker') {
+      if (!form.businessName.trim()) return 'Please enter your dealership name.';
+      if (!form.license.trim()) return 'Please enter your license number.';
+      if (!form.city) return 'Please select your city.';
+      if (!form.phone.trim()) return 'Phone number is required for broker accounts.';
+    }
+    if (!form.email.trim()) return 'Please enter your email address.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
+    if (!form.password) return 'Please enter a password.';
+    if (form.password.length < 6) return 'Password must be at least 6 characters.';
+    if (form.phone && !/^[\d\s\+\-()]{7,15}$/.test(form.phone)) return 'Please enter a valid phone number.';
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await register({
-      id: `${role}-${Date.now()}`,
-      email: form.email,
-      password: form.password,
-      role,
-      status: role === 'broker' ? 'pending' : 'active',
-      name: role === 'buyer' ? form.name : undefined,
-      businessName: role === 'broker' ? form.businessName : undefined,
-      phone: form.phone || undefined,
-      license: role === 'broker' ? form.license : undefined,
-      city: form.city || undefined,
-    });
-    if (!result.ok) {
-      const message = result.error ?? 'Unable to create account.';
-      setError(message);
-      toast.error(message);
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      toast.error(validationError);
       return;
     }
+    setLoading(true);
     setError('');
-    navigate(role === 'buyer' ? '/buyer-dashboard' : '/broker-dashboard');
+    try {
+      const result = await register({
+        id: `${role}-${Date.now()}`,
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        role,
+        status: role === 'broker' ? 'pending' : 'active',
+        name: role === 'buyer' ? form.name.trim() : undefined,
+        businessName: role === 'broker' ? form.businessName.trim() : undefined,
+        phone: form.phone.trim() || undefined,
+        license: role === 'broker' ? form.license.trim() : undefined,
+        city: form.city || undefined,
+      });
+      if (!result.ok) {
+        const message = result.error ?? 'Unable to create account.';
+        setError(message);
+        toast.error(message);
+        return;
+      }
+      setError('');
+      if (role === 'broker') {
+        toast.success('Account created! Your broker account is pending admin approval.', { duration: 5000 });
+      } else {
+        toast.success('Account created successfully! Welcome to CarMatchr!');
+      }
+      navigate(role === 'buyer' ? '/buyer-dashboard' : '/broker-dashboard');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -71,25 +106,25 @@ const Register: React.FC = () => {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             {role === 'buyer' ? (
               <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input type="text" name="name" className="form-control" placeholder="John Doe" onChange={handleChange} required />
+                <label className="form-label">Full Name *</label>
+                <input type="text" name="name" className="form-control" placeholder="John Doe" value={form.name} onChange={handleChange} required />
               </div>
             ) : (
               <>
                 <div className="form-group">
-                  <label className="form-label">Dealership / Business Name</label>
-                  <input type="text" name="businessName" className="form-control" placeholder="ABC Motors" onChange={handleChange} required />
+                  <label className="form-label">Dealership / Business Name *</label>
+                  <input type="text" name="businessName" className="form-control" placeholder="ABC Motors" value={form.businessName} onChange={handleChange} required />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div className="form-group">
-                    <label className="form-label">License Number</label>
-                    <input type="text" name="license" className="form-control" placeholder="DL-12345" onChange={handleChange} required />
+                    <label className="form-label">License Number *</label>
+                    <input type="text" name="license" className="form-control" placeholder="DL-12345" value={form.license} onChange={handleChange} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">City</label>
+                    <label className="form-label">City *</label>
                     <select name="city" className="form-control" value={form.city} onChange={handleChange} required>
                       <option value="">Select your city</option>
                       {cities.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}, {c.state}</option>)}
@@ -100,26 +135,30 @@ const Register: React.FC = () => {
             )}
 
             <div className="form-group">
-              <label className="form-label">Phone Number</label>
-              <input type="tel" name="phone" className="form-control" placeholder="+91 9876543210" onChange={handleChange} required={role === 'broker'} />
+              <label className="form-label">Phone Number {role === 'broker' ? '*' : ''}</label>
+              <input type="tel" name="phone" className="form-control" placeholder="+91 9876543210" value={form.phone} onChange={handleChange} required={role === 'broker'} />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input type="email" name="email" className="form-control" placeholder="you@example.com" onChange={handleChange} required />
+              <label className="form-label">Email Address *</label>
+              <input type="email" name="email" className="form-control" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
             </div>
             <div className="form-group">
-              <label className="form-label">Password</label>
-              <input type="password" name="password" className="form-control" placeholder="Min. 8 characters" onChange={handleChange} required />
+              <label className="form-label">Password * <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)', fontWeight: 400 }}>(min. 6 characters)</span></label>
+              <input type="password" name="password" className="form-control" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} required />
             </div>
 
-            <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }}>
-              Create Account
+            <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+              {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Creating Account…</> : 'Create Account'}
             </button>
             {error && (
-              <p style={{ marginTop: '10px', color: 'var(--color-primary)', fontSize: '0.8125rem' }}>
-                {error}
-              </p>
+              <div style={{
+                marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                fontSize: '0.8125rem', fontWeight: 500,
+              }}>
+                ⚠️ {error}
+              </div>
             )}
           </form>
 

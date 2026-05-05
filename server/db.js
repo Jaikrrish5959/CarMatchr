@@ -1,8 +1,12 @@
 import path from 'path';
 import Database from 'better-sqlite3';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
-const dbPath = path.resolve(process.cwd(), 'db', 'carmatchr.sqlite');
+const isVercel = process.env.VERCEL === '1';
+const dbPath = isVercel
+  ? path.join('/tmp', 'carmatchr.sqlite')
+  : path.resolve(process.cwd(), 'db', 'carmatchr.sqlite');
+
 export const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');

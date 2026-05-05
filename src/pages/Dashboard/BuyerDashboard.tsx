@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useData } from '../../contexts/useData';
-import { Plus, X, Check, Clock, MessageSquare } from 'lucide-react';
+import { Plus, X, Check, Clock, MessageSquare, Loader2 } from 'lucide-react';
 import { useCatalog } from '../../contexts/useCatalog';
+import toast from 'react-hot-toast';
 
 const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ const BuyerDashboard: React.FC = () => {
   const [yearRange, setYearRange] = useState('');
   const [budget, setBudget] = useState('');
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const selectedBrand = brands.find((b) => b.name === make);
   const modelFeatures = selectedBrand?.models.find((m) => m.name === model)?.features ?? [];
 
@@ -22,10 +24,21 @@ const BuyerDashboard: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (user?.id) {
+    if (!make) { toast.error('Please select a car brand.'); return; }
+    if (!model) { toast.error('Please select a car model.'); return; }
+    if (!budget.trim()) { toast.error('Please enter your budget range.'); return; }
+    if (!user?.id) { toast.error('Please log in first.'); return; }
+
+    setSubmitting(true);
+    try {
       await addRequirement({ buyerId: user.id, make, model, yearRange, budget, preferredFeature: feature, description });
+      toast.success('Requirement posted! Brokers will now send you offers.');
       setShowForm(false);
       setMake(''); setModel(''); setFeature(''); setYearRange(''); setBudget(''); setDescription('');
+    } catch {
+      toast.error('Failed to post requirement. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -86,7 +99,9 @@ const BuyerDashboard: React.FC = () => {
                 <label className="form-label">Additional Details</label>
                 <textarea required className="form-control" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Condition preferences, urgency, trim level..." />
               </div>
-              <button type="submit" className="btn btn-primary">Submit Requirement</button>
+              <button type="submit" className="btn btn-primary" disabled={submitting}>
+                {submitting ? <><Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> Posting…</> : 'Submit Requirement'}
+              </button>
             </form>
           </div>
         )}

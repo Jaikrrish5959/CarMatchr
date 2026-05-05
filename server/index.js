@@ -3,22 +3,27 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { seedCatalog } from './catalogSeeder.js';
 
 const app = express();
 const PORT = 4001;
+const isVercel = process.env.VERCEL === '1';
+
 seedCatalog();
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'db', 'uploads')));
+
+// --- Upload directory ---
+const uploadsDir = isVercel
+  ? path.join('/tmp', 'uploads')
+  : path.resolve(process.cwd(), 'db', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+app.use('/uploads', express.static(uploadsDir));
 
 // --- Multer config for listing images ---
-const uploadsDir = path.resolve(process.cwd(), 'db', 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
@@ -28,7 +33,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per file
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = /jpeg|jpg|png|webp|gif/;
     cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
@@ -96,16 +101,14 @@ app.post('/api/auth/login', async (req, res) => {
   }
   const found = db.prepare('SELECT * FROM users WHERE email = ? AND role = ? LIMIT 1').get(email, role);
   if (!found) {
-    return res.status(401).json({ error: 'Invalid credentials.' });
+    return res.status(401).json({ error: 'Invalid credentials. Please check your email, password, and selected role.' });
   }
 
-  // Support both hashed and legacy plaintext passwords
   let passwordMatch = false;
   if (found.password.startsWith('$2')) {
     passwordMatch = await bcrypt.compare(password, found.password);
   } else {
     passwordMatch = found.password === password;
-    // Upgrade to hashed password on successful plaintext login
     if (passwordMatch) {
       const hashed = await bcrypt.hash(password, SALT_ROUNDS);
       db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, found.id);
@@ -113,7 +116,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   if (!passwordMatch) {
-    return res.status(401).json({ error: 'Invalid credentials.' });
+    return res.status(401).json({ error: 'Invalid credentials. Please check your password.' });
   }
   return res.json({ user: mapUser(found) });
 });
@@ -165,27 +168,24 @@ app.get('/api/data', (_req, res) => {
   const offers = db.prepare('SELECT * FROM offers ORDER BY createdAt DESC').all().map((o) => ({ ...o, isRead: !!o.isRead }));
   const brokerListings = db.prepare('SELECT * FROM brokerListings ORDER BY createdAt DESC').all();
 
-  // Attach images to each listing
   const imgStmt = db.prepare('SELECT imagePath, sortOrder FROM listingImages WHERE listingId = ? ORDER BY sortOrder');
-  const listingsWithImages = brokerListings.map((l) => ({
+  const leadStmt = db.prepare('SELECT COUNT(*) as cnt FROM contactEvents WHERE listingId = ?');
+  const listingsWithExtras = brokerListings.map((l) => ({
     ...l,
     images: imgStmt.all(l.id).map((r) => r.imagePath),
-  }));
-
-  // Attach lead counts to each listing
-  const leadStmt = db.prepare('SELECT COUNT(*) as cnt FROM contactEvents WHERE listingId = ?');
-  const listingsWithLeads = listingsWithImages.map((l) => ({
-    ...l,
     leadsCount: leadStmt.get(l.id)?.cnt ?? 0,
   }));
 
-  res.json({ requirements, offers, brokerListings: listingsWithLeads });
+  res.json({ requirements, offers, brokerListings: listingsWithExtras });
 });
 
 // ========== REQUIREMENTS ==========
 
 app.post('/api/requirements', (req, res) => {
   const payload = req.body;
+  if (!payload.buyerId || !payload.make || !payload.model || !payload.budget) {
+    return res.status(400).json({ error: 'Please fill in all required fields (make, model, budget).' });
+  }
   const id = `req-${Date.now()}`;
   db.prepare(`
     INSERT INTO requirements (id, buyerId, make, model, yearRange, budget, preferredFeature, description, status, createdAt)
@@ -195,10 +195,10 @@ app.post('/api/requirements', (req, res) => {
     buyerId: payload.buyerId,
     make: payload.make,
     model: payload.model,
-    yearRange: payload.yearRange,
+    yearRange: payload.yearRange || '',
     budget: payload.budget,
     preferredFeature: payload.preferredFeature ?? '',
-    description: payload.description,
+    description: payload.description || '',
     createdAt: new Date().toISOString(),
   });
   res.json({ ok: true, id });
@@ -213,6 +213,9 @@ app.patch('/api/requirements/:id/close', (req, res) => {
 
 app.post('/api/offers', (req, res) => {
   const o = req.body;
+  if (!o.requirementId || !o.brokerId || !o.price) {
+    return res.status(400).json({ error: 'Please provide all required offer details.' });
+  }
   const id = `offer-${Date.now()}`;
   db.prepare(`
     INSERT INTO offers (id, requirementId, brokerId, brokerName, brokerPhone, price, details, status, isRead, createdAt)
@@ -221,10 +224,10 @@ app.post('/api/offers', (req, res) => {
     id,
     requirementId: o.requirementId,
     brokerId: o.brokerId,
-    brokerName: o.brokerName,
-    brokerPhone: o.brokerPhone,
+    brokerName: o.brokerName || '',
+    brokerPhone: o.brokerPhone || '',
     price: o.price,
-    details: o.details,
+    details: o.details || '',
     createdAt: new Date().toISOString(),
   });
   res.json({ ok: true });
@@ -255,13 +258,30 @@ app.patch('/api/offers/:id/accept', (req, res) => {
 
 app.post('/api/listings', (req, res) => {
   const l = req.body;
+  if (!l.brokerId || !l.make || !l.model || !l.price || !l.city) {
+    return res.status(400).json({ error: 'Please fill in all required listing fields.' });
+  }
   const id = `bl-${Date.now()}`;
   db.prepare(`
     INSERT INTO brokerListings (id, brokerId, brokerName, make, model, variant, year, price, fuelType, transmission, bodyType, color, city, kmDriven, owners, description, status, createdAt)
     VALUES (@id, @brokerId, @brokerName, @make, @model, @variant, @year, @price, @fuelType, @transmission, @bodyType, @color, @city, @kmDriven, @owners, @description, 'active', @createdAt)
   `).run({
     id,
-    ...l,
+    brokerId: l.brokerId,
+    brokerName: l.brokerName || '',
+    make: l.make,
+    model: l.model,
+    variant: l.variant || '',
+    year: l.year || 2024,
+    price: l.price,
+    fuelType: l.fuelType || 'Petrol',
+    transmission: l.transmission || 'Manual',
+    bodyType: l.bodyType || 'SUV',
+    color: l.color || '',
+    city: l.city,
+    kmDriven: l.kmDriven || 0,
+    owners: l.owners || 1,
+    description: l.description || '',
     createdAt: new Date().toISOString(),
   });
   res.json({ ok: true, id });
@@ -358,6 +378,11 @@ app.patch('/api/admin/models/:id/image', (req, res) => {
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`CarMatchr API running on http://localhost:${PORT}`);
-});
+// Only listen when running locally (not on Vercel serverless)
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`CarMatchr API running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
