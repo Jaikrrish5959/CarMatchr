@@ -8,8 +8,8 @@ import { db } from './db.js';
 import { seedCatalog } from './catalogSeeder.js';
 
 const app = express();
-const PORT = 4001;
-const isVercel = process.env.VERCEL === '1';
+const PORT = process.env.PORT || 4001;
+const isVercel = !!process.env.VERCEL;
 
 seedCatalog();
 

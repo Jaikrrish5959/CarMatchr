@@ -2,7 +2,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 
-const isVercel = process.env.VERCEL === '1';
+const isVercel = !!process.env.VERCEL;
 const dbPath = isVercel
   ? path.join('/tmp', 'carmatchr.sqlite')
   : path.resolve(process.cwd(), 'db', 'carmatchr.sqlite');
