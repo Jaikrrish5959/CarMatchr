@@ -41,28 +41,60 @@ function importFile(filePath, mapper) {
   return count;
 }
 
+function seedLogos() {
+  const companiesPath = path.resolve(process.cwd(), 'companies.csv');
+  if (!fs.existsSync(companiesPath)) return;
+  const content = fs.readFileSync(companiesPath, 'utf8');
+  const rows = parse(content, { columns: true, skip_empty_lines: true });
+  const updateStmt = db.prepare('UPDATE brands SET logoUrl = ? WHERE LOWER(name) = LOWER(?)');
+
+  // Manual mappings for brands missing from companies.csv or with different names
+  const manualMappings = [
+    { name: 'Maruti', logo: 'https://www.carlogos.org/car-logos/suzuki-logo.png' },
+    { name: 'Maruti Suzuki', logo: 'https://www.carlogos.org/car-logos/suzuki-logo.png' },
+    { name: 'Tata', logo: 'https://www.carlogos.org/car-logos/tata-logo.png' },
+    { name: 'Mahindra', logo: 'https://www.carlogos.org/car-logos/mahindra-logo.png' },
+    { name: 'Skoda', logo: 'https://www.carlogos.org/car-logos/skoda-logo.png' },
+    { name: 'Toyota', logo: 'https://www.carlogos.org/car-logos/toyota-logo.png' },
+  ];
+
+  for (const mapping of manualMappings) {
+    updateStmt.run(mapping.logo, mapping.name);
+  }
+
+  for (const row of rows) {
+    if (row.name && row.logo_link) {
+      updateStmt.run(row.logo_link, row.name);
+      // Also try normalized version just in case
+      updateStmt.run(row.logo_link, normalizeBrand(row.name));
+    }
+  }
+}
+
 export function seedCatalog() {
   const count = db.prepare('SELECT COUNT(*) as c FROM brands').get().c;
-  if (count > 0) return 0;
-  const carDekhoPath = path.resolve(process.cwd(), 'CAR DETAILS FROM CAR DEKHO.csv');
-  const carsExportPath = path.resolve(process.cwd(), 'Cars export 2026-04-28 12-08-05.csv');
+  if (count === 0) {
+    const carDekhoPath = path.resolve(process.cwd(), 'CAR DETAILS FROM CAR DEKHO.csv');
+    const carsExportPath = path.resolve(process.cwd(), 'Cars export 2026-04-28 12-08-05.csv');
 
-  const c1 = importFile(carDekhoPath, (row) => {
-    const name = String(row.name || '').trim();
-    if (!name) return null;
-    const parts = name.split(/\s+/);
-    const brand = normalizeBrand(parts[0]);
-    const model = normalizeModel(parts[1] || parts[0]);
-    if (!brand || !model) return null;
-    return { brand, model };
-  });
+    importFile(carDekhoPath, (row) => {
+      const name = String(row.name || '').trim();
+      if (!name) return null;
+      const parts = name.split(/\s+/);
+      const brand = normalizeBrand(parts[0]);
+      const model = normalizeModel(parts[1] || parts[0]);
+      if (!brand || !model) return null;
+      return { brand, model };
+    });
 
-  const c2 = importFile(carsExportPath, (row) => {
-    const brand = normalizeBrand(row.Manufacturer);
-    const model = normalizeModel(row.model);
-    if (!brand || !model) return null;
-    return { brand, model };
-  });
+    importFile(carsExportPath, (row) => {
+      const brand = normalizeBrand(row.Manufacturer);
+      const model = normalizeModel(row.model);
+      if (!brand || !model) return null;
+      return { brand, model };
+    });
+  }
 
-  return c1 + c2;
+  seedLogos();
+  return db.prepare('SELECT COUNT(*) as c FROM brands').get().c;
 }

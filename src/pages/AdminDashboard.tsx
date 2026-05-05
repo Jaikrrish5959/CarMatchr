@@ -109,6 +109,16 @@ const AdminDashboard: React.FC = () => {
     await refreshCatalog();
   };
 
+  const removeFeature = async (mId: number, fId: number) => {
+    await fetch('/api/admin/model-features', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelId: mId, featureId: fId }),
+    });
+    toast.success('Feature removed');
+    await refreshCatalog();
+  };
+
   return (
     <section className="section">
       <div className="container" style={{ maxWidth: '1100px' }}>
@@ -180,9 +190,27 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
           {selectedModel && (
-            <p style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--color-gray-500)' }}>
-              Current model features: {selectedModel.features.map((f) => f.name).join(', ') || 'None'}
-            </p>
+            <div style={{ marginTop: '12px' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginBottom: '8px' }}>
+                Current model features:
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {selectedModel.features.length === 0 ? (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-gray-400)', fontStyle: 'italic' }}>None</span>
+                ) : selectedModel.features.map((f) => (
+                  <span key={f.id} className="badge badge-info" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    padding: '5px 10px', fontSize: '0.75rem',
+                  }}>
+                    {f.name}
+                    <button onClick={() => removeFeature(selectedModelId!, f.id)} style={{
+                      background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)',
+                      padding: 0, lineHeight: 1, fontSize: '0.875rem', fontWeight: 700,
+                    }}>×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

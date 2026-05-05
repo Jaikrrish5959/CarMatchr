@@ -1,7 +1,8 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { brands, budgetRanges, bodyTypes, fuelTypes, transmissions, type Filters } from '../data/carDatabase';
+import { budgetRanges, bodyTypes, fuelTypes, transmissions, type Filters } from '../data/carDatabase';
 import { useLanguage } from '../contexts/useLanguage';
+import { useCatalog } from '../contexts/useCatalog';
 
 interface FilterPanelProps {
   filters: Filters;
@@ -12,6 +13,7 @@ interface FilterPanelProps {
 
 const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, onClose, resultCount }) => {
   const { t } = useLanguage();
+  const { brands } = useCatalog();
 
   const set = (key: keyof Filters, value: string | number) => {
     onChange({ ...filters, [key]: value });

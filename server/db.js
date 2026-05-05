@@ -1,5 +1,6 @@
 import path from 'path';
 import Database from 'better-sqlite3';
+import bcrypt from 'bcrypt';
 
 const dbPath = path.resolve(process.cwd(), 'db', 'carmatchr.sqlite');
 export const db = new Database(dbPath);
@@ -30,6 +31,7 @@ export function initDb() {
       model TEXT NOT NULL,
       yearRange TEXT NOT NULL,
       budget TEXT NOT NULL,
+      preferredFeature TEXT DEFAULT '',
       description TEXT NOT NULL,
       status TEXT NOT NULL,
       createdAt TEXT NOT NULL
@@ -93,20 +95,45 @@ export function initDb() {
       featureId INTEGER NOT NULL,
       UNIQUE(modelId, featureId)
     );
+
+    CREATE TABLE IF NOT EXISTS contactEvents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listingId TEXT NOT NULL,
+      buyerName TEXT NOT NULL DEFAULT 'Anonymous',
+      buyerEmail TEXT NOT NULL DEFAULT '',
+      buyerPhone TEXT NOT NULL DEFAULT '',
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS listingImages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listingId TEXT NOT NULL,
+      imagePath TEXT NOT NULL,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL
+    );
   `);
+
+  // Migration: add preferredFeature column if missing (existing DBs)
+  try {
+    db.prepare("SELECT preferredFeature FROM requirements LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE requirements ADD COLUMN preferredFeature TEXT DEFAULT ''");
+  }
 }
 
 initDb();
 
 const adminExists = db.prepare("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").get();
 if (!adminExists) {
+  const hashedPw = bcrypt.hashSync('admin123', 10);
   db.prepare(`
     INSERT INTO users (id, email, password, role, status, name, createdAt)
     VALUES (@id, @email, @password, @role, @status, @name, @createdAt)
   `).run({
     id: `admin-${Date.now()}`,
     email: 'admin@carmatchr.com',
-    password: 'admin123',
+    password: hashedPw,
     role: 'admin',
     status: 'active',
     name: 'Platform Admin',

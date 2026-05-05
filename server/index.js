@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import bcrypt from 'bcrypt';
 import { db } from './db.js';
 import { seedCatalog } from './catalogSeeder.js';
 
@@ -11,6 +14,28 @@ seedCatalog();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(path.resolve(process.cwd(), 'db', 'uploads')));
+
+// --- Multer config for listing images ---
+const uploadsDir = path.resolve(process.cwd(), 'db', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per file
+  fileFilter: (_req, file, cb) => {
+    const allowed = /jpeg|jpg|png|webp|gif/;
+    cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
+  },
+});
+
+const SALT_ROUNDS = 10;
 
 const mapUser = (row) => ({
   id: row.id,
@@ -24,7 +49,9 @@ const mapUser = (row) => ({
   city: row.city ?? undefined,
 });
 
-app.post('/api/auth/register', (req, res) => {
+// ========== AUTH ==========
+
+app.post('/api/auth/register', async (req, res) => {
   const user = req.body;
   if (!user?.email || !user?.password || !user?.role) {
     return res.status(400).json({ error: 'Missing required fields.' });
@@ -40,13 +67,15 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   const id = `${user.role}-${Date.now()}`;
+  const hashedPassword = await bcrypt.hash(user.password, SALT_ROUNDS);
+
   db.prepare(`
     INSERT INTO users (id, email, password, role, status, name, businessName, phone, license, city, createdAt)
     VALUES (@id, @email, @password, @role, @status, @name, @businessName, @phone, @license, @city, @createdAt)
   `).run({
     id,
     email: user.email,
-    password: user.password,
+    password: hashedPassword,
     role: user.role,
     status: user.role === 'broker' ? 'pending' : 'active',
     name: user.name ?? null,
@@ -60,17 +89,36 @@ app.post('/api/auth/register', (req, res) => {
   return res.json({ user: mapUser(created) });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body;
   if (!email || !password || !role) {
     return res.status(400).json({ error: 'Email, password and role are required.' });
   }
   const found = db.prepare('SELECT * FROM users WHERE email = ? AND role = ? LIMIT 1').get(email, role);
-  if (!found || found.password !== password) {
+  if (!found) {
+    return res.status(401).json({ error: 'Invalid credentials.' });
+  }
+
+  // Support both hashed and legacy plaintext passwords
+  let passwordMatch = false;
+  if (found.password.startsWith('$2')) {
+    passwordMatch = await bcrypt.compare(password, found.password);
+  } else {
+    passwordMatch = found.password === password;
+    // Upgrade to hashed password on successful plaintext login
+    if (passwordMatch) {
+      const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+      db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, found.id);
+    }
+  }
+
+  if (!passwordMatch) {
     return res.status(401).json({ error: 'Invalid credentials.' });
   }
   return res.json({ user: mapUser(found) });
 });
+
+// ========== USERS ==========
 
 app.patch('/api/users/:id/status', (req, res) => {
   const { id } = req.params;
@@ -82,6 +130,8 @@ app.patch('/api/users/:id/status', (req, res) => {
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   return res.json({ user: mapUser(row) });
 });
+
+// ========== CATALOG ==========
 
 app.get('/api/catalog/brands', (_req, res) => {
   const brands = db.prepare('SELECT id, name, logoUrl FROM brands ORDER BY name').all();
@@ -108,19 +158,38 @@ app.get('/api/catalog/features', (_req, res) => {
   res.json(rows);
 });
 
+// ========== DATA (bulk fetch) ==========
+
 app.get('/api/data', (_req, res) => {
   const requirements = db.prepare('SELECT * FROM requirements ORDER BY createdAt DESC').all();
   const offers = db.prepare('SELECT * FROM offers ORDER BY createdAt DESC').all().map((o) => ({ ...o, isRead: !!o.isRead }));
   const brokerListings = db.prepare('SELECT * FROM brokerListings ORDER BY createdAt DESC').all();
-  res.json({ requirements, offers, brokerListings });
+
+  // Attach images to each listing
+  const imgStmt = db.prepare('SELECT imagePath, sortOrder FROM listingImages WHERE listingId = ? ORDER BY sortOrder');
+  const listingsWithImages = brokerListings.map((l) => ({
+    ...l,
+    images: imgStmt.all(l.id).map((r) => r.imagePath),
+  }));
+
+  // Attach lead counts to each listing
+  const leadStmt = db.prepare('SELECT COUNT(*) as cnt FROM contactEvents WHERE listingId = ?');
+  const listingsWithLeads = listingsWithImages.map((l) => ({
+    ...l,
+    leadsCount: leadStmt.get(l.id)?.cnt ?? 0,
+  }));
+
+  res.json({ requirements, offers, brokerListings: listingsWithLeads });
 });
+
+// ========== REQUIREMENTS ==========
 
 app.post('/api/requirements', (req, res) => {
   const payload = req.body;
   const id = `req-${Date.now()}`;
   db.prepare(`
-    INSERT INTO requirements (id, buyerId, make, model, yearRange, budget, description, status, createdAt)
-    VALUES (@id, @buyerId, @make, @model, @yearRange, @budget, @description, 'open', @createdAt)
+    INSERT INTO requirements (id, buyerId, make, model, yearRange, budget, preferredFeature, description, status, createdAt)
+    VALUES (@id, @buyerId, @make, @model, @yearRange, @budget, @preferredFeature, @description, 'open', @createdAt)
   `).run({
     id,
     buyerId: payload.buyerId,
@@ -128,16 +197,19 @@ app.post('/api/requirements', (req, res) => {
     model: payload.model,
     yearRange: payload.yearRange,
     budget: payload.budget,
+    preferredFeature: payload.preferredFeature ?? '',
     description: payload.description,
     createdAt: new Date().toISOString(),
   });
-  res.json({ ok: true });
+  res.json({ ok: true, id });
 });
 
 app.patch('/api/requirements/:id/close', (req, res) => {
   db.prepare("UPDATE requirements SET status = 'closed' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
 });
+
+// ========== OFFERS ==========
 
 app.post('/api/offers', (req, res) => {
   const o = req.body;
@@ -179,6 +251,8 @@ app.patch('/api/offers/:id/accept', (req, res) => {
   res.json({ ok: true });
 });
 
+// ========== BROKER LISTINGS ==========
+
 app.post('/api/listings', (req, res) => {
   const l = req.body;
   const id = `bl-${Date.now()}`;
@@ -190,13 +264,64 @@ app.post('/api/listings', (req, res) => {
     ...l,
     createdAt: new Date().toISOString(),
   });
-  res.json({ ok: true });
+  res.json({ ok: true, id });
 });
 
 app.patch('/api/listings/:id/sold', (req, res) => {
   db.prepare("UPDATE brokerListings SET status = 'sold' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
 });
+
+// ========== LISTING IMAGES ==========
+
+app.post('/api/listings/:id/images', upload.array('images', 10), (req, res) => {
+  const listingId = req.params.id;
+  const listing = db.prepare('SELECT id FROM brokerListings WHERE id = ?').get(listingId);
+  if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+
+  const files = req.files || [];
+  const insertStmt = db.prepare(
+    'INSERT INTO listingImages (listingId, imagePath, sortOrder, createdAt) VALUES (?, ?, ?, ?)'
+  );
+  const now = new Date().toISOString();
+  const paths = [];
+  files.forEach((file, i) => {
+    const relativePath = `/uploads/${file.filename}`;
+    insertStmt.run(listingId, relativePath, i, now);
+    paths.push(relativePath);
+  });
+
+  res.json({ ok: true, images: paths });
+});
+
+app.get('/api/listings/:id/images', (req, res) => {
+  const images = db.prepare('SELECT imagePath FROM listingImages WHERE listingId = ? ORDER BY sortOrder')
+    .all(req.params.id)
+    .map((r) => r.imagePath);
+  res.json(images);
+});
+
+// ========== CONTACT EVENTS ==========
+
+app.post('/api/listings/:id/contact', (req, res) => {
+  const listingId = req.params.id;
+  const listing = db.prepare('SELECT id FROM brokerListings WHERE id = ?').get(listingId);
+  if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+
+  const { buyerName, buyerEmail, buyerPhone } = req.body;
+  db.prepare(
+    'INSERT INTO contactEvents (listingId, buyerName, buyerEmail, buyerPhone, createdAt) VALUES (?, ?, ?, ?, ?)'
+  ).run(listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone || '', new Date().toISOString());
+
+  res.json({ ok: true });
+});
+
+app.get('/api/listings/:id/leads', (req, res) => {
+  const leads = db.prepare('SELECT * FROM contactEvents WHERE listingId = ? ORDER BY createdAt DESC').all(req.params.id);
+  res.json(leads);
+});
+
+// ========== ADMIN ==========
 
 app.get('/api/admin/users', (_req, res) => {
   const rows = db.prepare('SELECT id, email, role, status, name, businessName, phone, city FROM users ORDER BY createdAt DESC').all();
@@ -213,6 +338,13 @@ app.post('/api/admin/features', (req, res) => {
 app.post('/api/admin/model-features', (req, res) => {
   const { modelId, featureId } = req.body;
   db.prepare('INSERT OR IGNORE INTO modelFeatures(modelId, featureId) VALUES (?, ?)').run(modelId, featureId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/model-features', (req, res) => {
+  const { modelId, featureId } = req.body;
+  if (!modelId || !featureId) return res.status(400).json({ error: 'modelId and featureId required.' });
+  db.prepare('DELETE FROM modelFeatures WHERE modelId = ? AND featureId = ?').run(modelId, featureId);
   res.json({ ok: true });
 });
 

@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "node server/index.js",
+    "dev:all": "concurrently -n vite,api -c cyan,green \"npm run dev\" \"npm run dev:server\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:catalog": "node server/seedCatalog.js"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.9.0",
+    "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "csv-parse": "^6.2.1",
     "express": "^5.2.1",

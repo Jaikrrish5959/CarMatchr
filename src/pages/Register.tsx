@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
 import { UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { cities } from '../data/carDatabase';
 
 const Register: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -15,7 +16,7 @@ const Register: React.FC = () => {
 
   const [form, setForm] = useState({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '' });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -89,7 +90,10 @@ const Register: React.FC = () => {
                   </div>
                   <div className="form-group">
                     <label className="form-label">City</label>
-                    <input type="text" name="city" className="form-control" placeholder="Mumbai" onChange={handleChange} required />
+                    <select name="city" className="form-control" value={form.city} onChange={handleChange} required>
+                      <option value="">Select your city</option>
+                      {cities.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}, {c.state}</option>)}
+                    </select>
                   </div>
                 </div>
               </>

@@ -10,7 +10,15 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang, setLang] = useState<Language>('en');
+  const [lang, setLangState] = useState<Language>(() => {
+    const saved = localStorage.getItem('carmatchr_lang');
+    return (saved && ['en', 'hi', 'ta', 'te', 'kn'].includes(saved)) ? saved as Language : 'en';
+  });
+
+  const setLang = (l: Language) => {
+    setLangState(l);
+    localStorage.setItem('carmatchr_lang', l);
+  };
 
   const t = (key: string): string => {
     const dict = translations[lang] as Record<string, string>;

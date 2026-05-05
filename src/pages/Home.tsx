@@ -2,8 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Zap, Award, ArrowRight, Star,
-  MapPin, SlidersHorizontal, Heart, Fuel, Gauge
+  MapPin, SlidersHorizontal, Heart, Fuel, Gauge,
+  Phone, Mail, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { useAuth } from '../contexts/useAuth';
 import { useData } from '../contexts/useData';
 import { useLanguage } from '../contexts/useLanguage';
 import {
@@ -29,7 +31,12 @@ const Home: React.FC = () => {
   const [showMarketplace, setShowMarketplace] = useState(true);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [sort, setSort] = useState<SortOption>('relevance');
-  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+  const [wishlist, setWishlist] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem('carmatchr_wishlist'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
+  });
+  const [contactModal, setContactModal] = useState<{ brokerName: string; phone: string; email: string; listingId: string } | null>(null);
+  const [activeImage, setActiveImage] = useState<Record<string, number>>({});
+  const { user } = useAuth();
 
   // --- Convert broker listings to CarListing format ---
   const brokerCarsAsListings: CarListing[] = useMemo(() =>
@@ -58,6 +65,7 @@ const Home: React.FC = () => {
       isFeatured: false,
       kmDriven: l.kmDriven,
       owners: l.owners,
+      images: l.images,
     }))
   , [brokerListings, brands]);
 
@@ -74,13 +82,23 @@ const Home: React.FC = () => {
   const toggleWish = (id: string) => {
     setWishlist(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      localStorage.setItem('carmatchr_wishlist', JSON.stringify([...next]));
       return next;
     });
+  };
+
+  const handleContactBroker = (car: CarListing) => {
+    const bl = brokerListings.find(l => l.id === car.id);
+    if (!bl) return;
+    setContactModal({ brokerName: bl.brokerName, phone: bl.brokerName, email: '', listingId: bl.id });
+    // Also get broker user info for phone/email
+    fetch(`/api/listings/${bl.id}/contact`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buyerName: user?.name || 'Anonymous', buyerEmail: user?.email || '', buyerPhone: user?.phone || '' }),
+    }).catch(console.error);
+    // Show broker contact details from the listing
+    setContactModal({ brokerName: bl.brokerName, phone: user?.phone || 'N/A', email: '', listingId: bl.id });
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -114,14 +132,71 @@ const Home: React.FC = () => {
   ];
 
   // --- CAR CARD RENDERER ---
-  const renderCarCard = (car: typeof carListings[0], showWish = true) => (
-    <div key={car.id} className="card card-hoverable" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ position: 'relative', height: '180px', overflow: 'hidden' }}>
-        <img src={car.image} alt={`${car.make} ${car.model}`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }}
-          onMouseOver={e => (e.currentTarget.style.transform = 'scale(1.05)')}
-          onMouseOut={e => (e.currentTarget.style.transform = 'scale(1)')} />
-        {car.isFeatured && (
+  const renderCarCard = (car: typeof carListings[0], showWish = true) => {
+    const hasMultipleImages = car.images && car.images.length > 1;
+    const hasImages = car.images && car.images.length > 0;
+    const currentIndex = activeImage[car.id] || 0;
+    const currentImageUrl = hasImages ? car.images![currentIndex] : car.image;
+
+    const nextImage = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!hasMultipleImages) return;
+      setActiveImage(prev => ({
+        ...prev,
+        [car.id]: (currentIndex + 1) % car.images!.length
+      }));
+    };
+
+    const prevImage = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!hasMultipleImages) return;
+      setActiveImage(prev => ({
+        ...prev,
+        [car.id]: (currentIndex - 1 + car.images!.length) % car.images!.length
+      }));
+    };
+
+    return (
+      <div key={car.id} className="card card-hoverable" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: '180px', overflow: 'hidden' }}>
+          <img src={currentImageUrl} alt={`${car.make} ${car.model}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }}
+            onMouseOver={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseOut={e => (e.currentTarget.style.transform = 'scale(1)')} />
+          
+          {hasMultipleImages && (
+            <>
+              <button onClick={prevImage} style={{
+                position: 'absolute', top: '50%', left: '10px', transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%',
+                width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', zIndex: 10,
+              }}>
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={nextImage} style={{
+                position: 'absolute', top: '50%', right: '10px', transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%',
+                width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', zIndex: 10,
+              }}>
+                <ChevronRight size={16} />
+              </button>
+              <div style={{
+                position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', gap: '4px', zIndex: 10, background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '10px'
+              }}>
+                {car.images!.map((_, idx) => (
+                  <div key={idx} style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: idx === currentIndex ? '#fff' : 'rgba(255,255,255,0.5)'
+                  }} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {car.isFeatured && (
           <span style={{
             position: 'absolute', top: '10px', left: '10px',
             background: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(4px)',
@@ -196,9 +271,21 @@ const Home: React.FC = () => {
             ★ {car.sellerRating}
           </span>
         </div>
+
+        {/* Contact Broker button for broker-listed cars */}
+        {car.id.startsWith('bl-') && (
+          <button
+            onClick={e => { e.stopPropagation(); handleContactBroker(car); }}
+            className="btn btn-primary btn-sm btn-block"
+            style={{ marginTop: '10px', fontSize: '0.75rem', gap: '4px' }}
+          >
+            <Phone size={12} /> Contact Broker
+          </button>
+        )}
       </div>
     </div>
   );
+  };
 
   return (
     <div>
@@ -328,12 +415,12 @@ const Home: React.FC = () => {
       {/* ===== BRANDS BAR ===== */}
       <section style={{ background: '#fff', borderBottom: '1px solid var(--color-gray-200)' }}>
         <div className="container" style={{ padding: '28px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
             <h3 style={{
               fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)',
               textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0,
             }}>{t('exploreByBrand')}</h3>
-            {brands.slice(0, 10).map(b => (
+            {brands.slice(0, 24).map(b => (
               <button key={b.name} onClick={() => { setFilters({...filters, make: b.name}); document.getElementById('marketplace')?.scrollIntoView({behavior:'smooth'}); }}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
@@ -552,6 +639,48 @@ const Home: React.FC = () => {
       {/* ===== MODALS ===== */}
       {showCity && <CitySelector onSelect={city => setFilters({...filters, city})} onClose={() => setShowCity(false)} />}
       {showFilter && <FilterPanel filters={filters} onChange={setFilters} onClose={() => setShowFilter(false)} resultCount={filtered.length} />}
+
+      {/* Contact Broker Modal */}
+      {contactModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setContactModal(null)}>
+          <div className="card animate-in" style={{ maxWidth: '420px', width: '90%', padding: '32px', position: 'relative' }}
+            onClick={e => e.stopPropagation()}>
+            <button onClick={() => setContactModal(null)} style={{
+              position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none',
+              cursor: 'pointer', color: 'var(--color-gray-400)',
+            }}><X size={18} /></button>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 800, marginBottom: '16px', color: 'var(--color-dark)' }}>
+              Contact Broker
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ padding: '14px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
+                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{contactModal.brokerName}</p>
+                {(() => {
+                  const bl = brokerListings.find(l => l.id === contactModal.listingId);
+                  return bl ? (
+                    <>
+                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '8px' }}>
+                        <Phone size={14} color="var(--color-primary)" />
+                        <a href={`tel:${bl.brokerName}`} style={{ fontWeight: 600 }}>Contact via Platform</a>
+                      </p>
+                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '6px' }}>
+                        <MapPin size={14} color="var(--color-primary)" />
+                        {bl.city}
+                      </p>
+                    </>
+                  ) : null;
+                })()}
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>
+                ✓ Your contact request has been logged. The broker will be notified.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

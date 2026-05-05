@@ -24,6 +24,7 @@ export interface CarListing {
   isFeatured: boolean;
   kmDriven: number;
   owners: number;
+  images?: string[];
 }
 
 export interface City {

@@ -20,11 +20,10 @@ const BuyerDashboard: React.FC = () => {
 
   const myReqs = requirements.filter(r => r.buyerId === user?.id);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user?.id) {
-      const finalDescription = feature ? `${description} | Preferred feature: ${feature}` : description;
-      addRequirement({ buyerId: user.id, make, model, yearRange, budget, description: finalDescription });
+      await addRequirement({ buyerId: user.id, make, model, yearRange, budget, preferredFeature: feature, description });
       setShowForm(false);
       setMake(''); setModel(''); setFeature(''); setYearRange(''); setBudget(''); setDescription('');
     }
@@ -128,11 +127,18 @@ const BuyerDashboard: React.FC = () => {
                 {/* Description */}
                 <div style={{
                   padding: '12px 16px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)',
-                  fontSize: '0.875rem', color: 'var(--color-gray-600)', lineHeight: 1.7, marginBottom: '20px',
+                  fontSize: '0.875rem', color: 'var(--color-gray-600)', lineHeight: 1.7, marginBottom: req.preferredFeature ? '8px' : '20px',
                   border: '1px solid var(--color-gray-100)',
                 }}>
                   {req.description}
                 </div>
+                {req.preferredFeature && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <span className="badge badge-info" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
+                      ⭐ Preferred: {req.preferredFeature}
+                    </span>
+                  </div>
+                )}
 
                 {/* Offers */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>

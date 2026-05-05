@@ -8,6 +8,7 @@ export interface Requirement {
   model: string;
   yearRange: string;
   budget: string;
+  preferredFeature: string;
   description: string;
   status: 'open' | 'closed';
   createdAt: string;
@@ -45,100 +46,83 @@ export interface BrokerListing {
   description: string;
   status: 'active' | 'sold';
   createdAt: string;
+  images: string[];
+  leadsCount: number;
 }
 
 interface DataContextType {
   requirements: Requirement[];
   offers: Offer[];
   brokerListings: BrokerListing[];
-  addRequirement: (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => void;
+  isLoaded: boolean;
+  addRequirement: (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => Promise<void>;
   closeRequirement: (id: string) => void;
   addOffer: (offer: Omit<Offer, 'id' | 'status' | 'createdAt' | 'isRead'>) => void;
   acceptOffer: (offerId: string, reqId: string) => void;
   rejectOffer: (offerId: string) => void;
   markOfferRead: (offerId: string) => void;
-  addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt'>) => void;
+  addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<string | null>;
   removeBrokerListing: (id: string) => void;
+  refreshData: () => Promise<void>;
 }
-
-const defaultRequirements: Requirement[] = [
-  {
-    id: 'req-1',
-    buyerId: 'buyer-1',
-    make: 'Toyota',
-    model: 'Camry',
-    yearRange: '2019 - 2022',
-    budget: '$18,000 - $22,000',
-    description: 'Looking for a reliable everyday sedan. Clean title only, no accidents.',
-    status: 'open',
-    createdAt: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: 'req-2',
-    buyerId: 'buyer-2',
-    make: 'Honda',
-    model: 'CR-V',
-    yearRange: '2020 - 2023',
-    budget: '$25,000',
-    description: 'AWD preferred, under 40k miles. Ready to buy this week.',
-    status: 'open',
-    createdAt: new Date().toISOString()
-  }
-];
-
-const defaultOffers: Offer[] = [
-  {
-    id: 'offer-1',
-    requirementId: 'req-1',
-    brokerId: 'broker-1',
-    brokerName: 'Elite Motors',
-    brokerPhone: '+91 9000000000',
-    price: '$21,500',
-    details: '2021 Camry LE in silver. 32k miles. Perfect condition, 1 owner.',
-    status: 'pending',
-    isRead: false,
-    createdAt: new Date().toISOString()
-  }
-];
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [requirements, setRequirements] = useState<Requirement[]>(defaultRequirements);
-  const [offers, setOffers] = useState<Offer[]>(defaultOffers);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [brokerListings, setBrokerListings] = useState<BrokerListing[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from HDD on mount
+  const loadData = async () => {
+    try {
+      const res = await fetch('/api/data');
+      const data = await res.json();
+      if (Array.isArray(data.requirements)) setRequirements(data.requirements);
+      if (Array.isArray(data.offers)) setOffers(data.offers);
+      if (Array.isArray(data.brokerListings)) setBrokerListings(data.brokerListings);
+    } catch (e) {
+      console.error("Failed to load local DB:", e);
+    }
+    setIsLoaded(true);
+  };
+
+  // Load from server on mount
   useEffect(() => {
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data.requirements)) setRequirements(data.requirements);
-        if (Array.isArray(data.offers)) setOffers(data.offers);
-        if (Array.isArray(data.brokerListings)) setBrokerListings(data.brokerListings);
-        setIsLoaded(true);
-      })
-      .catch((e) => {
-        console.error("Failed to load local DB:", e);
-        setIsLoaded(true); // fall back to defaults
-      });
+    loadData();
   }, []);
 
-  const addRequirement = (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => {
-    const newReq: Requirement = {
-      ...req,
-      id: `req-${Date.now()}`,
-      status: 'open',
-      createdAt: new Date().toISOString(),
-    };
-    setRequirements((prev) => [newReq, ...prev]);
-    if (isLoaded) {
-      fetch('/api/requirements', {
+  const refreshData = async () => {
+    await loadData();
+  };
+
+  const addRequirement = async (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => {
+    try {
+      const res = await fetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req),
-      }).catch(console.error);
+      });
+      const data = await res.json();
+      const serverId = data.id ?? `req-${Date.now()}`;
+
+      const newReq: Requirement = {
+        ...req,
+        id: serverId,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+      };
+      setRequirements((prev) => [newReq, ...prev]);
+    } catch (e) {
+      console.error('Failed to add requirement:', e);
+      // Fallback to client-generated ID
+      const newReq: Requirement = {
+        ...req,
+        id: `req-${Date.now()}`,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+      };
+      setRequirements((prev) => [newReq, ...prev]);
     }
   };
 
@@ -201,20 +185,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addBrokerListing = (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt'>) => {
-    const newListing: BrokerListing = {
-      ...listing,
-      id: `bl-${Date.now()}`,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-    };
-    setBrokerListings((prev) => [newListing, ...prev]);
-    if (isLoaded) {
-      fetch('/api/listings', {
+  const addBrokerListing = async (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/listings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(listing),
-      }).catch(console.error);
+      });
+      const data = await res.json();
+      const serverId = data.id ?? `bl-${Date.now()}`;
+
+      const newListing: BrokerListing = {
+        ...listing,
+        id: serverId,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        images: [],
+        leadsCount: 0,
+      };
+      setBrokerListings((prev) => [newListing, ...prev]);
+      return serverId;
+    } catch (e) {
+      console.error('Failed to add listing:', e);
+      const newListing: BrokerListing = {
+        ...listing,
+        id: `bl-${Date.now()}`,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        images: [],
+        leadsCount: 0,
+      };
+      setBrokerListings((prev) => [newListing, ...prev]);
+      return newListing.id;
     }
   };
 
@@ -227,12 +229,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Loading spinner while data loads
+  if (!isLoaded) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', flexDirection: 'column', gap: '16px',
+      }}>
+        <div style={{
+          width: '48px', height: '48px',
+          border: '4px solid var(--color-gray-200)',
+          borderTop: '4px solid var(--color-primary)',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <p style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem', fontWeight: 600 }}>
+          Loading CarMatchr…
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <DataContext.Provider
       value={{
         requirements,
         offers,
         brokerListings,
+        isLoaded,
         addRequirement,
         closeRequirement,
         addOffer,
@@ -241,6 +266,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markOfferRead,
         addBrokerListing,
         removeBrokerListing,
+        refreshData,
       }}
     >
       {children}

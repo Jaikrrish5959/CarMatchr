@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useData } from '../../contexts/useData';
-import { Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel, Gauge } from 'lucide-react';
+import { Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel, Gauge, ImagePlus, Users } from 'lucide-react';
 import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
 import { useCatalog } from '../../contexts/useCatalog';
 import toast from 'react-hot-toast';
@@ -17,6 +17,7 @@ const BrokerDashboard: React.FC = () => {
   const [offerError, setOfferError] = useState('');
   const [activeTab, setActiveTab] = useState<'marketplace' | 'inventory'>('marketplace');
   const [showListForm, setShowListForm] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   // List Car form state
   const [listForm, setListForm] = useState<{
@@ -95,15 +96,27 @@ const BrokerDashboard: React.FC = () => {
     }
   };
 
-  const handleListCar = (e: React.FormEvent) => {
+  const handleListCar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id || !user?.businessName) return;
-    addBrokerListing({
+    const listingId = await addBrokerListing({
       brokerId: user.id,
       brokerName: user.businessName,
       ...listForm,
     });
+
+    // Upload images if any
+    if (listingId && imageFiles.length > 0) {
+      const formData = new FormData();
+      imageFiles.forEach(f => formData.append('images', f));
+      try {
+        await fetch(`/api/listings/${listingId}/images`, { method: 'POST', body: formData });
+        toast.success(`${imageFiles.length} image(s) uploaded`);
+      } catch { toast.error('Image upload failed'); }
+    }
+
     setShowListForm(false);
+    setImageFiles([]);
     setListForm({ make: '', model: '', variant: '', year: 2024, price: 0, fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV', color: '', city: '', kmDriven: 0, owners: 1, description: '' });
   };
 
@@ -365,6 +378,21 @@ const BrokerDashboard: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Image Upload */}
+                  <div className="form-group" style={{ margin: 0, marginTop: '14px' }}>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ImagePlus size={14} /> Car Images (max 10)
+                    </label>
+                    <input type="file" multiple accept="image/jpeg,image/png,image/webp"
+                      onChange={e => setImageFiles(Array.from(e.target.files || []))}
+                      style={{ fontSize: '0.8125rem' }} />
+                    {imageFiles.length > 0 && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--color-success)', marginTop: '4px' }}>
+                        {imageFiles.length} file(s) selected
+                      </p>
+                    )}
+                  </div>
+
                   <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                     <button type="submit" className="btn btn-primary">
                       <Plus size={15} /> Add to Marketplace
@@ -413,9 +441,14 @@ const BrokerDashboard: React.FC = () => {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--color-gray-100)' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>
-                        <MapPin size={10} /> {car.city}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>
+                          <MapPin size={10} /> {car.city}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', color: 'var(--color-info)', fontWeight: 600 }}>
+                          <Users size={10} /> {car.leadsCount ?? 0} leads
+                        </span>
+                      </div>
                       {car.status === 'active' && (
                         <button onClick={() => removeBrokerListing(car.id)}
                           className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>
