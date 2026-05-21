@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useData } from '../../contexts/useData';
 import { Plus, X, Check, Clock, MessageSquare, Loader2 } from 'lucide-react';
@@ -19,6 +19,29 @@ const BuyerDashboard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const selectedBrand = brands.find((b) => b.name === make);
   const modelFeatures = selectedBrand?.models.find((m) => m.name === model)?.features ?? [];
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem('pending_requirement');
+    if (pending && user?.role === 'buyer' && user.id) {
+      const { make, model, budget, yearRange, description } = JSON.parse(pending);
+      sessionStorage.removeItem('pending_requirement');
+      addRequirement({
+        buyerId: user.id,
+        make,
+        model,
+        yearRange: yearRange || '2020-2024',
+        budget,
+        preferredFeature: '',
+        description: description || 'Looking for a clean vehicle in good condition.'
+      })
+        .then(() => {
+          toast.success('Your pending requirement has been posted successfully!');
+        })
+        .catch(() => {
+          toast.error('Failed to post pending requirement.');
+        });
+    }
+  }, [user, addRequirement]);
 
   const myReqs = requirements.filter(r => r.buyerId === user?.id);
 

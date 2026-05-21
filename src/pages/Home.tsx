@@ -2,82 +2,42 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Zap, Award, ArrowRight, Star,
-  MapPin, SlidersHorizontal, Heart, Fuel, Gauge,
-  Phone, X, ChevronLeft, ChevronRight
+  MapPin, Heart, Fuel, Gauge, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/useAuth';
 import { useData } from '../contexts/useData';
 import { useLanguage } from '../contexts/useLanguage';
 import {
-  carListings, filterListings, sortListings,
-  defaultFilters, type Filters, type SortOption, type CarListing
+  carListings
 } from '../data/carDatabase';
-import CitySelector from '../components/CitySelector';
-import FilterPanel from '../components/FilterPanel';
 import { useCatalog } from '../contexts/useCatalog';
+import toast from 'react-hot-toast';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { brokerListings } = useData();
+  const { addRequirement } = useData();
   const { t } = useLanguage();
   const { brands } = useCatalog();
+  const { user } = useAuth();
 
   // --- State ---
   const [activeHeroTab, setActiveHeroTab] = useState<'buy' | 'sell'>('buy');
   const [heroMake, setHeroMake] = useState('');
+  const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
-  const [showCity, setShowCity] = useState(false);
-  const [showFilter, setShowFilter] = useState(false);
-  const [showMarketplace, setShowMarketplace] = useState(true);
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
-  const [sort, setSort] = useState<SortOption>('relevance');
+  const [heroYearRange, setHeroYearRange] = useState('');
+  const [heroDescription, setHeroDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const [wishlist, setWishlist] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem('carmatchr_wishlist'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
   });
-  const [contactModal, setContactModal] = useState<{ brokerName: string; phone: string; email: string; listingId: string } | null>(null);
   const [activeImage, setActiveImage] = useState<Record<string, number>>({});
-  const { user } = useAuth();
 
-  // --- Convert broker listings to CarListing format ---
-  const brokerCarsAsListings: CarListing[] = useMemo(() =>
-    brokerListings.filter(l => l.status === 'active').map(l => ({
-      id: l.id,
-      make: l.make,
-      model: l.model,
-      variant: l.variant || '',
-      year: l.year,
-      price: l.price,
-      mileage: 0,
-      fuelType: l.fuelType,
-      transmission: l.transmission,
-      bodyType: l.bodyType,
-      seatingCapacity: 5,
-      color: l.color || 'N/A',
-      city: l.city,
-      image: (
-        brands.find((b) => b.name === l.make)?.models.find((m) => m.name === l.model)?.imageUrl ||
-        'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=480&q=80'
-      ),
-      sellerRating: 4.5,
-      sellerName: l.brokerName,
-      features: [],
-      listed: l.createdAt,
-      isFeatured: false,
-      kmDriven: l.kmDriven,
-      owners: l.owners,
-      images: l.images,
-    }))
-  , [brokerListings, brands]);
+  const selectedBrand = brands.find((b) => b.name === heroMake);
 
   // --- Merge seed + broker listings ---
-  const allListings = useMemo(() => [...brokerCarsAsListings, ...carListings], [brokerCarsAsListings]);
-
-  // --- Derived ---
-  const filtered = useMemo(() => sortListings(filterListings(allListings, filters), sort), [allListings, filters, sort]);
   const featuredCars = useMemo(() => carListings.filter(c => c.isFeatured).slice(0, 4), []);
-  const locationCars = useMemo(() =>
-    filters.city ? allListings.filter(c => c.city === filters.city).slice(0, 4) : []
-  , [filters.city, allListings]);
 
   const toggleWish = (id: string) => {
     setWishlist(prev => {
@@ -88,30 +48,48 @@ const Home: React.FC = () => {
     });
   };
 
-  const handleContactBroker = (car: CarListing) => {
-    const bl = brokerListings.find(l => l.id === car.id);
-    if (!bl) return;
-    setContactModal({ brokerName: bl.brokerName, phone: bl.brokerName, email: '', listingId: bl.id });
-    // Also get broker user info for phone/email
-    fetch(`/api/listings/${bl.id}/contact`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ buyerName: user?.name || 'Anonymous', buyerEmail: user?.email || '', buyerPhone: user?.phone || '' }),
-    }).catch(console.error);
-    // Show broker contact details from the listing
-    setContactModal({ brokerName: bl.brokerName, phone: user?.phone || 'N/A', email: '', listingId: bl.id });
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
+  const handlePostRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
-    const f = { ...filters };
-    if (heroMake) f.make = heroMake;
-    if (heroBudget) {
-      const [min, max] = heroBudget.split('-').map(Number);
-      f.budgetMin = min; f.budgetMax = max || Infinity;
+    if (!heroMake) { toast.error('Please select a car brand.'); return; }
+    if (!heroModel) { toast.error('Please select a car model.'); return; }
+    if (!heroBudget.trim()) { toast.error('Please specify your budget range.'); return; }
+
+    if (user) {
+      if (user.role !== 'buyer') {
+        toast.error('Only buyers can post requirements.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await addRequirement({
+          buyerId: user.id,
+          make: heroMake,
+          model: heroModel,
+          yearRange: heroYearRange || '2020-2024',
+          budget: heroBudget,
+          preferredFeature: '',
+          description: heroDescription || 'Looking for a clean vehicle in good condition.'
+        });
+        toast.success('Requirement posted successfully!');
+        navigate('/buyer-dashboard');
+      } catch {
+        toast.error('Failed to post requirement.');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      // Not logged in: Save draft in sessionStorage and redirect to login
+      const reqDraft = {
+        make: heroMake,
+        model: heroModel,
+        budget: heroBudget,
+        yearRange: heroYearRange || '2020-2024',
+        description: heroDescription || 'Looking for a clean vehicle in good condition.'
+      };
+      sessionStorage.setItem('pending_requirement', JSON.stringify(reqDraft));
+      toast.success('Please log in or register to complete posting your requirement!');
+      navigate('/login');
     }
-    setFilters(f);
-    // Scroll to marketplace
-    document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const stats = [
@@ -119,16 +97,6 @@ const Home: React.FC = () => {
     { value: '2,500+',  label: 'Verified Brokers' },
     { value: '50,000+', label: 'Deals Completed' },
     { value: '4.8 ★',   label: 'Average Rating' },
-  ];
-
-  const activeFilterCount = [filters.make, filters.bodyType, filters.fuelType, filters.transmission].filter(Boolean).length
-    + (filters.budgetMin > 0 || filters.budgetMax < Infinity ? 1 : 0);
-  const sortOptions: Array<{ value: SortOption; label: string }> = [
-    { value: 'relevance', label: 'Relevance' },
-    { value: 'price-low', label: 'Price Low-High' },
-    { value: 'price-high', label: 'Price High-Low' },
-    { value: 'newest', label: 'Newest' },
-    { value: 'km-low', label: 'Lowest KM' },
   ];
 
   // --- CAR CARD RENDERER ---
@@ -157,7 +125,7 @@ const Home: React.FC = () => {
     };
 
     return (
-      <div key={car.id} className="card card-hoverable" style={{ padding: 0, overflow: 'hidden' }}>
+      <div key={car.id} onClick={() => navigate('/marketplace')} className="card card-hoverable" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
         <div style={{ position: 'relative', height: '180px', overflow: 'hidden' }}>
           <img src={currentImageUrl} alt={`${car.make} ${car.model}`}
             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }}
@@ -197,99 +165,87 @@ const Home: React.FC = () => {
           )}
 
           {car.isFeatured && (
-          <span style={{
-            position: 'absolute', top: '10px', left: '10px',
-            background: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(4px)',
-            color: '#fff', fontSize: '0.625rem', fontWeight: 700,
-            padding: '3px 8px', borderRadius: 'var(--radius-full)',
-            letterSpacing: '0.03em', textTransform: 'uppercase',
-          }}>Featured</span>
-        )}
-        {car.id.startsWith('bl-') && (
-          <span style={{
-            position: 'absolute', top: '10px', left: '10px',
-            background: 'rgba(230,57,70,0.9)', backdropFilter: 'blur(4px)',
-            color: '#fff', fontSize: '0.625rem', fontWeight: 700,
-            padding: '3px 8px', borderRadius: 'var(--radius-full)',
-            letterSpacing: '0.03em', textTransform: 'uppercase',
-          }}>🏪 Broker Listed</span>
-        )}
-        {showWish && (
-          <button onClick={e => { e.stopPropagation(); toggleWish(car.id); }}
-            style={{
-              position: 'absolute', top: '10px', right: '10px',
-              background: 'rgba(255,255,255,0.9)', border: 'none', cursor: 'pointer',
-              width: '32px', height: '32px', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'transform 0.2s',
-            }}>
-            <Heart size={15} fill={wishlist.has(car.id) ? '#e63946' : 'none'} color={wishlist.has(car.id) ? '#e63946' : '#64748b'} />
-          </button>
-        )}
-      </div>
+            <span style={{
+              position: 'absolute', top: '10px', left: '10px',
+              background: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(4px)',
+              color: '#fff', fontSize: '0.625rem', fontWeight: 700,
+              padding: '3px 8px', borderRadius: 'var(--radius-full)',
+              letterSpacing: '0.03em', textTransform: 'uppercase',
+            }}>Featured</span>
+          )}
+          {car.id.startsWith('bl-') && (
+            <span style={{
+              position: 'absolute', top: '10px', left: '10px',
+              background: 'rgba(230,57,70,0.9)', backdropFilter: 'blur(4px)',
+              color: '#fff', fontSize: '0.625rem', fontWeight: 700,
+              padding: '3px 8px', borderRadius: 'var(--radius-full)',
+              letterSpacing: '0.03em', textTransform: 'uppercase',
+            }}>🏪 Broker Listed</span>
+          )}
+          {showWish && (
+            <button onClick={e => { e.stopPropagation(); toggleWish(car.id); }}
+              style={{
+                position: 'absolute', top: '10px', right: '10px',
+                background: 'rgba(255,255,255,0.9)', border: 'none', cursor: 'pointer',
+                width: '32px', height: '32px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'transform 0.2s',
+              }}>
+              <Heart size={15} fill={wishlist.has(car.id) ? '#e63946' : 'none'} color={wishlist.has(car.id) ? '#e63946' : '#64748b'} />
+            </button>
+          )}
+        </div>
 
-      <div style={{ padding: '14px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-          <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-dark)', lineHeight: 1.3 }}>
-              {car.year} {car.make} {car.model}
-            </h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '1px' }}>{car.variant}</p>
+        <div style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-dark)', lineHeight: 1.3 }}>
+                {car.year} {car.make} {car.model}
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '1px' }}>{car.variant}</p>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '1.0625rem', fontWeight: 800, color: 'var(--color-primary)', margin: '8px 0' }}>
+            ₹{car.price} Lakh
+          </p>
+
+          {/* Specs row */}
+          <div style={{
+            display: 'flex', gap: '12px', padding: '8px 0',
+            borderTop: '1px solid var(--color-gray-100)', marginTop: '4px',
+            fontSize: '0.6875rem', color: 'var(--color-gray-500)', fontWeight: 500,
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Gauge size={11} /> {car.kmDriven.toLocaleString()} km
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Fuel size={11} /> {car.fuelType}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              {car.transmission === 'Automatic' ? 'AT' : 'MT'}
+            </span>
+          </div>
+
+          {/* Location + Seller */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginTop: '8px', fontSize: '0.6875rem',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--color-gray-500)' }}>
+              <MapPin size={10} /> {car.city}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color: 'var(--color-warning)', fontWeight: 700 }}>
+              ★ {car.sellerRating}
+            </span>
           </div>
         </div>
-
-        <p style={{ fontSize: '1.0625rem', fontWeight: 800, color: 'var(--color-primary)', margin: '8px 0' }}>
-          ₹{car.price} Lakh
-        </p>
-
-        {/* Specs row */}
-        <div style={{
-          display: 'flex', gap: '12px', padding: '8px 0',
-          borderTop: '1px solid var(--color-gray-100)', marginTop: '4px',
-          fontSize: '0.6875rem', color: 'var(--color-gray-500)', fontWeight: 500,
-        }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <Gauge size={11} /> {car.kmDriven.toLocaleString()} km
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <Fuel size={11} /> {car.fuelType}
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            {car.transmission === 'Automatic' ? 'AT' : 'MT'}
-          </span>
-        </div>
-
-        {/* Location + Seller */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginTop: '8px', fontSize: '0.6875rem',
-        }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--color-gray-500)' }}>
-            <MapPin size={10} /> {car.city}
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color: 'var(--color-warning)', fontWeight: 700 }}>
-            ★ {car.sellerRating}
-          </span>
-        </div>
-
-        {/* Contact Broker button for broker-listed cars */}
-        {car.id.startsWith('bl-') && (
-          <button
-            onClick={e => { e.stopPropagation(); handleContactBroker(car); }}
-            className="btn btn-primary btn-sm btn-block"
-            style={{ marginTop: '10px', fontSize: '0.75rem', gap: '4px' }}
-          >
-            <Phone size={12} /> Contact Broker
-          </button>
-        )}
       </div>
-    </div>
-  );
+    );
   };
 
   return (
     <div>
-
       {/* ===== HERO ===== */}
       <section style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
@@ -335,7 +291,7 @@ const Home: React.FC = () => {
               </div>
             </div>
 
-            {/* Right — Search Widget */}
+            {/* Right — Search/Post Widget */}
             <div className="animate-in animate-delay-1" style={{
               background: '#fff', borderRadius: 'var(--radius-xl)', overflow: 'hidden',
               boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
@@ -357,42 +313,41 @@ const Home: React.FC = () => {
 
               <div style={{ padding: '24px' }}>
                 {activeHeroTab === 'buy' ? (
-                  <form onSubmit={handleSearch}>
-                    {/* City Selector Button */}
-                    <button type="button" onClick={() => setShowCity(true)}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '10px 14px', background: 'var(--color-gray-50)',
-                        border: '1.5px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)',
-                        cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '0.875rem',
-                        color: filters.city ? 'var(--color-dark)' : 'var(--color-gray-400)',
-                        fontWeight: filters.city ? 600 : 400, marginBottom: '14px',
-                      }}>
-                      <MapPin size={15} color="var(--color-primary)" />
-                      {filters.city || t('selectCity')}
-                    </button>
-
+                  <form onSubmit={handlePostRequirement}>
                     <div className="form-group">
-                      <label className="form-label">{t('selectBrand')}</label>
-                      <select className="form-control" value={heroMake} onChange={e => setHeroMake(e.target.value)}>
-                        <option value="">All Brands</option>
+                      <label className="form-label">{t('selectBrand')} *</label>
+                      <select required className="form-control" value={heroMake} onChange={e => { setHeroMake(e.target.value); setHeroModel(''); }}>
+                        <option value="">Select Brand</option>
                         {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                       </select>
                     </div>
+
                     <div className="form-group">
-                      <label className="form-label">{t('yourBudget')}</label>
-                      <select className="form-control" value={heroBudget} onChange={e => setHeroBudget(e.target.value)}>
-                        <option value="">All Budgets</option>
-                        <option value="0-5">Under ₹5 Lakh</option>
-                        <option value="5-10">₹5 - 10 Lakh</option>
-                        <option value="10-15">₹10 - 15 Lakh</option>
-                        <option value="15-25">₹15 - 25 Lakh</option>
-                        <option value="25-50">₹25 - 50 Lakh</option>
-                        <option value="50-Infinity">₹50 Lakh+</option>
+                      <label className="form-label">Select Model *</label>
+                      <select required className="form-control" value={heroModel} onChange={e => setHeroModel(e.target.value)} disabled={!heroMake}>
+                        <option value="">Select Model</option>
+                        {selectedBrand?.models.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                       </select>
                     </div>
-                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '4px' }}>
-                      <Search size={17} /> {t('findMyCar')}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label className="form-label">{t('yourBudget')} *</label>
+                        <input required className="form-control" value={heroBudget} onChange={e => setHeroBudget(e.target.value)} placeholder="e.g. ₹10-15 Lakh" />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Year Range</label>
+                        <input className="form-control" value={heroYearRange} onChange={e => setHeroYearRange(e.target.value)} placeholder="e.g. 2020-2024" />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Additional Details</label>
+                      <input className="form-control" value={heroDescription} onChange={e => setHeroDescription(e.target.value)} placeholder="Condition, urgency, color..." />
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '4px' }} disabled={submitting}>
+                      <Zap size={17} /> {submitting ? 'Posting...' : 'Post Requirement'}
                     </button>
                   </form>
                 ) : (
@@ -421,11 +376,11 @@ const Home: React.FC = () => {
               textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0,
             }}>{t('exploreByBrand')}</h3>
             {brands.slice(0, 24).map(b => (
-              <button key={b.name} onClick={() => { setFilters({...filters, make: b.name}); document.getElementById('marketplace')?.scrollIntoView({behavior:'smooth'}); }}
+              <button key={b.name} onClick={() => navigate(`/marketplace`)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                  padding: '8px 14px', background: filters.make === b.name ? 'var(--color-primary-light)' : 'var(--color-gray-50)',
-                  border: `1px solid ${filters.make === b.name ? 'var(--color-primary)' :'var(--color-gray-200)'}`,
+                  padding: '8px 14px', background: 'var(--color-gray-50)',
+                  border: '1px solid var(--color-gray-200)',
                   borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font)',
                   minWidth: '72px', flexShrink: 0, transition: 'all 0.15s',
                 }}>
@@ -441,23 +396,6 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* ===== LOCATION SUGGESTIONS ===== */}
-      {filters.city && locationCars.length > 0 && (
-        <section className="section" style={{ paddingBottom: '32px' }}>
-          <div className="container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <div>
-                <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--color-dark)' }}>
-                  <MapPin size={18} style={{ display: 'inline', verticalAlign: '-3px', color: 'var(--color-primary)' }} /> Cars in {filters.city}
-                </h2>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>Location-based suggestions near you</p>
-              </div>
-            </div>
-            <div className="grid grid-4">{locationCars.map(c => renderCarCard(c))}</div>
-          </div>
-        </section>
-      )}
-
       {/* ===== FEATURED CARS ===== */}
       <section className="section" style={{ paddingBottom: '32px' }}>
         <div className="container">
@@ -466,127 +404,24 @@ const Home: React.FC = () => {
               <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--color-dark)' }}>{t('popularCars')}</h2>
               <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>{t('mostSearched')}</p>
             </div>
+            <button onClick={() => navigate('/marketplace')} className="btn btn-outline btn-sm">View Marketplace</button>
           </div>
           <div className="grid grid-4">{featuredCars.map(c => renderCarCard(c))}</div>
         </div>
       </section>
 
-      {/* ===== MARKETPLACE ===== */}
-      <section id="marketplace" className="section" style={{ background: '#fff', borderTop: '1px solid var(--color-gray-200)', paddingTop: '48px' }}>
-        <div className="container">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showMarketplace ? '24px' : 0 }}>
-            <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--color-dark)' }}>{t('marketplace')}</h2>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowMarketplace(prev => !prev)}
-            >
-              {showMarketplace ? 'Hide Marketplace' : 'Show Marketplace'}
-            </button>
-          </div>
-
-          {showMarketplace && (
-            <>
-              {/* Toolbar */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: '24px', flexWrap: 'wrap', gap: '12px',
-              }}>
-                <div>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
-                    {filtered.length} {t('carsFound')}
-                    {filters.city && <> in <strong>{filters.city}</strong></>}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {/* Search */}
-                  <div style={{ position: 'relative' }}>
-                    <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }} />
-                    <input className="form-control" style={{ paddingLeft: '34px', width: '220px', fontSize: '0.8125rem' }}
-                      placeholder="Search cars..."
-                      value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} />
-                  </div>
-
-                  {/* Filter button */}
-                  <button onClick={() => setShowFilter(true)} className="btn btn-secondary btn-sm" style={{ position: 'relative' }}>
-                    <SlidersHorizontal size={14} /> {t('filters')}
-                    {activeFilterCount > 0 && (
-                      <span style={{
-                        position: 'absolute', top: '-6px', right: '-6px',
-                        background: 'var(--color-primary)', color: '#fff',
-                        fontSize: '0.625rem', fontWeight: 800, width: '18px', height: '18px',
-                        borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{activeFilterCount}</span>
-                    )}
-                  </button>
-
-                  {/* Sort chips */}
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {sortOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setSort(option.value)}
-                        style={{
-                          border: sort === option.value ? '1px solid var(--color-primary)' : '1px solid var(--color-gray-200)',
-                          background: sort === option.value ? 'var(--color-primary-light)' : '#fff',
-                          color: sort === option.value ? 'var(--color-primary)' : 'var(--color-gray-600)',
-                          borderRadius: 'var(--radius-full)',
-                          padding: '7px 12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font)',
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Filters Chips */}
-              {activeFilterCount > 0 && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                  {filters.make && (
-                    <span className="badge badge-info" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px' }}
-                      onClick={() => setFilters({...filters, make: ''})}>{filters.make} ×</span>
-                  )}
-                  {filters.bodyType && (
-                    <span className="badge badge-info" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px' }}
-                      onClick={() => setFilters({...filters, bodyType: ''})}>{filters.bodyType} ×</span>
-                  )}
-                  {filters.fuelType && (
-                    <span className="badge badge-info" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px' }}
-                      onClick={() => setFilters({...filters, fuelType: ''})}>{filters.fuelType} ×</span>
-                  )}
-                  {filters.transmission && (
-                    <span className="badge badge-info" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px' }}
-                      onClick={() => setFilters({...filters, transmission: ''})}>{filters.transmission} ×</span>
-                  )}
-                  {(filters.budgetMin > 0 || filters.budgetMax < Infinity) && (
-                    <span className="badge badge-info" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px' }}
-                      onClick={() => setFilters({...filters, budgetMin: 0, budgetMax: Infinity})}>Budget ×</span>
-                  )}
-                  <button onClick={() => setFilters({...defaultFilters, city: filters.city})}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'var(--font)' }}>
-                    {t('clearAll')}
-                  </button>
-                </div>
-              )}
-
-              {/* Car Grid */}
-              {filtered.length === 0 ? (
-                <div className="empty-state" style={{ margin: '40px 0' }}>
-                  <div className="empty-state-icon"><Search size={24} /></div>
-                  <p className="empty-state-title">{t('noResults')}</p>
-                </div>
-              ) : (
-                <div className="grid grid-4">{filtered.map(c => renderCarCard(c))}</div>
-              )}
-            </>
-          )}
+      {/* ===== MARKETPLACE TEASER ===== */}
+      <section className="section" style={{ background: '#fff', borderTop: '1px solid var(--color-gray-200)', paddingTop: '56px', paddingBottom: '56px', textAlign: 'center' }}>
+        <div className="container" style={{ maxWidth: '800px' }}>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-dark)', marginBottom: '12px' }}>
+            Explore Our Car Marketplace
+          </h2>
+          <p style={{ fontSize: '0.9375rem', color: 'var(--color-gray-500)', lineHeight: 1.7, marginBottom: '28px' }}>
+            Browse through hundreds of quality used cars listed by verified brokers across India. Filter by budget, brand, body type, fuel type, and more to find your dream car.
+          </p>
+          <button onClick={() => navigate('/marketplace')} className="btn btn-primary btn-lg">
+            Explore All Cars in Marketplace <ArrowRight size={16} />
+          </button>
         </div>
       </section>
 
@@ -635,52 +470,6 @@ const Home: React.FC = () => {
           </div>
         </div>
       </section>
-
-      {/* ===== MODALS ===== */}
-      {showCity && <CitySelector onSelect={city => setFilters({...filters, city})} onClose={() => setShowCity(false)} />}
-      {showFilter && <FilterPanel filters={filters} onChange={setFilters} onClose={() => setShowFilter(false)} resultCount={filtered.length} />}
-
-      {/* Contact Broker Modal */}
-      {contactModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setContactModal(null)}>
-          <div className="card animate-in" style={{ maxWidth: '420px', width: '90%', padding: '32px', position: 'relative' }}
-            onClick={e => e.stopPropagation()}>
-            <button onClick={() => setContactModal(null)} style={{
-              position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none',
-              cursor: 'pointer', color: 'var(--color-gray-400)',
-            }}><X size={18} /></button>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 800, marginBottom: '16px', color: 'var(--color-dark)' }}>
-              Contact Broker
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ padding: '14px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
-                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{contactModal.brokerName}</p>
-                {(() => {
-                  const bl = brokerListings.find(l => l.id === contactModal.listingId);
-                  return bl ? (
-                    <>
-                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '8px' }}>
-                        <Phone size={14} color="var(--color-primary)" />
-                        <a href={`tel:${bl.brokerName}`} style={{ fontWeight: 600 }}>Contact via Platform</a>
-                      </p>
-                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '6px' }}>
-                        <MapPin size={14} color="var(--color-primary)" />
-                        {bl.city}
-                      </p>
-                    </>
-                  ) : null;
-                })()}
-              </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>
-                ✓ Your contact request has been logged. The broker will be notified.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

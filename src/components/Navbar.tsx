@@ -28,10 +28,22 @@ const Navbar: React.FC = () => {
   return (
     <nav className="navbar">
       <div className="container navbar-inner">
-        <Link to="/" className="navbar-brand">
-          <Car size={24} strokeWidth={2.5} />
-          CarMatchr
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <Link to="/" className="navbar-brand" style={{ marginRight: 0 }}>
+            <Car size={24} strokeWidth={2.5} />
+            CarMatchr
+          </Link>
+          <Link to="/marketplace" style={{
+            fontSize: '0.875rem',
+            fontWeight: 700,
+            color: 'var(--color-gray-600)',
+            textDecoration: 'none',
+            transition: 'color 0.15s',
+          }} onMouseEnter={e => e.currentTarget.style.color = 'var(--color-primary)'}
+             onMouseLeave={e => e.currentTarget.style.color = 'var(--color-gray-600)'}>
+            Marketplace
+          </Link>
+        </div>
 
         <div className="navbar-actions">
           {/* Language Picker */}

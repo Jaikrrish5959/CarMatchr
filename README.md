@@ -46,6 +46,15 @@ This project includes:
 npm install
 ```
 
+### 2) Configure environment
+
+Copy the example and set your JWT secret:
+
+```bash
+cp .env.example .env
+# Edit .env and set a strong JWT_SECRET
+```
+
 ### 2) Seed catalog from CSV datasets
 
 ```bash
@@ -70,10 +79,8 @@ Frontend runs on Vite dev server (usually `http://localhost:5173`) and proxies `
 
 ## Admin Access
 
-Default admin credentials:
-
-- Email: `admin@carmatchr.com`
-- Password: `admin123`
+Default admin credentials are set during first database initialization.
+See `.env.example` for configuration. **Change the default admin password immediately after first login.**
 
 Use `/admin` after login to:
 
@@ -99,3 +106,15 @@ npm rebuild better-sqlite3
 ```
 
 - CSV datasets do not include official logo/image assets. Assign exact brand logos and model images from Admin.
+
+## Security
+
+- JWT authentication on all protected API routes
+- Role-based access control (Buyer / Broker / Admin)
+- Ownership verification prevents IDOR attacks
+- Rate limiting on auth endpoints (30 req / 15 min)
+- Helmet security headers
+- CORS restricted to configured origins
+- bcrypt password hashing (no plaintext fallback)
+- UUID-based resource IDs
+- Database indexes on all lookup columns

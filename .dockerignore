@@ -1,0 +1,9 @@
+node_modules
+dist
+db/uploads
+db/*.sqlite
+db/*.sqlite-wal
+db/*.sqlite-shm
+.env
+database.json
+.git

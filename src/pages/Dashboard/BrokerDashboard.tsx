@@ -4,6 +4,7 @@ import { useData } from '../../contexts/useData';
 import { Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel, Gauge, ImagePlus, Users } from 'lucide-react';
 import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
 import { useCatalog } from '../../contexts/useCatalog';
+import { getToken } from '../../services/authService';
 import toast from 'react-hot-toast';
 
 const BrokerDashboard: React.FC = () => {
@@ -109,8 +110,11 @@ const BrokerDashboard: React.FC = () => {
     if (listingId && imageFiles.length > 0) {
       const formData = new FormData();
       imageFiles.forEach(f => formData.append('images', f));
+      const token = getToken();
+      const uploadHeaders: Record<string, string> = {};
+      if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
       try {
-        await fetch(`/api/listings/${listingId}/images`, { method: 'POST', body: formData });
+        await fetch(`/api/listings/${listingId}/images`, { method: 'POST', headers: uploadHeaders, body: formData });
         toast.success(`${imageFiles.length} image(s) uploaded`);
       } catch { toast.error('Image upload failed'); }
     }

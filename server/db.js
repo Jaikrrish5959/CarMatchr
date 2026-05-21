@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import path from 'path';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const isVercel = !!process.env.VERCEL;
 const dbPath = isVercel
@@ -10,6 +12,7 @@ const dbPath = isVercel
 export const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 export function initDb() {
   db.exec(`
@@ -17,8 +20,8 @@ export function initDb() {
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL,
       password TEXT NOT NULL,
-      role TEXT NOT NULL,
-      status TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('buyer', 'broker', 'admin')),
+      status TEXT NOT NULL CHECK(status IN ('active', 'pending')),
       name TEXT,
       businessName TEXT,
       phone TEXT,
@@ -37,9 +40,11 @@ export function initDb() {
       budget TEXT NOT NULL,
       preferredFeature TEXT DEFAULT '',
       description TEXT NOT NULL,
-      status TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_req_buyer ON requirements(buyerId);
+    CREATE INDEX IF NOT EXISTS idx_req_status ON requirements(status);
 
     CREATE TABLE IF NOT EXISTS offers (
       id TEXT PRIMARY KEY,
@@ -49,10 +54,12 @@ export function initDb() {
       brokerPhone TEXT NOT NULL,
       price TEXT NOT NULL,
       details TEXT NOT NULL,
-      status TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'rejected')),
       isRead INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_offer_req ON offers(requirementId);
+    CREATE INDEX IF NOT EXISTS idx_offer_broker ON offers(brokerId);
 
     CREATE TABLE IF NOT EXISTS brokerListings (
       id TEXT PRIMARY KEY,
@@ -71,9 +78,11 @@ export function initDb() {
       kmDriven INTEGER NOT NULL,
       owners INTEGER NOT NULL,
       description TEXT NOT NULL,
-      status TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active', 'sold')),
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_bl_broker ON brokerListings(brokerId);
+    CREATE INDEX IF NOT EXISTS idx_bl_status ON brokerListings(status);
 
     CREATE TABLE IF NOT EXISTS brands (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,6 +117,7 @@ export function initDb() {
       buyerPhone TEXT NOT NULL DEFAULT '',
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_ce_listing ON contactEvents(listingId);
 
     CREATE TABLE IF NOT EXISTS listingImages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +126,7 @@ export function initDb() {
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_li_listing ON listingImages(listingId);
   `);
 
   // Migration: add preferredFeature column if missing (existing DBs)
@@ -128,6 +139,7 @@ export function initDb() {
 
 initDb();
 
+// Seed default admin account if none exists
 const adminExists = db.prepare("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").get();
 if (!adminExists) {
   const hashedPw = bcrypt.hashSync('admin123', 10);
@@ -135,7 +147,7 @@ if (!adminExists) {
     INSERT INTO users (id, email, password, role, status, name, createdAt)
     VALUES (@id, @email, @password, @role, @status, @name, @createdAt)
   `).run({
-    id: `admin-${Date.now()}`,
+    id: `admin-${crypto.randomUUID()}`,
     email: 'admin@carmatchr.com',
     password: hashedPw,
     role: 'admin',

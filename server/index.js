@@ -1,11 +1,74 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
+import { z } from 'zod';
 import { db } from './db.js';
 import { seedCatalog } from './catalogSeeder.js';
+import { authenticate, requireRole, requireOwnership, JWT_SECRET } from './middleware.js';
+
+// ========== ZOD SCHEMAS ==========
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  role: z.enum(['buyer', 'broker']),
+  name: z.string().optional().nullable(),
+  businessName: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  license: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+}).refine(data => {
+  if (data.role === 'broker' && !data.phone) return false;
+  return true;
+}, { message: 'Broker account requires a contact number.', path: ['phone'] });
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+  role: z.enum(['buyer', 'broker', 'admin'])
+});
+
+const requirementSchema = z.object({
+  make: z.string().min(1),
+  model: z.string().min(1),
+  budget: z.string().min(1),
+  yearRange: z.string().optional(),
+  preferredFeature: z.string().optional().nullable(),
+  description: z.string().optional()
+});
+
+const offerSchema = z.object({
+  requirementId: z.string().min(1),
+  brokerName: z.string().optional(),
+  brokerPhone: z.string().optional(),
+  price: z.string().min(1),
+  details: z.string().optional()
+});
+
+const listingSchema = z.object({
+  brokerName: z.string().optional(),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  variant: z.string().optional(),
+  year: z.number().int().min(1900).max(2100),
+  price: z.number().positive(),
+  fuelType: z.string().min(1),
+  transmission: z.string().min(1),
+  bodyType: z.string().min(1),
+  color: z.string().optional(),
+  city: z.string().min(1),
+  kmDriven: z.number().nonnegative(),
+  owners: z.number().int().positive(),
+  description: z.string().optional()
+});
+
 
 const app = express();
 const PORT = process.env.PORT || 4001;
@@ -13,8 +76,42 @@ const isVercel = !!process.env.VERCEL;
 
 seedCatalog();
 
-app.use(cors());
+// ========== SECURITY MIDDLEWARE ==========
+
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+// CORS — restrict to known origins
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map(s => s.trim());
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+}));
+
 app.use(express.json({ limit: '2mb' }));
+
+// Rate limiting — auth endpoints
+app.use('/api/auth/', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+
+// Rate limiting — general API
+app.use('/api/', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // --- Upload directory ---
 const uploadsDir = isVercel
@@ -27,8 +124,8 @@ app.use('/uploads', express.static(uploadsDir));
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${crypto.randomUUID()}${ext}`);
   },
 });
 const upload = multer({
@@ -36,11 +133,23 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = /jpeg|jpg|png|webp|gif/;
-    cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
+    if (!allowed.test(path.extname(file.originalname).toLowerCase())) {
+      return cb(new Error('Only image files (jpg, png, webp, gif) are allowed.'));
+    }
+    cb(null, true);
   },
 });
 
 const SALT_ROUNDS = 10;
+const JWT_EXPIRES_IN = '7d';
+
+/** Sign a JWT for a given user row */
+const signToken = (user) =>
+  jwt.sign(
+    { sub: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
 
 const mapUser = (row) => ({
   id: row.id,
@@ -54,16 +163,26 @@ const mapUser = (row) => ({
   city: row.city ?? undefined,
 });
 
-// ========== AUTH ==========
+// ========== HEALTH CHECK ==========
+
+app.get('/api/health', (_req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: 'error', message: 'Database unavailable' });
+  }
+});
+
+// ========== AUTH (public) ==========
 
 app.post('/api/auth/register', async (req, res) => {
-  const user = req.body;
-  if (!user?.email || !user?.password || !user?.role) {
-    return res.status(400).json({ error: 'Missing required fields.' });
+  const result = registerSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
-  if (user.role === 'broker' && !user.phone) {
-    return res.status(400).json({ error: 'Broker account requires a contact number.' });
-  }
+  const user = result.data;
+  
   const exists = db
     .prepare('SELECT 1 FROM users WHERE email = ? AND role = ? LIMIT 1')
     .get(user.email, user.role);
@@ -71,7 +190,7 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(409).json({ error: `An ${user.role} account already exists for this email.` });
   }
 
-  const id = `${user.role}-${Date.now()}`;
+  const id = `${user.role}-${crypto.randomUUID()}`;
   const hashedPassword = await bcrypt.hash(user.password, SALT_ROUNDS);
 
   db.prepare(`
@@ -91,39 +210,55 @@ app.post('/api/auth/register', async (req, res) => {
     createdAt: new Date().toISOString(),
   });
   const created = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  return res.json({ user: mapUser(created) });
+  const token = signToken(created);
+  return res.json({ token, user: mapUser(created) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password, role } = req.body;
-  if (!email || !password || !role) {
+  const result = loginSchema.safeParse(req.body);
+  if (!result.success) {
     return res.status(400).json({ error: 'Email, password and role are required.' });
   }
+  const { email, password, role } = result.data;
   const found = db.prepare('SELECT * FROM users WHERE email = ? AND role = ? LIMIT 1').get(email, role);
   if (!found) {
     return res.status(401).json({ error: 'Invalid credentials. Please check your email, password, and selected role.' });
   }
 
-  let passwordMatch = false;
-  if (found.password.startsWith('$2')) {
-    passwordMatch = await bcrypt.compare(password, found.password);
-  } else {
-    passwordMatch = found.password === password;
-    if (passwordMatch) {
-      const hashed = await bcrypt.hash(password, SALT_ROUNDS);
-      db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, found.id);
-    }
-  }
+  // Always use bcrypt — no plaintext fallback
+  const passwordMatch = await bcrypt.compare(password, found.password);
 
   if (!passwordMatch) {
     return res.status(401).json({ error: 'Invalid credentials. Please check your password.' });
   }
-  return res.json({ user: mapUser(found) });
+  const token = signToken(found);
+  return res.json({ token, user: mapUser(found) });
 });
 
-// ========== USERS ==========
+// ========== USERS (authenticated) ==========
 
-app.patch('/api/users/:id/status', (req, res) => {
+// Update own profile
+app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), (req, res) => {
+  const { id } = req.params;
+  const { phone, name } = req.body;
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: 'User not found.' });
+
+  const updatedPhone = phone !== undefined ? (phone || null) : row.phone;
+  const updatedName = name !== undefined ? (name || null) : (row.name ?? row.businessName ?? null);
+
+  if (row.role === 'broker') {
+    db.prepare('UPDATE users SET phone = ?, businessName = ? WHERE id = ?').run(updatedPhone, updatedName, id);
+  } else {
+    db.prepare('UPDATE users SET phone = ?, name = ? WHERE id = ?').run(updatedPhone, updatedName, id);
+  }
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  return res.json({ user: mapUser(updated) });
+});
+
+// Update user status — admin only
+app.patch('/api/users/:id/status', authenticate, requireRole('admin'), (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   if (!['active', 'pending'].includes(status)) {
@@ -134,25 +269,42 @@ app.patch('/api/users/:id/status', (req, res) => {
   return res.json({ user: mapUser(row) });
 });
 
-// ========== CATALOG ==========
+// ========== CATALOG (public read) ==========
 
 app.get('/api/catalog/brands', (_req, res) => {
-  const brands = db.prepare('SELECT id, name, logoUrl FROM brands ORDER BY name').all();
-  const modelStmt = db.prepare('SELECT id, name, imageUrl FROM models WHERE brandId = ? ORDER BY name');
-  const featureStmt = db.prepare(`
-    SELECT f.id, f.name
-    FROM modelFeatures mf
-    JOIN features f ON f.id = mf.featureId
-    WHERE mf.modelId = ?
-    ORDER BY f.name
-  `);
-  const response = brands.map((brand) => {
-    const models = modelStmt.all(brand.id).map((model) => ({
-      ...model,
-      features: featureStmt.all(model.id),
-    }));
-    return { ...brand, models };
-  });
+  // Single query with JOINs instead of N+1
+  const rows = db.prepare(`
+    SELECT b.id AS brandId, b.name AS brandName, b.logoUrl,
+           m.id AS modelId, m.name AS modelName, m.imageUrl,
+           f.id AS featureId, f.name AS featureName
+    FROM brands b
+    LEFT JOIN models m ON m.brandId = b.id
+    LEFT JOIN modelFeatures mf ON mf.modelId = m.id
+    LEFT JOIN features f ON f.id = mf.featureId
+    ORDER BY b.name, m.name, f.name
+  `).all();
+
+  const brandsMap = new Map();
+  for (const row of rows) {
+    if (!brandsMap.has(row.brandId)) {
+      brandsMap.set(row.brandId, { id: row.brandId, name: row.brandName, logoUrl: row.logoUrl, models: new Map() });
+    }
+    const brand = brandsMap.get(row.brandId);
+    if (row.modelId && !brand.models.has(row.modelId)) {
+      brand.models.set(row.modelId, { id: row.modelId, name: row.modelName, imageUrl: row.imageUrl, features: [] });
+    }
+    if (row.modelId && row.featureId) {
+      const model = brand.models.get(row.modelId);
+      if (!model.features.some(f => f.id === row.featureId)) {
+        model.features.push({ id: row.featureId, name: row.featureName });
+      }
+    }
+  }
+
+  const response = Array.from(brandsMap.values()).map(b => ({
+    ...b,
+    models: Array.from(b.models.values()),
+  }));
   res.json(response);
 });
 
@@ -161,11 +313,13 @@ app.get('/api/catalog/features', (_req, res) => {
   res.json(rows);
 });
 
-// ========== DATA (bulk fetch) ==========
+// ========== DATA (authenticated, bulk fetch) ==========
 
-app.get('/api/data', (_req, res) => {
+app.get('/api/data', authenticate, (_req, res) => {
   const requirements = db.prepare('SELECT * FROM requirements ORDER BY createdAt DESC').all();
   const offers = db.prepare('SELECT * FROM offers ORDER BY createdAt DESC').all().map((o) => ({ ...o, isRead: !!o.isRead }));
+
+  // Single query for listings with image count and lead count
   const brokerListings = db.prepare('SELECT * FROM brokerListings ORDER BY createdAt DESC').all();
 
   const imgStmt = db.prepare('SELECT imagePath, sortOrder FROM listingImages WHERE listingId = ? ORDER BY sortOrder');
@@ -179,20 +333,23 @@ app.get('/api/data', (_req, res) => {
   res.json({ requirements, offers, brokerListings: listingsWithExtras });
 });
 
-// ========== REQUIREMENTS ==========
+// ========== REQUIREMENTS (authenticated) ==========
 
-app.post('/api/requirements', (req, res) => {
-  const payload = req.body;
-  if (!payload.buyerId || !payload.make || !payload.model || !payload.budget) {
+app.post('/api/requirements', authenticate, (req, res) => {
+  const result = requirementSchema.safeParse(req.body);
+  if (!result.success) {
     return res.status(400).json({ error: 'Please fill in all required fields (make, model, budget).' });
   }
-  const id = `req-${Date.now()}`;
+  const payload = result.data;
+  // Use authenticated user's ID, not client-supplied
+  const buyerId = req.user.sub;
+  const id = `req-${crypto.randomUUID()}`;
   db.prepare(`
     INSERT INTO requirements (id, buyerId, make, model, yearRange, budget, preferredFeature, description, status, createdAt)
     VALUES (@id, @buyerId, @make, @model, @yearRange, @budget, @preferredFeature, @description, 'open', @createdAt)
   `).run({
     id,
-    buyerId: payload.buyerId,
+    buyerId,
     make: payload.make,
     model: payload.model,
     yearRange: payload.yearRange || '',
@@ -204,26 +361,35 @@ app.post('/api/requirements', (req, res) => {
   res.json({ ok: true, id });
 });
 
-app.patch('/api/requirements/:id/close', (req, res) => {
+app.patch('/api/requirements/:id/close', authenticate, (req, res) => {
+  // Verify the user owns this requirement
+  const requirement = db.prepare('SELECT buyerId FROM requirements WHERE id = ?').get(req.params.id);
+  if (!requirement) return res.status(404).json({ error: 'Requirement not found.' });
+  if (requirement.buyerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only close your own requirements.' });
+  }
   db.prepare("UPDATE requirements SET status = 'closed' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
 });
 
-// ========== OFFERS ==========
+// ========== OFFERS (authenticated) ==========
 
-app.post('/api/offers', (req, res) => {
-  const o = req.body;
-  if (!o.requirementId || !o.brokerId || !o.price) {
+app.post('/api/offers', authenticate, requireRole('broker'), (req, res) => {
+  const result = offerSchema.safeParse(req.body);
+  if (!result.success) {
     return res.status(400).json({ error: 'Please provide all required offer details.' });
   }
-  const id = `offer-${Date.now()}`;
+  const o = result.data;
+  // Use authenticated user's ID, not client-supplied
+  const brokerId = req.user.sub;
+  const id = `offer-${crypto.randomUUID()}`;
   db.prepare(`
     INSERT INTO offers (id, requirementId, brokerId, brokerName, brokerPhone, price, details, status, isRead, createdAt)
     VALUES (@id, @requirementId, @brokerId, @brokerName, @brokerPhone, @price, @details, 'pending', 0, @createdAt)
   `).run({
     id,
     requirementId: o.requirementId,
-    brokerId: o.brokerId,
+    brokerId,
     brokerName: o.brokerName || '',
     brokerPhone: o.brokerPhone || '',
     price: o.price,
@@ -233,19 +399,31 @@ app.post('/api/offers', (req, res) => {
   res.json({ ok: true });
 });
 
-app.patch('/api/offers/:id/read', (req, res) => {
+app.patch('/api/offers/:id/read', authenticate, (req, res) => {
   db.prepare('UPDATE offers SET isRead = 1 WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/offers/:id/reject', (req, res) => {
+app.patch('/api/offers/:id/reject', authenticate, (req, res) => {
+  // Verify the authenticated user owns the requirement this offer belongs to
+  const offer = db.prepare('SELECT requirementId FROM offers WHERE id = ?').get(req.params.id);
+  if (!offer) return res.status(404).json({ error: 'Offer not found.' });
+  const requirement = db.prepare('SELECT buyerId FROM requirements WHERE id = ?').get(offer.requirementId);
+  if (requirement && requirement.buyerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only reject offers on your own requirements.' });
+  }
   db.prepare("UPDATE offers SET status = 'rejected' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/offers/:id/accept', (req, res) => {
+app.patch('/api/offers/:id/accept', authenticate, (req, res) => {
   const { id } = req.params;
   const { reqId } = req.body;
+  // Verify the authenticated user owns the requirement
+  const requirement = db.prepare('SELECT buyerId FROM requirements WHERE id = ?').get(reqId);
+  if (requirement && requirement.buyerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only accept offers on your own requirements.' });
+  }
   db.transaction(() => {
     db.prepare("UPDATE offers SET status = 'accepted' WHERE id = ?").run(id);
     db.prepare("UPDATE offers SET status = 'rejected' WHERE requirementId = ? AND id != ?").run(reqId, id);
@@ -254,20 +432,22 @@ app.patch('/api/offers/:id/accept', (req, res) => {
   res.json({ ok: true });
 });
 
-// ========== BROKER LISTINGS ==========
+// ========== BROKER LISTINGS (authenticated) ==========
 
-app.post('/api/listings', (req, res) => {
-  const l = req.body;
-  if (!l.brokerId || !l.make || !l.model || !l.price || !l.city) {
-    return res.status(400).json({ error: 'Please fill in all required listing fields.' });
+app.post('/api/listings', authenticate, requireRole('broker'), (req, res) => {
+  const result = listingSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: 'Please fill in all required listing fields with valid values.' });
   }
-  const id = `bl-${Date.now()}`;
+  const l = result.data;
+  const brokerId = req.user.sub;
+  const id = `bl-${crypto.randomUUID()}`;
   db.prepare(`
     INSERT INTO brokerListings (id, brokerId, brokerName, make, model, variant, year, price, fuelType, transmission, bodyType, color, city, kmDriven, owners, description, status, createdAt)
     VALUES (@id, @brokerId, @brokerName, @make, @model, @variant, @year, @price, @fuelType, @transmission, @bodyType, @color, @city, @kmDriven, @owners, @description, 'active', @createdAt)
   `).run({
     id,
-    brokerId: l.brokerId,
+    brokerId,
     brokerName: l.brokerName || '',
     make: l.make,
     model: l.model,
@@ -287,17 +467,26 @@ app.post('/api/listings', (req, res) => {
   res.json({ ok: true, id });
 });
 
-app.patch('/api/listings/:id/sold', (req, res) => {
+app.patch('/api/listings/:id/sold', authenticate, (req, res) => {
+  // Verify the broker owns this listing
+  const listing = db.prepare('SELECT brokerId FROM brokerListings WHERE id = ?').get(req.params.id);
+  if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+  if (listing.brokerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only modify your own listings.' });
+  }
   db.prepare("UPDATE brokerListings SET status = 'sold' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
 });
 
-// ========== LISTING IMAGES ==========
+// ========== LISTING IMAGES (authenticated) ==========
 
-app.post('/api/listings/:id/images', upload.array('images', 10), (req, res) => {
+app.post('/api/listings/:id/images', authenticate, upload.array('images', 10), (req, res) => {
   const listingId = req.params.id;
-  const listing = db.prepare('SELECT id FROM brokerListings WHERE id = ?').get(listingId);
+  const listing = db.prepare('SELECT id, brokerId FROM brokerListings WHERE id = ?').get(listingId);
   if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+  if (listing.brokerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only add images to your own listings.' });
+  }
 
   const files = req.files || [];
   const insertStmt = db.prepare(
@@ -321,7 +510,7 @@ app.get('/api/listings/:id/images', (req, res) => {
   res.json(images);
 });
 
-// ========== CONTACT EVENTS ==========
+// ========== CONTACT EVENTS (public — buyers contact brokers) ==========
 
 app.post('/api/listings/:id/contact', (req, res) => {
   const listingId = req.params.id;
@@ -336,46 +525,61 @@ app.post('/api/listings/:id/contact', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/listings/:id/leads', (req, res) => {
+app.get('/api/listings/:id/leads', authenticate, (req, res) => {
+  // Verify the broker owns this listing
+  const listing = db.prepare('SELECT brokerId FROM brokerListings WHERE id = ?').get(req.params.id);
+  if (listing && listing.brokerId !== req.user.sub && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only view leads for your own listings.' });
+  }
   const leads = db.prepare('SELECT * FROM contactEvents WHERE listingId = ? ORDER BY createdAt DESC').all(req.params.id);
   res.json(leads);
 });
 
-// ========== ADMIN ==========
+// ========== ADMIN (authenticated + admin role) ==========
 
-app.get('/api/admin/users', (_req, res) => {
+app.get('/api/admin/users', authenticate, requireRole('admin'), (_req, res) => {
   const rows = db.prepare('SELECT id, email, role, status, name, businessName, phone, city FROM users ORDER BY createdAt DESC').all();
   res.json(rows);
 });
 
-app.post('/api/admin/features', (req, res) => {
+app.post('/api/admin/features', authenticate, requireRole('admin'), (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Feature name required.' });
   db.prepare('INSERT OR IGNORE INTO features(name) VALUES (?)').run(name);
   res.json({ ok: true });
 });
 
-app.post('/api/admin/model-features', (req, res) => {
+app.post('/api/admin/model-features', authenticate, requireRole('admin'), (req, res) => {
   const { modelId, featureId } = req.body;
   db.prepare('INSERT OR IGNORE INTO modelFeatures(modelId, featureId) VALUES (?, ?)').run(modelId, featureId);
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/model-features', (req, res) => {
+app.delete('/api/admin/model-features', authenticate, requireRole('admin'), (req, res) => {
   const { modelId, featureId } = req.body;
   if (!modelId || !featureId) return res.status(400).json({ error: 'modelId and featureId required.' });
   db.prepare('DELETE FROM modelFeatures WHERE modelId = ? AND featureId = ?').run(modelId, featureId);
   res.json({ ok: true });
 });
 
-app.patch('/api/admin/brands/:id/logo', (req, res) => {
+app.patch('/api/admin/brands/:id/logo', authenticate, requireRole('admin'), (req, res) => {
   db.prepare('UPDATE brands SET logoUrl = ? WHERE id = ?').run(req.body.logoUrl ?? null, req.params.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/admin/models/:id/image', (req, res) => {
+app.patch('/api/admin/models/:id/image', authenticate, requireRole('admin'), (req, res) => {
   db.prepare('UPDATE models SET imageUrl = ? WHERE id = ?').run(req.body.imageUrl ?? null, req.params.id);
   res.json({ ok: true });
+});
+
+// ========== GLOBAL ERROR HANDLER ==========
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS: Origin not allowed.' });
+  }
+  res.status(500).json({ error: 'Internal server error.' });
 });
 
 // Only listen when running locally (not on Vercel serverless)

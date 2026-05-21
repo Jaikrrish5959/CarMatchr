@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import type { CarListing } from '../data/carDatabase';
+import { getToken } from '../services/authService';
 
 export interface Requirement {
   id: string;
@@ -68,6 +69,21 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+/** Build headers with auth token */
+function authJsonHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -76,7 +92,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/data');
+      const res = await fetch('/api/data', { headers: authHeaders() });
+      if (!res.ok) { setIsLoaded(true); return; }
       const data = await res.json();
       if (Array.isArray(data.requirements)) setRequirements(data.requirements);
       if (Array.isArray(data.offers)) setOffers(data.offers);
@@ -100,7 +117,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await fetch('/api/requirements', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authJsonHeaders(),
         body: JSON.stringify(req),
       });
       const data = await res.json();
@@ -115,7 +132,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRequirements((prev) => [newReq, ...prev]);
     } catch (e) {
       console.error('Failed to add requirement:', e);
-      // Fallback to client-generated ID
       const newReq: Requirement = {
         ...req,
         id: `req-${Date.now()}`,
@@ -131,7 +147,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((r) => (r.id === id ? { ...r, status: 'closed' } : r))
     );
     if (isLoaded) {
-      fetch(`/api/requirements/${id}/close`, { method: 'PATCH' }).catch(console.error);
+      fetch(`/api/requirements/${id}/close`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
@@ -147,7 +163,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isLoaded) {
       fetch('/api/offers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authJsonHeaders(),
         body: JSON.stringify(offer),
       }).catch(console.error);
     }
@@ -161,7 +177,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isLoaded) {
       fetch(`/api/offers/${offerId}/accept`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authJsonHeaders(),
         body: JSON.stringify({ reqId }),
       }).catch(console.error);
     }
@@ -172,7 +188,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((o) => (o.id === offerId ? { ...o, status: 'rejected' } : o))
     );
     if (isLoaded) {
-      fetch(`/api/offers/${offerId}/reject`, { method: 'PATCH' }).catch(console.error);
+      fetch(`/api/offers/${offerId}/reject`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
@@ -181,7 +197,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((o) => (o.id === offerId ? { ...o, isRead: true } : o))
     );
     if (isLoaded) {
-      fetch(`/api/offers/${offerId}/read`, { method: 'PATCH' }).catch(console.error);
+      fetch(`/api/offers/${offerId}/read`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
@@ -189,7 +205,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await fetch('/api/listings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authJsonHeaders(),
         body: JSON.stringify(listing),
       });
       const data = await res.json();
@@ -225,7 +241,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((l) => (l.id === id ? { ...l, status: 'sold' } : l))
     );
     if (isLoaded) {
-      fetch(`/api/listings/${id}/sold`, { method: 'PATCH' }).catch(console.error);
+      fetch(`/api/listings/${id}/sold`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 

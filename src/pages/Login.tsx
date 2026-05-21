@@ -40,9 +40,17 @@ const Login: React.FC = () => {
         return;
       }
       toast.success(`Welcome back, ${result.user.name || result.user.email}!`);
-      if (result.user.role === 'broker') navigate('/broker-dashboard');
-      else if (result.user.role === 'admin') navigate('/admin');
-      else navigate('/buyer-dashboard');
+      // ── handleLogin logic (App.js equivalent) ──────────────────────────────
+      // If the user hasn't added a phone number yet → send them to Settings first
+      if (!result.user.phone) {
+        navigate('/settings');
+      } else if (result.user.role === 'broker') {
+        navigate('/broker-dashboard');
+      } else if (result.user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/buyer-dashboard');
+      }
     } finally {
       setLoading(false);
     }
