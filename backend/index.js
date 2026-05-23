@@ -572,17 +572,7 @@ app.patch('/api/admin/models/:id/image', authenticate, requireRole('admin'), (re
   res.json({ ok: true });
 });
 
-// ========== STATIC FRONTEND SERVING (For Single-Container Hosting) ==========
-const distDir = path.resolve(process.cwd(), 'dist');
-if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return next();
-    }
-    res.sendFile(path.join(distDir, 'index.html'));
-  });
-}
+
 
 // ========== GLOBAL ERROR HANDLER ==========
 

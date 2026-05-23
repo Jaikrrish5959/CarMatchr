@@ -18,14 +18,14 @@ dist-ssr
 !.env.example
 
 # Database files
-db/*.sqlite
-db/*.sqlite-wal
-db/*.sqlite-shm
-db/*.db
+backend/db/*.sqlite
+backend/db/*.sqlite-wal
+backend/db/*.sqlite-shm
+backend/db/*.db
 database.json
 
 # Uploaded files
-db/uploads/
+backend/db/uploads/
 
 # Editor directories and files
 .vscode/*
