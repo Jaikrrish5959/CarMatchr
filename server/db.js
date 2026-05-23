@@ -1,13 +1,20 @@
 import 'dotenv/config';
 import path from 'path';
+import fs from 'fs';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 const isVercel = !!process.env.VERCEL;
-const dbPath = isVercel
-  ? path.join('/tmp', 'carmatchr.sqlite')
-  : path.resolve(process.cwd(), 'db', 'carmatchr.sqlite');
+const dbDir = isVercel
+  ? '/tmp'
+  : path.resolve(process.cwd(), 'db');
+
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+const dbPath = path.join(dbDir, 'carmatchr.sqlite');
 
 export const db = new Database(dbPath);
 
