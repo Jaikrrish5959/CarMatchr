@@ -10,6 +10,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { OAuth2Client } from 'google-auth-library';
 import { db } from './db.js';
 import { seedCatalog } from './catalogSeeder.js';
 import { authenticate, requireRole, requireOwnership, JWT_SECRET } from './middleware.js';
@@ -33,6 +34,15 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
   role: z.enum(['buyer', 'broker', 'admin'])
+});
+
+const googleBrokerRegisterSchema = z.object({
+  email: z.string().email(),
+  businessName: z.string().min(1, 'Dealership name is required.'),
+  license: z.string().min(1, 'License number is required.'),
+  city: z.string().min(1, 'City is required.'),
+  phone: z.string().min(1, 'Phone number is required.'),
+  credential: z.string().min(1, 'Google credential is required.'),
 });
 
 const requirementSchema = z.object({
@@ -163,6 +173,20 @@ const mapUser = (row) => ({
   city: row.city ?? undefined,
 });
 
+// ========== GOOGLE OAUTH CONFIG ==========
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+async function verifyGoogleToken(idToken) {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new Error('Google Sign-In is not configured on the server. Please define GOOGLE_CLIENT_ID in your environment.');
+  }
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  return ticket.getPayload();
+}
+
 // ========== HEALTH CHECK ==========
 
 app.get('/api/health', (_req, res) => {
@@ -175,6 +199,119 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ========== AUTH (public) ==========
+
+app.post('/api/auth/google', async (req, res) => {
+  const { credential, role } = req.body;
+  if (!credential || !role) {
+    return res.status(400).json({ error: 'Credential and role are required.' });
+  }
+
+  try {
+    const payload = await verifyGoogleToken(credential);
+    if (!payload || !payload.email) {
+      return res.status(400).json({ error: 'Invalid Google credential.' });
+    }
+
+    const email = payload.email.toLowerCase();
+    const name = payload.name || '';
+
+    // Check if the user exists with this email and role
+    const found = db.prepare('SELECT * FROM users WHERE email = ? AND role = ? LIMIT 1').get(email, role);
+    if (found) {
+      // User exists! Sign token and return.
+      const token = signToken(found);
+      return res.json({ token, user: mapUser(found) });
+    }
+
+    // User does not exist, so they are registering.
+    if (role === 'buyer') {
+      const id = `buyer-google-${crypto.randomUUID()}`;
+      // Generate secure dummy password hash for schema compatibility
+      const dummyPassword = crypto.randomUUID();
+      const hashedPassword = await bcrypt.hash(dummyPassword, SALT_ROUNDS);
+
+      db.prepare(`
+        INSERT INTO users (id, email, password, role, status, name, createdAt)
+        VALUES (@id, @email, @password, @role, @status, @name, @createdAt)
+      `).run({
+        id,
+        email,
+        password: hashedPassword,
+        role: 'buyer',
+        status: 'active',
+        name: name || null,
+        createdAt: new Date().toISOString(),
+      });
+
+      const created = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+      const token = signToken(created);
+      return res.json({ token, user: mapUser(created) });
+    } else if (role === 'broker') {
+      // Brokers need additional details before creating DB record.
+      return res.json({
+        isNewUser: true,
+        email,
+        name,
+        credential,
+      });
+    } else {
+      return res.status(400).json({ error: 'Invalid role.' });
+    }
+  } catch (err) {
+    console.error('Google Auth Error:', err);
+    return res.status(400).json({ error: err.message || 'Google authentication failed.' });
+  }
+});
+
+app.post('/api/auth/google/register', async (req, res) => {
+  const result = googleBrokerRegisterSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
+  }
+  const { email, businessName, license, city, phone, credential } = result.data;
+
+  try {
+    const payload = await verifyGoogleToken(credential);
+    if (!payload || !payload.email || payload.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ error: 'Invalid Google credential.' });
+    }
+
+    // Verify user doesn't already exist as a broker
+    const exists = db
+      .prepare('SELECT 1 FROM users WHERE email = ? AND role = ? LIMIT 1')
+      .get(email, 'broker');
+    if (exists) {
+      return res.status(409).json({ error: 'A broker account already exists for this email.' });
+    }
+
+    const id = `broker-google-${crypto.randomUUID()}`;
+    const dummyPassword = crypto.randomUUID();
+    const hashedPassword = await bcrypt.hash(dummyPassword, SALT_ROUNDS);
+
+    db.prepare(`
+      INSERT INTO users (id, email, password, role, status, businessName, license, city, phone, createdAt)
+      VALUES (@id, @email, @password, @role, @status, @businessName, @license, @city, @phone, @createdAt)
+    `).run({
+      id,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: 'broker',
+      status: 'pending',
+      businessName,
+      license,
+      city,
+      phone,
+      createdAt: new Date().toISOString(),
+    });
+
+    const created = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const token = signToken(created);
+    return res.json({ token, user: mapUser(created) });
+  } catch (err) {
+    console.error('Google Broker Signup Error:', err);
+    return res.status(400).json({ error: err.message || 'Google registration failed.' });
+  }
+});
 
 app.post('/api/auth/register', async (req, res) => {
   const result = registerSchema.safeParse(req.body);

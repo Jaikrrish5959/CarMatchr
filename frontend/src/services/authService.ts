@@ -127,3 +127,79 @@ export function authHeaders(): Record<string, string> {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+// ─── Google OAuth API calls ───────────────────────────────────────────────────
+
+export interface GoogleLoginResult {
+  ok: boolean;
+  isNewUser?: boolean;
+  email?: string;
+  name?: string;
+  credential?: string;
+  user?: AuthUser;
+  token?: string;
+  error?: string;
+}
+
+export async function loginWithGoogle(credential: string, role: string): Promise<GoogleLoginResult> {
+  try {
+    const res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential, role }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Google login failed.' };
+    }
+
+    if (data.isNewUser) {
+      return {
+        ok: true,
+        isNewUser: true,
+        email: data.email,
+        name: data.name,
+        credential: data.credential,
+      };
+    }
+
+    const { token, user } = data as { token: string; user: AuthUser };
+    saveSession(token, user);
+
+    return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function registerBrokerWithGoogle(data: {
+  email: string;
+  businessName: string;
+  license: string;
+  city: string;
+  phone: string;
+  credential: string;
+}): Promise<LoginResult> {
+  try {
+    const res = await fetch('/api/auth/google/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    const body = await res.json();
+
+    if (!res.ok) {
+      return { ok: false, error: body.error || 'Google dealer registration failed.' };
+    }
+
+    const { token, user } = body as { token: string; user: AuthUser };
+    saveSession(token, user);
+
+    return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}

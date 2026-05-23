@@ -21,6 +21,15 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   register: (user: User & { password: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  loginWithGoogle: (credential: string, role: string) => Promise<authService.GoogleLoginResult>;
+  registerBrokerWithGoogle: (data: {
+    email: string;
+    businessName: string;
+    license: string;
+    city: string;
+    phone: string;
+    credential: string;
+  }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   updateStatus: (status: 'active' | 'pending') => Promise<void>;
@@ -72,6 +81,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { ok: true, user: result.user as User };
   };
 
+  // ─── Google OAuth ────────────────────────────────────────────────────────────
+  const loginWithGoogle = async (
+    credential: string,
+    role: string
+  ): Promise<authService.GoogleLoginResult> => {
+    const result = await authService.loginWithGoogle(credential, role);
+
+    if (result.ok && result.user) {
+      setUser(result.user as User);
+    }
+    return result;
+  };
+
+  const registerBrokerWithGoogle = async (
+    data: {
+      email: string;
+      businessName: string;
+      license: string;
+      city: string;
+      phone: string;
+      credential: string;
+    }
+  ): Promise<{ ok: boolean; error?: string; user?: User }> => {
+    const result = await authService.registerBrokerWithGoogle(data);
+
+    if (!result.ok || !result.user) {
+      return { ok: false, error: result.error };
+    }
+
+    setUser(result.user as User);
+    return { ok: true, user: result.user as User };
+  };
+
   // ─── Logout ──────────────────────────────────────────────────────────────────
   const logout = () => {
     setUser(null);
@@ -107,6 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         login,
         register,
+        loginWithGoogle,
+        registerBrokerWithGoogle,
         logout,
         updateUser,
         updateStatus,
