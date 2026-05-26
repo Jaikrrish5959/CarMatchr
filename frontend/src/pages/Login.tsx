@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { LogIn, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/useAuth';
 import { cities } from '../data/carDatabase';
 import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
-  const [role, setRole] = useState<'buyer' | 'broker' | 'admin'>('buyer');
+  const [searchParams] = useSearchParams();
+  const initialRole = (searchParams.get('role') as 'buyer' | 'broker' | 'admin') || 'buyer';
+  const [role, setRole] = useState<'buyer' | 'broker' | 'admin'>(initialRole);
+
+  useEffect(() => {
+    const r = searchParams.get('role');
+    if (r === 'buyer' || r === 'broker' || r === 'admin') {
+      setRole(r);
+    }
+  }, [searchParams]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

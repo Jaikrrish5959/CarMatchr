@@ -8,11 +8,11 @@ The project is split into two completely separate repositories/folders:
 
 ## Key Features
 
-- Role-based auth for Buyer, Broker, and Admin
+- Role-based auth for Buyer and Broker (Admin is available internally)
+- Instant Broker activation (brokers are active immediately upon registration; no admin approval required)
 - One email can have at most one Buyer account and one Broker account
 - Broker contact number required and shared in broker offers
 - Buyer and Broker dashboards with real API persistence
-- Admin broker approval flow (no simulated approval button)
 - Catalog management:
   - Brand logos
   - Model images
@@ -95,13 +95,13 @@ npm run dev
 
 ## Admin Access
 
-Default admin credentials are set during the first database initialization.
-See `backend/.env.example` for configuration. **Change the default admin password immediately after first login.**
+To streamline regular user signups, the Admin role tab is hidden on the standard login screen. However, administrator access remains fully functional:
 
-Use `/admin` after login to:
-- Approve brokers
-- Add/assign features
-- Set brand logos and model images
+1. **Accessing Admin Login**: Navigate to `http://localhost:5173/login?role=admin` to enable the Admin role login option.
+2. **Credentials**: Default admin credentials are set during the first database initialization (e.g. `admin@carmatchr.com` / `admin123`). See `backend/.env.example` for configuration. Change this password immediately after logging in.
+3. **Usage**: Log in to `/login?role=admin` and navigate to `/admin` to:
+   - Manage/assign features
+   - Set brand logos and model images
 
 ## Notes
 
