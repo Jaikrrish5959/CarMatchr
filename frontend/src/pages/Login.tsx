@@ -154,7 +154,7 @@ const Login: React.FC = () => {
         return;
       }
 
-      toast.success('Broker registration submitted! Account is pending admin approval.', { duration: 5000 });
+      toast.success('Broker registration completed successfully!');
       navigate('/broker-dashboard');
     } catch (err: any) {
       toast.error(err.message || 'An error occurred.');
@@ -308,15 +308,12 @@ const Login: React.FC = () => {
               </div>
 
               <form onSubmit={handleSubmit} noValidate>
-                <div className="tab-group" style={{ marginBottom: '16px' }}>
+                 <div className="tab-group" style={{ marginBottom: '16px' }}>
                   <button type="button" className={`tab-btn ${role === 'buyer' ? 'active' : ''}`} onClick={() => setRole('buyer')}>
                     Buyer
                   </button>
                   <button type="button" className={`tab-btn ${role === 'broker' ? 'active' : ''}`} onClick={() => setRole('broker')}>
                     Broker / Dealer
-                  </button>
-                  <button type="button" className={`tab-btn ${role === 'admin' ? 'active' : ''}`} onClick={() => setRole('admin')}>
-                    Admin
                   </button>
                 </div>
                 <div className="form-group">

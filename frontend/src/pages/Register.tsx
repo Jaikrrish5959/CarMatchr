@@ -154,7 +154,7 @@ const Register: React.FC = () => {
         return;
       }
 
-      toast.success('Broker registration submitted! Account is pending admin approval.', { duration: 5000 });
+      toast.success('Broker registration completed successfully!');
       navigate('/broker-dashboard');
     } catch (err: any) {
       toast.error(err.message || 'An error occurred.');
@@ -200,7 +200,7 @@ const Register: React.FC = () => {
         email: form.email.trim().toLowerCase(),
         password: form.password,
         role,
-        status: role === 'broker' ? 'pending' : 'active',
+        status: 'active',
         name: role === 'buyer' ? form.name.trim() : undefined,
         businessName: role === 'broker' ? form.businessName.trim() : undefined,
         phone: form.phone.trim() || undefined,
@@ -215,7 +215,7 @@ const Register: React.FC = () => {
       }
       setError('');
       if (role === 'broker') {
-        toast.success('Account created! Your broker account is pending admin approval.', { duration: 5000 });
+        toast.success('Account created successfully! Welcome to CarMatchr!');
       } else {
         toast.success('Account created successfully! Welcome to CarMatchr!');
       }

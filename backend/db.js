@@ -142,7 +142,15 @@ export function initDb() {
   } catch {
     db.exec("ALTER TABLE requirements ADD COLUMN preferredFeature TEXT DEFAULT ''");
   }
+
+  // Migration: activate all pending users since admin verification is disabled
+  try {
+    db.prepare("UPDATE users SET status = 'active' WHERE status = 'pending'").run();
+  } catch (err) {
+    console.error('Failed to auto-activate pending users:', err);
+  }
 }
+
 
 initDb();
 
