@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
 import { UserPlus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -194,10 +194,9 @@ const Register: React.FC = () => {
     }
     setLoading(true);
     setError('');
-    try {
-      const result = await register({
-        id: `${role}-${Date.now()}`,
-        email: form.email.trim().toLowerCase(),
+      try {
+        const result = await register({
+          email: form.email.trim().toLowerCase(),
         password: form.password,
         role,
         status: 'active',

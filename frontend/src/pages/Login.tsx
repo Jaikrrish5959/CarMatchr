@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { LogIn, Loader2 } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import { cities } from '../data/carDatabase';
 import toast from 'react-hot-toast';
 
@@ -192,7 +192,9 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const result = await login(email.trim().toLowerCase(), password, role);
+      const normalizedEmail = email.trim().toLowerCase();
+      const roleForLogin = normalizedEmail === 'admin@carmatchr.com' ? 'admin' : role;
+      const result = await login(normalizedEmail, password, roleForLogin);
       if (!result.ok || !result.user) {
         const msg = result.error ?? 'Unable to log in. Please try again.';
         setError(msg);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Search, MapPin } from 'lucide-react';
 import { cities } from '../data/carDatabase';
-import { useLanguage } from '../contexts/useLanguage';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface CitySelectorProps {
   onSelect: (city: string) => void;

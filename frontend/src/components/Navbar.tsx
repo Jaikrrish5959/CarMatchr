@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Car, LogOut, User as UserIcon, Globe, Bell } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
-import { useData } from '../contexts/useData';
-import { useLanguage } from '../contexts/useLanguage';
+import { useAuth } from '../hooks/useAuth';
+import { useData } from '../hooks/useData';
+import { useLanguage } from '../hooks/useLanguage';
 import { languageNames, type Language } from '../data/carDatabase';
 
 const Navbar: React.FC = () => {

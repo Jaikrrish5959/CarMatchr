@@ -1,8 +1,8 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { budgetRanges, bodyTypes, fuelTypes, transmissions, type Filters } from '../data/carDatabase';
-import { useLanguage } from '../contexts/useLanguage';
-import { useCatalog } from '../contexts/useCatalog';
+import { useLanguage } from '../hooks/useLanguage';
+import { useCatalog } from '../hooks/useCatalog';
 
 interface FilterPanelProps {
   filters: Filters;

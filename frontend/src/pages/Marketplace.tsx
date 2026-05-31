@@ -3,16 +3,16 @@ import {
   Search, SlidersHorizontal, Heart, Fuel, Gauge,
   MapPin, Phone, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
-import { useData } from '../contexts/useData';
-import { useLanguage } from '../contexts/useLanguage';
+import { useAuth } from '../hooks/useAuth';
+import { useData } from '../hooks/useData';
+import { useLanguage } from '../hooks/useLanguage';
 import {
   carListings, filterListings, sortListings,
   defaultFilters, type Filters, type SortOption, type CarListing
 } from '../data/carDatabase';
 import CitySelector from '../components/CitySelector';
 import FilterPanel from '../components/FilterPanel';
-import { useCatalog } from '../contexts/useCatalog';
+import { useCatalog } from '../hooks/useCatalog';
 
 const Marketplace: React.FC = () => {
   const { brokerListings } = useData();

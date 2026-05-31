@@ -3,8 +3,8 @@ import type { CarListing } from '../data/carDatabase';
 import { getToken } from '../services/authService';
 
 export interface Requirement {
-  id: string;
-  buyerId: string;
+  id: number;
+  buyerId: number;
   make: string;
   model: string;
   yearRange: string;
@@ -16,9 +16,9 @@ export interface Requirement {
 }
 
 export interface Offer {
-  id: string;
-  requirementId: string;
-  brokerId: string;
+  id: number;
+  requirementId: number;
+  brokerId: number;
   brokerName: string;
   brokerPhone: string;
   price: string;
@@ -29,8 +29,8 @@ export interface Offer {
 }
 
 export interface BrokerListing {
-  id: string;
-  brokerId: string;
+  id: number;
+  brokerId: number;
   brokerName: string;
   make: string;
   model: string;
@@ -57,12 +57,12 @@ interface DataContextType {
   brokerListings: BrokerListing[];
   isLoaded: boolean;
   addRequirement: (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => Promise<void>;
-  closeRequirement: (id: string) => void;
+  closeRequirement: (id: number) => void;
   addOffer: (offer: Omit<Offer, 'id' | 'status' | 'createdAt' | 'isRead'>) => void;
-  acceptOffer: (offerId: string, reqId: string) => void;
-  rejectOffer: (offerId: string) => void;
-  markOfferRead: (offerId: string) => void;
-  addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<string | null>;
+  acceptOffer: (offerId: number, reqId: number) => void;
+  rejectOffer: (offerId: number) => void;
+  markOfferRead: (offerId: number) => void;
+  addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<number | null>;
   removeBrokerListing: (id: string) => void;
   refreshData: () => Promise<void>;
 }
@@ -121,7 +121,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(req),
       });
       const data = await res.json();
-      const serverId = data.id ?? `req-${Date.now()}`;
+      const serverId = data.id ?? Date.now();
 
       const newReq: Requirement = {
         ...req,
@@ -134,7 +134,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Failed to add requirement:', e);
       const newReq: Requirement = {
         ...req,
-        id: `req-${Date.now()}`,
+        id: Date.now(),
         status: 'open',
         createdAt: new Date().toISOString(),
       };
@@ -142,7 +142,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const closeRequirement = (id: string) => {
+  const closeRequirement = (id: number) => {
     setRequirements((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'closed' } : r))
     );
@@ -154,7 +154,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addOffer = (offer: Omit<Offer, 'id' | 'status' | 'createdAt' | 'isRead'>) => {
     const newOffer: Offer = {
       ...offer,
-      id: `offer-${Date.now()}`,
+      id: Date.now(),
       status: 'pending',
       isRead: false,
       createdAt: new Date().toISOString(),
@@ -169,7 +169,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const acceptOffer = (offerId: string, reqId: string) => {
+  const acceptOffer = (offerId: number, reqId: number) => {
     setOffers((prev) =>
       prev.map((o) => (o.id === offerId ? { ...o, status: 'accepted' } : o.requirementId === reqId ? { ...o, status: 'rejected' } : o))
     );
@@ -183,7 +183,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const rejectOffer = (offerId: string) => {
+  const rejectOffer = (offerId: number) => {
     setOffers((prev) =>
       prev.map((o) => (o.id === offerId ? { ...o, status: 'rejected' } : o))
     );
@@ -192,7 +192,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const markOfferRead = (offerId: string) => {
+  const markOfferRead = (offerId: number) => {
     setOffers((prev) =>
       prev.map((o) => (o.id === offerId ? { ...o, isRead: true } : o))
     );
@@ -201,7 +201,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addBrokerListing = async (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>): Promise<string | null> => {
+  const addBrokerListing = async (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>): Promise<number | null> => {
     try {
       const res = await fetch('/api/listings', {
         method: 'POST',
@@ -209,7 +209,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(listing),
       });
       const data = await res.json();
-      const serverId = data.id ?? `bl-${Date.now()}`;
+      const serverId = data.id ?? Date.now();
 
       const newListing: BrokerListing = {
         ...listing,
@@ -225,7 +225,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Failed to add listing:', e);
       const newListing: BrokerListing = {
         ...listing,
-        id: `bl-${Date.now()}`,
+        id: Date.now(),
         status: 'active',
         createdAt: new Date().toISOString(),
         images: [],
@@ -236,7 +236,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const removeBrokerListing = (id: string) => {
+  const removeBrokerListing = (id: number) => {
     setBrokerListings((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status: 'sold' } : l))
     );

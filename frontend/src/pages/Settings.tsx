@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings as SettingsIcon, Phone, User, Loader2, CheckCircle } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {

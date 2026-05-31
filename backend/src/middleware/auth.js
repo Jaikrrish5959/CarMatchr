@@ -64,7 +64,7 @@ export function requireOwnership(paramName = 'id') {
       // Admins can act on any resource
       return next();
     }
-    if (req.params[paramName] !== req.user.sub) {
+    if (String(req.params[paramName]) !== String(req.user.sub)) {
       return res.status(403).json({ error: 'You can only modify your own resources.' });
     }
     next();

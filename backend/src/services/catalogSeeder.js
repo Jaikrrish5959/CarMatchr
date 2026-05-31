@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
-import { db } from './db.js';
+import { db } from '../db/index.js';
 
 function normalizeBrand(raw) {
   const value = (raw || '').trim();
@@ -21,13 +21,16 @@ function normalizeModel(raw) {
   return value.replace(/\s+/g, ' ');
 }
 
-function upsertCatalog(brand, model) {
-  db.prepare('INSERT OR IGNORE INTO brands(name) VALUES (?)').run(brand);
-  const brandRow = db.prepare('SELECT id FROM brands WHERE name = ?').get(brand);
-  db.prepare('INSERT OR IGNORE INTO models(brandId, name) VALUES (?, ?)').run(brandRow.id, model);
+async function upsertCatalog(brand, model) {
+  await db.run('INSERT INTO brands(name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [brand]);
+  const brandRow = await db.get('SELECT id FROM brands WHERE name = $1', [brand]);
+  await db.run(
+    'INSERT INTO models(brand_id, name) VALUES ($1, $2) ON CONFLICT (brand_id, name) DO NOTHING',
+    [brandRow.id, model]
+  );
 }
 
-function importFile(filePath, mapper) {
+async function importFile(filePath, mapper) {
   if (!fs.existsSync(filePath)) return 0;
   const content = fs.readFileSync(filePath, 'utf8');
   const rows = parse(content, { columns: true, skip_empty_lines: true });
@@ -35,18 +38,17 @@ function importFile(filePath, mapper) {
   for (const row of rows) {
     const mapped = mapper(row);
     if (!mapped) continue;
-    upsertCatalog(mapped.brand, mapped.model);
+    await upsertCatalog(mapped.brand, mapped.model);
     count += 1;
   }
   return count;
 }
 
-function seedLogos() {
-  const companiesPath = path.resolve(process.cwd(), 'companies.csv');
+async function seedLogos() {
+  const companiesPath = path.resolve(process.cwd(), 'data', 'companies.csv');
   if (!fs.existsSync(companiesPath)) return;
   const content = fs.readFileSync(companiesPath, 'utf8');
   const rows = parse(content, { columns: true, skip_empty_lines: true });
-  const updateStmt = db.prepare('UPDATE brands SET logoUrl = ? WHERE LOWER(name) = LOWER(?)');
 
   // Manual mappings for brands missing from companies.csv or with different names
   const manualMappings = [
@@ -59,25 +61,35 @@ function seedLogos() {
   ];
 
   for (const mapping of manualMappings) {
-    updateStmt.run(mapping.logo, mapping.name);
+    await db.run('UPDATE brands SET logo_url = $1 WHERE LOWER(name) = LOWER($2)', [
+      mapping.logo,
+      mapping.name,
+    ]);
   }
 
   for (const row of rows) {
     if (row.name && row.logo_link) {
-      updateStmt.run(row.logo_link, row.name);
+      await db.run('UPDATE brands SET logo_url = $1 WHERE LOWER(name) = LOWER($2)', [
+        row.logo_link,
+        row.name,
+      ]);
       // Also try normalized version just in case
-      updateStmt.run(row.logo_link, normalizeBrand(row.name));
+      await db.run('UPDATE brands SET logo_url = $1 WHERE LOWER(name) = LOWER($2)', [
+        row.logo_link,
+        normalizeBrand(row.name),
+      ]);
     }
   }
 }
 
-export function seedCatalog() {
-  const count = db.prepare('SELECT COUNT(*) as c FROM brands').get().c;
+export async function seedCatalog() {
+  const countRow = await db.get('SELECT COUNT(*) as c FROM brands');
+  const count = Number(countRow?.c ?? 0);
   if (count === 0) {
-    const carDekhoPath = path.resolve(process.cwd(), 'CAR DETAILS FROM CAR DEKHO.csv');
-    const carsExportPath = path.resolve(process.cwd(), 'Cars export 2026-04-28 12-08-05.csv');
+    const carDekhoPath = path.resolve(process.cwd(), 'data', 'car_dekho.csv');
+    const carsExportPath = path.resolve(process.cwd(), 'data', 'cars_export_2026-04-28.csv');
 
-    importFile(carDekhoPath, (row) => {
+    await importFile(carDekhoPath, (row) => {
       const name = String(row.name || '').trim();
       if (!name) return null;
       const parts = name.split(/\s+/);
@@ -87,7 +99,7 @@ export function seedCatalog() {
       return { brand, model };
     });
 
-    importFile(carsExportPath, (row) => {
+    await importFile(carsExportPath, (row) => {
       const brand = normalizeBrand(row.Manufacturer);
       const model = normalizeModel(row.model);
       if (!brand || !model) return null;
@@ -95,6 +107,7 @@ export function seedCatalog() {
     });
   }
 
-  seedLogos();
-  return db.prepare('SELECT COUNT(*) as c FROM brands').get().c;
+  await seedLogos();
+  const finalCountRow = await db.get('SELECT COUNT(*) as c FROM brands');
+  return Number(finalCountRow?.c ?? 0);
 }

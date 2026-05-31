@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useAuth } from '../../contexts/useAuth';
-import { useData } from '../../contexts/useData';
+import { useAuth } from '../../hooks/useAuth';
+import { useData } from '../../hooks/useData';
 import {
   Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel,
   Gauge, ImagePlus, Users, Star, ChevronDown, TrendingDown, TrendingUp,
@@ -8,7 +8,7 @@ import {
   Zap, ArrowRight,
 } from 'lucide-react';
 import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
-import { useCatalog } from '../../contexts/useCatalog';
+import { useCatalog } from '../../hooks/useCatalog';
 import { getToken } from '../../services/authService';
 import toast from 'react-hot-toast';
 import type { BrokerListing, Requirement } from '../../contexts/DataContext';
@@ -170,7 +170,7 @@ const BrokerDashboard: React.FC = () => {
   const carouselRef = useRef<HTMLDivElement>(null);
 
   // — Offer form state —
-  const [activeReqId, setActiveReqId] = useState<string | null>(null);
+  const [activeReqId, setActiveReqId] = useState<number | null>(null);
   const [price, setPrice] = useState('');
   const [details, setDetails] = useState('');
   const [offerError, setOfferError] = useState('');
@@ -181,11 +181,11 @@ const BrokerDashboard: React.FC = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   // — NEW feature state —
-  const [savedReqIds, setSavedReqIds] = useState<string[]>([]);
+  const [savedReqIds, setSavedReqIds] = useState<number[]>([]);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [inventoryPickerReqId, setInventoryPickerReqId] = useState<string | null>(null);
+  const [inventoryPickerReqId, setInventoryPickerReqId] = useState<number | null>(null);
 
   // — List Car form state —
   const [listForm, setListForm] = useState<{
@@ -250,7 +250,7 @@ const BrokerDashboard: React.FC = () => {
   const buyerReqCount = sidebarReq ? requirements.filter(r => r.buyerId === sidebarReq.buyerId).length : 0;
 
   /* ---- HANDLERS ---- */
-  const handleSubmitOffer = (e: React.FormEvent, reqId: string) => {
+  const handleSubmitOffer = (e: React.FormEvent, reqId: number) => {
     e.preventDefault();
     if (!user?.phone) {
       const msg = 'Add your contact number in your broker profile before sending offers.';
@@ -288,7 +288,7 @@ const BrokerDashboard: React.FC = () => {
     setListForm({ make: '', model: '', variant: '', year: 2024, price: 0, fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV', color: '', city: '', kmDriven: 0, owners: 1, description: '' });
   };
 
-  const toggleSave = (reqId: string) =>
+  const toggleSave = (reqId: number) =>
     setSavedReqIds(prev => prev.includes(reqId) ? prev.filter(id => id !== reqId) : [...prev, reqId]);
 
   const selectedBrand = brands.find(b => b.name === listForm.make);
@@ -429,7 +429,7 @@ const BrokerDashboard: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                           <div>
                             <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                              REQ #{req.id.split('-').pop()?.toUpperCase().slice(0, 8)}
+                              REQ #{String(req.id).slice(-8).toUpperCase()}
                             </p>
                             <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--color-dark)' }}>{req.make} {req.model}</h3>
                             <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>

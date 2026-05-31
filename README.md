@@ -24,7 +24,7 @@ The project is split into two completely separate repositories/folders:
 
 - **Frontend:** React, TypeScript, Vite, React Router (`frontend/`)
 - **Backend:** Node.js, Express (`backend/`)
-- **Database:** SQLite via `better-sqlite3` (`backend/db/`)
+- **Database:** PostgreSQL via `pg`
 - **Data Ingest:** `csv-parse` for initial seed data
 
 ## Project Structure
@@ -32,7 +32,7 @@ The project is split into two completely separate repositories/folders:
 - `frontend/` - React frontend application
   - `src/` - React components, pages, contexts, etc.
 - `backend/` - Node.js Express backend API
-  - `db/` - SQLite database and local uploads folder
+  - `db/` - local uploads folder
   - `CAR DETAILS FROM CAR DEKHO.csv` - Source dataset for seeding
   - `companies.csv` - Source dataset for seeding
 
@@ -58,6 +58,20 @@ npm install
 **Configure environment:**
 ```bash
 cp .env.example .env
+```
+
+**Set up PostgreSQL (local):**
+1. Install PostgreSQL and create a database named `carmatchr`.
+2. Update `DATABASE_URL` in `.env`:
+  ```bash
+  DATABASE_URL=postgres://postgres:password@localhost:5432/carmatchr
+  ```
+3. (Optional) If your Postgres requires SSL, set `PGSSL=true`.
+
+**Migrate existing SQLite data (optional):**
+If you have an existing SQLite database in `backend/db/carmatchr.sqlite`, run:
+```bash
+npm run migrate:sqlite
 ```
 *(Edit `.env` and set a strong `JWT_SECRET`)*
 

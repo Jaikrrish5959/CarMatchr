@@ -4,13 +4,13 @@ import {
   Search, Zap, Award, ArrowRight, Star,
   MapPin, Heart, Fuel, Gauge, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { useAuth } from '../contexts/useAuth';
-import { useData } from '../contexts/useData';
-import { useLanguage } from '../contexts/useLanguage';
+import { useAuth } from '../hooks/useAuth';
+import { useData } from '../hooks/useData';
+import { useLanguage } from '../hooks/useLanguage';
 import {
   carListings
 } from '../data/carDatabase';
-import { useCatalog } from '../contexts/useCatalog';
+import { useCatalog } from '../hooks/useCatalog';
 import toast from 'react-hot-toast';
 
 const Home: React.FC = () => {
@@ -375,8 +375,8 @@ const Home: React.FC = () => {
               fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)',
               textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0,
             }}>{t('exploreByBrand')}</h3>
-            {brands.slice(0, 24).map(b => (
-              <button key={b.name} onClick={() => navigate(`/marketplace`)}
+            {brands.slice(0, 24).map((b) => (
+              <button key={b.id} onClick={() => navigate(`/marketplace`)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
                   padding: '8px 14px', background: 'var(--color-gray-50)',
@@ -385,11 +385,11 @@ const Home: React.FC = () => {
                   minWidth: '72px', flexShrink: 0, transition: 'all 0.15s',
                 }}>
                 {b.logoUrl ? (
-                  <img src={b.logoUrl} alt={b.name} style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                  <img src={b.logoUrl} alt={b.name || 'Brand'} style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                 ) : (
-                  <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>{b.name.slice(0, 2).toUpperCase()}</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>{(b.name || 'NA').slice(0, 2).toUpperCase()}</span>
                 )}
-                <span style={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--color-gray-600)', whiteSpace: 'nowrap' }}>{b.name}</span>
+                <span style={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--color-gray-600)', whiteSpace: 'nowrap' }}>{b.name || 'Unknown'}</span>
               </button>
             ))}
           </div>

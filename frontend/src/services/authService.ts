@@ -2,7 +2,7 @@
 // Handles all authentication HTTP calls and localStorage token management.
 
 export interface AuthUser {
-  id: string;
+  id: number;
   email: string;
   username?: string;
   name?: string;

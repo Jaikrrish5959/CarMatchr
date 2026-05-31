@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import { useAuth } from './contexts/useAuth';
+import { useAuth } from './hooks/useAuth';
 
 const Home = React.lazy(() => import('./pages/Home'));
 const Login = React.lazy(() => import('./pages/Login'));

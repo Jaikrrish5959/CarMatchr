@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/useAuth';
-import { useData } from '../../contexts/useData';
+import { useAuth } from '../../hooks/useAuth';
+import { useData } from '../../hooks/useData';
 import { Plus, X, Check, Clock, MessageSquare, Loader2 } from 'lucide-react';
-import { useCatalog } from '../../contexts/useCatalog';
+import { useCatalog } from '../../hooks/useCatalog';
 import toast from 'react-hot-toast';
 
 const BuyerDashboard: React.FC = () => {

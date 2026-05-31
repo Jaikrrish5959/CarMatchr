@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { CatalogContext } from './CatalogContext';
+import { CatalogContext } from '../contexts/CatalogContext';
 
 export const useCatalog = () => {
   const context = useContext(CatalogContext);

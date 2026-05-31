@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Home, Users, Image as ImageIcon, Cpu, Settings,
+  Home, Users, Image as ImageIcon, Cpu, Settings, Car,
   MessageSquare, BookOpen, ArrowUpRight, Plus, Trash2,
   Check, TrendingUp, Sparkles, ShieldCheck
 } from 'lucide-react';
-import { useCatalog } from '../contexts/useCatalog';
+import { useCatalog } from '../hooks/useCatalog';
 import { authHeaders } from '../services/authService';
 
 function authJsonHeaders(): Record<string, string> {
@@ -13,7 +13,7 @@ function authJsonHeaders(): Record<string, string> {
 }
 
 type AdminUser = {
-  id: string;
+  id: number;
   email: string;
   role: 'buyer' | 'broker' | 'admin';
   status: 'active' | 'pending';
@@ -35,8 +35,30 @@ const AdminDashboard: React.FC = () => {
   const [featureId, setFeatureId] = useState<number | null>(null);
 
   // Layout states
-  const [activeTab, setActiveTab] = useState<'overview' | 'brokers' | 'media' | 'features'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'brokers' | 'media' | 'features' | 'master-data' | 'catalog'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const [catalogTab, setCatalogTab] = useState<'brands' | 'models'>('brands');
+  const [brandRows, setBrandRows] = useState<Array<{ id: number; name: string; logoUrl?: string | null }>>([]);
+  const [modelRows, setModelRows] = useState<Array<{ id: number; brandId: number; brandName: string; name: string; imageUrl?: string | null }>>([]);
+  const [brandForm, setBrandForm] = useState({ name: '', logoUrl: '' });
+  const [modelForm, setModelForm] = useState({ brandId: '', name: '', imageUrl: '' });
+  const [brandEditId, setBrandEditId] = useState<number | null>(null);
+  const [brandEditForm, setBrandEditForm] = useState({ name: '', logoUrl: '' });
+  const [modelEditId, setModelEditId] = useState<number | null>(null);
+  const [modelEditForm, setModelEditForm] = useState({ brandId: '', name: '', imageUrl: '' });
+  const [brandBulkFile, setBrandBulkFile] = useState<File | null>(null);
+  const [modelBulkFile, setModelBulkFile] = useState<File | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [modelFilterBrandId, setModelFilterBrandId] = useState<string>('');
+
+  const [masterType, setMasterType] = useState<'cities' | 'fuel_types' | 'body_types' | 'transmissions'>('cities');
+  const [masterRows, setMasterRows] = useState<Array<Record<string, any>>>([]);
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [masterForm, setMasterForm] = useState<Record<string, string>>({});
+  const [masterEditId, setMasterEditId] = useState<number | null>(null);
+  const [masterEditForm, setMasterEditForm] = useState<Record<string, string>>({});
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
 
   const loadUsers = async () => {
     try {
@@ -58,10 +80,94 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const loadBrandCatalog = async () => {
+    setCatalogLoading(true);
+    try {
+      const res = await fetch('/api/admin/brands', { headers: authHeaders() });
+      const data = await res.json();
+      setBrandRows(Array.isArray(data) ? data : []);
+    } catch {
+      setBrandRows([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const loadModelCatalog = async () => {
+    setCatalogLoading(true);
+    try {
+      const query = modelFilterBrandId ? `?brandId=${modelFilterBrandId}` : '';
+      const res = await fetch(`/api/admin/models${query}`, { headers: authHeaders() });
+      const data = await res.json();
+      setModelRows(Array.isArray(data) ? data : []);
+    } catch {
+      setModelRows([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
     loadFeatures();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'catalog') {
+      loadBrandCatalog();
+      if (catalogTab === 'models') {
+        loadModelCatalog();
+      }
+    }
+  }, [activeTab, catalogTab, modelFilterBrandId]);
+
+  const masterTypeOptions = [
+    {
+      key: 'cities',
+      label: 'Cities',
+      fields: [
+        { key: 'name', label: 'City Name', required: true },
+        { key: 'state', label: 'State', required: false },
+        { key: 'icon', label: 'Icon', required: false },
+      ],
+    },
+    {
+      key: 'fuel_types',
+      label: 'Fuel Types',
+      fields: [{ key: 'name', label: 'Fuel Type', required: true }],
+    },
+    {
+      key: 'body_types',
+      label: 'Body Types',
+      fields: [{ key: 'name', label: 'Body Type', required: true }],
+    },
+    {
+      key: 'transmissions',
+      label: 'Transmissions',
+      fields: [{ key: 'name', label: 'Transmission', required: true }],
+    },
+  ] as const;
+
+  const activeMasterType = masterTypeOptions.find((t) => t.key === masterType) ?? masterTypeOptions[0];
+
+  const loadMasterData = async (type = masterType) => {
+    setMasterLoading(true);
+    try {
+      const res = await fetch(`/api/admin/master-data/${type}`, { headers: authHeaders() });
+      const data = await res.json();
+      setMasterRows(Array.isArray(data) ? data : []);
+    } catch {
+      setMasterRows([]);
+    } finally {
+      setMasterLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'master-data') {
+      loadMasterData();
+    }
+  }, [activeTab, masterType]);
 
   const selectedBrand = useMemo(
     () => brands.find((b) => b.id === selectedBrandId) ?? null,
@@ -72,7 +178,7 @@ const AdminDashboard: React.FC = () => {
     [selectedBrand, selectedModelId]
   );
 
-  const approveBroker = async (userId: string) => {
+  const approveBroker = async (userId: number) => {
     try {
       await fetch(`/api/users/${userId}/status`, {
         method: 'PATCH',
@@ -172,6 +278,263 @@ const AdminDashboard: React.FC = () => {
       await refreshCatalog();
     } catch {
       toast.error('Failed to remove feature.');
+    }
+  };
+
+  const resetBrandForms = () => {
+    setBrandForm({ name: '', logoUrl: '' });
+    setBrandEditId(null);
+    setBrandEditForm({ name: '', logoUrl: '' });
+  };
+
+  const resetModelForms = () => {
+    setModelForm({ brandId: '', name: '', imageUrl: '' });
+    setModelEditId(null);
+    setModelEditForm({ brandId: '', name: '', imageUrl: '' });
+  };
+
+  const addBrand = async () => {
+    if (!brandForm.name.trim()) {
+      toast.error('Brand name is required.');
+      return;
+    }
+    try {
+      await fetch('/api/admin/brands', {
+        method: 'POST',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ name: brandForm.name.trim(), logoUrl: brandForm.logoUrl.trim() || null }),
+      });
+      toast.success('Brand added.');
+      resetBrandForms();
+      await loadBrandCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to add brand.');
+    }
+  };
+
+  const saveBrandEdit = async () => {
+    if (!brandEditId) return;
+    try {
+      await fetch(`/api/admin/brands/${brandEditId}`, {
+        method: 'PATCH',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+          name: brandEditForm.name.trim() || undefined,
+          logoUrl: brandEditForm.logoUrl.trim() || null,
+        }),
+      });
+      toast.success('Brand updated.');
+      resetBrandForms();
+      await loadBrandCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to update brand.');
+    }
+  };
+
+  const deleteBrand = async (id: number) => {
+    if (!window.confirm('Delete this brand and all its models?')) return;
+    try {
+      await fetch(`/api/admin/brands/${id}`, { method: 'DELETE', headers: authHeaders() });
+      toast.success('Brand deleted.');
+      await loadBrandCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to delete brand.');
+    }
+  };
+
+  const addModel = async () => {
+    if (!modelForm.brandId || !modelForm.name.trim()) {
+      toast.error('Brand and model name are required.');
+      return;
+    }
+    try {
+      await fetch('/api/admin/models', {
+        method: 'POST',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+          brandId: Number(modelForm.brandId),
+          name: modelForm.name.trim(),
+          imageUrl: modelForm.imageUrl.trim() || null,
+        }),
+      });
+      toast.success('Model added.');
+      resetModelForms();
+      await loadModelCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to add model.');
+    }
+  };
+
+  const saveModelEdit = async () => {
+    if (!modelEditId) return;
+    try {
+      await fetch(`/api/admin/models/${modelEditId}`, {
+        method: 'PATCH',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+          brandId: modelEditForm.brandId ? Number(modelEditForm.brandId) : undefined,
+          name: modelEditForm.name.trim() || undefined,
+          imageUrl: modelEditForm.imageUrl.trim() || null,
+        }),
+      });
+      toast.success('Model updated.');
+      resetModelForms();
+      await loadModelCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to update model.');
+    }
+  };
+
+  const deleteModel = async (id: number) => {
+    if (!window.confirm('Delete this model?')) return;
+    try {
+      await fetch(`/api/admin/models/${id}`, { method: 'DELETE', headers: authHeaders() });
+      toast.success('Model deleted.');
+      await loadModelCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Failed to delete model.');
+    }
+  };
+
+  const uploadBrandBulk = async () => {
+    if (!brandBulkFile) {
+      toast.error('Please choose a brand CSV file.');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('file', brandBulkFile);
+      await fetch('/api/admin/brands/bulk', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      });
+      toast.success('Brand upload complete.');
+      setBrandBulkFile(null);
+      await loadBrandCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Brand upload failed.');
+    }
+  };
+
+  const uploadModelBulk = async () => {
+    if (!modelBulkFile) {
+      toast.error('Please choose a model CSV file.');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('file', modelBulkFile);
+      await fetch('/api/admin/models/bulk', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      });
+      toast.success('Model upload complete.');
+      setModelBulkFile(null);
+      await loadModelCatalog();
+      await refreshCatalog();
+    } catch {
+      toast.error('Model upload failed.');
+    }
+  };
+
+  const resetMasterForms = () => {
+    setMasterForm({});
+    setMasterEditId(null);
+    setMasterEditForm({});
+  };
+
+  const addMasterRow = async () => {
+    const payload: Record<string, string> = {};
+    for (const field of activeMasterType.fields) {
+      payload[field.key] = masterForm[field.key]?.trim() ?? '';
+    }
+
+    const missing = activeMasterType.fields.find((f) => f.required && !payload[f.key]);
+    if (missing) {
+      toast.error(`Please provide ${missing.label}.`);
+      return;
+    }
+
+    try {
+      await fetch(`/api/admin/master-data/${masterType}`, {
+        method: 'POST',
+        headers: authJsonHeaders(),
+        body: JSON.stringify(payload),
+      });
+      toast.success('Saved successfully.');
+      resetMasterForms();
+      await loadMasterData();
+    } catch {
+      toast.error('Failed to save entry.');
+    }
+  };
+
+  const startEditMasterRow = (row: Record<string, any>) => {
+    setMasterEditId(row.id);
+    const values: Record<string, string> = {};
+    for (const field of activeMasterType.fields) {
+      values[field.key] = row[field.key] ?? '';
+    }
+    setMasterEditForm(values);
+  };
+
+  const saveMasterEdit = async () => {
+    if (!masterEditId) return;
+    try {
+      await fetch(`/api/admin/master-data/${masterType}/${masterEditId}`, {
+        method: 'PATCH',
+        headers: authJsonHeaders(),
+        body: JSON.stringify(masterEditForm),
+      });
+      toast.success('Updated successfully.');
+      resetMasterForms();
+      await loadMasterData();
+    } catch {
+      toast.error('Failed to update entry.');
+    }
+  };
+
+  const deleteMasterRow = async (rowId: number) => {
+    if (!window.confirm('Delete this entry?')) return;
+    try {
+      await fetch(`/api/admin/master-data/${masterType}/${rowId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      toast.success('Deleted successfully.');
+      await loadMasterData();
+    } catch {
+      toast.error('Failed to delete entry.');
+    }
+  };
+
+  const uploadMasterBulk = async () => {
+    if (!bulkFile) {
+      toast.error('Please choose a CSV file.');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('file', bulkFile);
+      await fetch(`/api/admin/master-data/${masterType}/bulk`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: formData,
+      });
+      toast.success('Bulk upload complete.');
+      setBulkFile(null);
+      await loadMasterData();
+    } catch {
+      toast.error('Bulk upload failed.');
     }
   };
 
@@ -279,6 +642,32 @@ const AdminDashboard: React.FC = () => {
           >
             <Cpu size={20} strokeWidth={activeTab === 'features' ? 2.5 : 2} />
           </button>
+
+          <button
+            onClick={() => setActiveTab('master-data')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: activeTab === 'master-data' ? '#e1f893' : '#64748b',
+              padding: '12px', borderRadius: '50%', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="Master Data"
+          >
+            <Settings size={20} strokeWidth={activeTab === 'master-data' ? 2.5 : 2} />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('catalog')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: activeTab === 'catalog' ? '#e1f893' : '#64748b',
+              padding: '12px', borderRadius: '50%', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="Car Catalog"
+          >
+            <Car size={20} strokeWidth={activeTab === 'catalog' ? 2.5 : 2} />
+          </button>
         </div>
 
         {/* Bottom Actions */}
@@ -378,7 +767,8 @@ const AdminDashboard: React.FC = () => {
             { id: 'overview', label: 'Overview' },
             { id: 'brokers', label: 'Broker Validation' },
             { id: 'media', label: 'Catalog Media' },
-            { id: 'features', label: 'Model Features' }
+            { id: 'features', label: 'Model Features' },
+            { id: 'master-data', label: 'Master Data' }
           ].map(t => (
             <button
               key={t.id}
@@ -642,6 +1032,7 @@ const AdminDashboard: React.FC = () => {
                     { title: 'Registered Buyers', count: buyersCount, desc: 'View current car buyers', action: () => toast.success(`Active Buyer Accounts: ${buyersCount}`) },
                     { title: 'Brand Catalog', count: brands.length, desc: 'Media and logo uploads', action: () => setActiveTab('media') },
                     { title: 'Assigned Features', count: features.length, desc: 'Unique model specifications', action: () => setActiveTab('features') },
+                    { title: 'Car Catalog', count: brandRows.length, desc: 'Brands and models', action: () => setActiveTab('catalog') },
                     { title: 'Security Audits', count: 'Strict', desc: 'Secure middleware states', action: () => toast.success('Vite + Express OWASP Hardening Active') },
                   ].map((opt, idx) => (
                     <div
@@ -913,6 +1304,586 @@ const AdminDashboard: React.FC = () => {
               )}
             </div>
 
+          </div>
+        )}
+
+        {/* CAR CATALOG PANEL */}
+        {activeTab === 'catalog' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div className="card" style={{ padding: '32px', background: '#fff', borderRadius: '24px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#09090b', marginBottom: '4px' }}>Car Catalog</h2>
+              <p style={{ color: '#64748b', fontSize: '0.8125rem', marginBottom: '24px' }}>
+                Manage brand and model catalog entries used across the platform.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
+                {[
+                  { id: 'brands', label: 'Brands' },
+                  { id: 'models', label: 'Models' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setCatalogTab(t.id as 'brands' | 'models')}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '999px',
+                      border: '1px solid #e2e8f0',
+                      background: catalogTab === t.id ? '#09090b' : '#fff',
+                      color: catalogTab === t.id ? '#fff' : '#64748b',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: catalogTab === t.id ? '0 6px 14px rgba(9,9,11,0.18)' : 'var(--shadow-sm)',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {catalogTab === 'brands' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Brand Name</label>
+                      <input
+                        className="form-control"
+                        value={brandForm.name}
+                        onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
+                        placeholder="e.g. Hyundai"
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Logo URL</label>
+                      <input
+                        className="form-control"
+                        value={brandForm.logoUrl}
+                        onChange={(e) => setBrandForm({ ...brandForm, logoUrl: e.target.value })}
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <button className="btn btn-primary" onClick={addBrand} style={{ height: '42px' }}>
+                      <Plus size={16} /> Add Brand
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Bulk CSV Upload</label>
+                      <div style={{
+                        border: '1px dashed #e2e8f0',
+                        borderRadius: '14px',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        background: '#f8fafc'
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
+                            {brandBulkFile ? brandBulkFile.name : 'No file selected'}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            CSV headers: name, logoUrl
+                          </span>
+                        </div>
+                        <div>
+                          <input
+                            id="brand-csv"
+                            type="file"
+                            accept=".csv"
+                            style={{ display: 'none' }}
+                            onChange={(e) => setBrandBulkFile(e.target.files?.[0] ?? null)}
+                          />
+                          <label
+                            htmlFor="brand-csv"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '36px',
+                              padding: '0 14px',
+                              borderRadius: '999px',
+                              border: '1px solid #e2e8f0',
+                              background: '#fff',
+                              color: '#0f172a',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: 'var(--shadow-sm)'
+                            }}
+                          >
+                            Choose CSV
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={uploadBrandBulk} style={{ height: '42px' }}>
+                      Upload CSV
+                    </button>
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', color: '#64748b' }}>
+                          <th style={{ padding: '10px 8px' }}>ID</th>
+                          <th style={{ padding: '10px 8px' }}>Brand</th>
+                          <th style={{ padding: '10px 8px' }}>Logo URL</th>
+                          <th style={{ padding: '10px 8px' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {brandRows.map((row) => (
+                          <tr key={row.id} style={{ borderTop: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '10px 8px', fontWeight: 700, color: '#0f172a' }}>{row.id}</td>
+                            <td style={{ padding: '10px 8px' }}>
+                              {brandEditId === row.id ? (
+                                <input
+                                  className="form-control"
+                                  value={brandEditForm.name}
+                                  onChange={(e) => setBrandEditForm({ ...brandEditForm, name: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ color: '#0f172a' }}>{row.name}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 8px' }}>
+                              {brandEditId === row.id ? (
+                                <input
+                                  className="form-control"
+                                  value={brandEditForm.logoUrl}
+                                  onChange={(e) => setBrandEditForm({ ...brandEditForm, logoUrl: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ color: '#0f172a' }}>{row.logoUrl ?? '-'}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 8px' }}>
+                              {brandEditId === row.id ? (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button className="btn btn-primary btn-sm" onClick={saveBrandEdit}>Save</button>
+                                  <button className="btn btn-secondary btn-sm" onClick={resetBrandForms}>Cancel</button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => {
+                                      setBrandEditId(row.id);
+                                      setBrandEditForm({ name: row.name, logoUrl: row.logoUrl ?? '' });
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => deleteBrand(row.id)}
+                                    style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                                  >
+                                    <Trash2 size={12} /> Delete
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {catalogTab === 'models' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Brand</label>
+                      <select
+                        className="form-control"
+                        value={modelForm.brandId}
+                        onChange={(e) => setModelForm({ ...modelForm, brandId: e.target.value })}
+                      >
+                        <option value="">Select brand</option>
+                        {brandRows.map((b) => (
+                          <option key={b.id} value={String(b.id)}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Model Name</label>
+                      <input
+                        className="form-control"
+                        value={modelForm.name}
+                        onChange={(e) => setModelForm({ ...modelForm, name: e.target.value })}
+                        placeholder="e.g. Creta"
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Image URL</label>
+                      <input
+                        className="form-control"
+                        value={modelForm.imageUrl}
+                        onChange={(e) => setModelForm({ ...modelForm, imageUrl: e.target.value })}
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <button className="btn btn-primary" onClick={addModel} style={{ height: '42px' }}>
+                      <Plus size={16} /> Add Model
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr auto', gap: '16px', alignItems: 'end' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Filter by Brand</label>
+                      <select
+                        className="form-control"
+                        value={modelFilterBrandId}
+                        onChange={(e) => setModelFilterBrandId(e.target.value)}
+                      >
+                        <option value="">All brands</option>
+                        {brandRows.map((b) => (
+                          <option key={b.id} value={String(b.id)}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Bulk CSV Upload</label>
+                      <div style={{
+                        border: '1px dashed #e2e8f0',
+                        borderRadius: '14px',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        background: '#f8fafc'
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
+                            {modelBulkFile ? modelBulkFile.name : 'No file selected'}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            CSV headers: brandName, name, imageUrl
+                          </span>
+                        </div>
+                        <div>
+                          <input
+                            id="model-csv"
+                            type="file"
+                            accept=".csv"
+                            style={{ display: 'none' }}
+                            onChange={(e) => setModelBulkFile(e.target.files?.[0] ?? null)}
+                          />
+                          <label
+                            htmlFor="model-csv"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '36px',
+                              padding: '0 14px',
+                              borderRadius: '999px',
+                              border: '1px solid #e2e8f0',
+                              background: '#fff',
+                              color: '#0f172a',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: 'var(--shadow-sm)'
+                            }}
+                          >
+                            Choose CSV
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={uploadModelBulk} style={{ height: '42px' }}>
+                      Upload CSV
+                    </button>
+                  </div>
+
+                  {catalogLoading ? (
+                    <div style={{ padding: '24px 0', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>Loading...</div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                        <thead>
+                          <tr style={{ textAlign: 'left', color: '#64748b' }}>
+                            <th style={{ padding: '10px 8px' }}>ID</th>
+                            <th style={{ padding: '10px 8px' }}>Brand</th>
+                            <th style={{ padding: '10px 8px' }}>Model</th>
+                            <th style={{ padding: '10px 8px' }}>Image URL</th>
+                            <th style={{ padding: '10px 8px' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {modelRows.map((row) => (
+                            <tr key={row.id} style={{ borderTop: '1px solid #e2e8f0' }}>
+                              <td style={{ padding: '10px 8px', fontWeight: 700, color: '#0f172a' }}>{row.id}</td>
+                              <td style={{ padding: '10px 8px' }}>
+                                {modelEditId === row.id ? (
+                                  <select
+                                    className="form-control"
+                                    value={modelEditForm.brandId}
+                                    onChange={(e) => setModelEditForm({ ...modelEditForm, brandId: e.target.value })}
+                                  >
+                                    <option value="">Select brand</option>
+                                    {brandRows.map((b) => (
+                                      <option key={b.id} value={String(b.id)}>{b.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span style={{ color: '#0f172a' }}>{row.brandName}</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 8px' }}>
+                                {modelEditId === row.id ? (
+                                  <input
+                                    className="form-control"
+                                    value={modelEditForm.name}
+                                    onChange={(e) => setModelEditForm({ ...modelEditForm, name: e.target.value })}
+                                  />
+                                ) : (
+                                  <span style={{ color: '#0f172a' }}>{row.name}</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 8px' }}>
+                                {modelEditId === row.id ? (
+                                  <input
+                                    className="form-control"
+                                    value={modelEditForm.imageUrl}
+                                    onChange={(e) => setModelEditForm({ ...modelEditForm, imageUrl: e.target.value })}
+                                  />
+                                ) : (
+                                  <span style={{ color: '#0f172a' }}>{row.imageUrl ?? '-'}</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 8px' }}>
+                                {modelEditId === row.id ? (
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-primary btn-sm" onClick={saveModelEdit}>Save</button>
+                                    <button className="btn btn-secondary btn-sm" onClick={resetModelForms}>Cancel</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => {
+                                        setModelEditId(row.id);
+                                        setModelEditForm({
+                                          brandId: String(row.brandId),
+                                          name: row.name,
+                                          imageUrl: row.imageUrl ?? '',
+                                        });
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => deleteModel(row.id)}
+                                      style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                                    >
+                                      <Trash2 size={12} /> Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* MASTER DATA PANEL */}
+        {activeTab === 'master-data' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div className="card" style={{ padding: '32px', background: '#fff', borderRadius: '24px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#09090b', marginBottom: '4px' }}>Master Data Console</h2>
+              <p style={{ color: '#64748b', fontSize: '0.8125rem', marginBottom: '24px' }}>
+                Manage dropdown data for cities, fuel types, body types, and transmissions.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {masterTypeOptions.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => {
+                        setMasterType(t.key as any);
+                        resetMasterForms();
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '999px',
+                        border: '1px solid #e2e8f0',
+                        background: masterType === t.key ? '#09090b' : '#fff',
+                        color: masterType === t.key ? '#fff' : '#64748b',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: masterType === t.key ? '0 6px 14px rgba(9,9,11,0.18)' : 'var(--shadow-sm)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'end' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>Bulk CSV Upload</label>
+                    <div style={{
+                      border: '1px dashed #e2e8f0',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      background: '#f8fafc'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.8125rem', color: '#0f172a', fontWeight: 600 }}>
+                          {bulkFile ? bulkFile.name : 'No file selected'}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                          CSV headers: {activeMasterType.fields.map((f) => f.key).join(', ')}
+                        </span>
+                      </div>
+                      <div>
+                        <input
+                          id="master-csv"
+                          type="file"
+                          accept=".csv"
+                          style={{ display: 'none' }}
+                          onChange={(e) => setBulkFile(e.target.files?.[0] ?? null)}
+                        />
+                        <label
+                          htmlFor="master-csv"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '36px',
+                            padding: '0 14px',
+                            borderRadius: '999px',
+                            border: '1px solid #e2e8f0',
+                            background: '#fff',
+                            color: '#0f172a',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: 'var(--shadow-sm)'
+                          }}
+                        >
+                          Choose CSV
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary" onClick={uploadMasterBulk} style={{ height: '42px' }}>
+                    Upload CSV
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeMasterType.fields.length}, minmax(180px, 1fr)) auto`, gap: '12px', alignItems: 'end' }}>
+                {activeMasterType.fields.map((field) => (
+                  <div key={field.key} className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#09090b' }}>{field.label}</label>
+                    <input
+                      className="form-control"
+                      value={masterForm[field.key] ?? ''}
+                      onChange={(e) => setMasterForm({ ...masterForm, [field.key]: e.target.value })}
+                      placeholder={field.label}
+                    />
+                  </div>
+                ))}
+                <button className="btn btn-primary" onClick={addMasterRow} style={{ height: '42px' }}>
+                  <Plus size={16} /> Add
+                </button>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '24px', background: '#fff', borderRadius: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#09090b' }}>{activeMasterType.label} List</h3>
+                <button className="btn btn-secondary" onClick={() => loadMasterData()} disabled={masterLoading}>
+                  Refresh
+                </button>
+              </div>
+
+              {masterLoading ? (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>Loading...</div>
+              ) : masterRows.length === 0 ? (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>No data yet.</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: '#64748b' }}>
+                        <th style={{ padding: '10px 8px' }}>ID</th>
+                        {activeMasterType.fields.map((field) => (
+                          <th key={field.key} style={{ padding: '10px 8px' }}>{field.label}</th>
+                        ))}
+                        <th style={{ padding: '10px 8px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {masterRows.map((row) => (
+                        <tr key={row.id} style={{ borderTop: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '10px 8px', fontWeight: 700, color: '#0f172a' }}>{row.id}</td>
+                          {activeMasterType.fields.map((field) => (
+                            <td key={field.key} style={{ padding: '10px 8px' }}>
+                              {masterEditId === row.id ? (
+                                <input
+                                  className="form-control"
+                                  value={masterEditForm[field.key] ?? ''}
+                                  onChange={(e) => setMasterEditForm({ ...masterEditForm, [field.key]: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ color: '#0f172a' }}>{row[field.key] ?? '-'}</span>
+                              )}
+                            </td>
+                          ))}
+                          <td style={{ padding: '10px 8px' }}>
+                            {masterEditId === row.id ? (
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-primary btn-sm" onClick={saveMasterEdit}>Save</button>
+                                <button className="btn btn-secondary btn-sm" onClick={resetMasterForms}>Cancel</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-secondary btn-sm" onClick={() => startEditMasterRow(row)}>Edit</button>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => deleteMasterRow(row.id)}
+                                  style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                                >
+                                  <Trash2 size={12} /> Delete
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

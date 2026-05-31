@@ -4,7 +4,7 @@ import * as authService from '../services/authService';
 export type UserRole = 'buyer' | 'broker' | 'admin';
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
   password?: string;
   role: UserRole;
@@ -20,7 +20,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
-  register: (user: User & { password: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  register: (user: Omit<User, 'id'> & { password: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithGoogle: (credential: string, role: string) => Promise<authService.GoogleLoginResult>;
   registerBrokerWithGoogle: (data: {
     email: string;
@@ -69,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── Register ────────────────────────────────────────────────────────────────
   const register = async (
-    userData: User & { password: string }
+    userData: Omit<User, 'id'> & { password: string }
   ): Promise<{ ok: boolean; error?: string; user?: User }> => {
     const result = await authService.register(userData);
 
