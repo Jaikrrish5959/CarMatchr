@@ -32,18 +32,35 @@ const tableOrder = [
   'listingImages',
 ];
 
+const tableMap = {
+  users: 'users',
+  requirements: 'requirements',
+  offers: 'offers',
+  brokerListings: 'broker_listings',
+  brands: 'brands',
+  models: 'models',
+  features: 'features',
+  modelFeatures: 'model_features',
+  contactEvents: 'contact_events',
+  listingImages: 'listing_images',
+};
+
 const conflictTargets = {
   users: '(id)',
   requirements: '(id)',
   offers: '(id)',
-  brokerListings: '(id)',
+  broker_listings: '(id)',
   brands: '(id)',
   models: '(id)',
   features: '(id)',
-  modelFeatures: '(modelId, featureId)',
-  contactEvents: '(id)',
-  listingImages: '(id)',
+  model_features: '(model_id, feature_id)',
+  contact_events: '(id)',
+  listing_images: '(id)',
 };
+
+function camelToSnake(str) {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
 
 function normalizeRow(table, columns, values) {
   if (table === 'offers') {
@@ -55,16 +72,19 @@ function normalizeRow(table, columns, values) {
   return values;
 }
 
-async function insertRows(tx, table, columns, rows) {
+async function insertRows(tx, sqliteTable, columns, rows) {
   if (!rows.length) return 0;
-  const colList = columns.map((c) => `"${c}"`).join(', ');
-  const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-  const conflict = conflictTargets[table] ? ` ON CONFLICT ${conflictTargets[table]} DO NOTHING` : '';
-  const sql = `INSERT INTO "${table}" (${colList}) VALUES (${placeholders})${conflict}`;
+  const pgTable = tableMap[sqliteTable] || sqliteTable;
+  const pgColumns = columns.map(camelToSnake);
+
+  const colList = pgColumns.map((c) => `"${c}"`).join(', ');
+  const placeholders = pgColumns.map((_, i) => `$${i + 1}`).join(', ');
+  const conflict = conflictTargets[pgTable] ? ` ON CONFLICT ${conflictTargets[pgTable]} DO NOTHING` : '';
+  const sql = `INSERT INTO "${pgTable}" (${colList}) VALUES (${placeholders})${conflict}`;
 
   let inserted = 0;
   for (const row of rows) {
-    const normalized = normalizeRow(table, columns, [...row]);
+    const normalized = normalizeRow(sqliteTable, columns, [...row]);
     await tx.run(sql, normalized);
     inserted += 1;
   }
@@ -82,7 +102,7 @@ async function migrate() {
       }
       const { columns, values } = result[0];
       const count = await insertRows(tx, table, columns, values);
-      console.log(`Migrated ${count} rows into ${table}`);
+      console.log(`Migrated ${count} rows into ${tableMap[table] || table}`);
     }
 
     await tx.run(
@@ -95,10 +115,10 @@ async function migrate() {
       "SELECT setval(pg_get_serial_sequence('features','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM features), 1), true)"
     );
     await tx.run(
-      "SELECT setval(pg_get_serial_sequence('contactEvents','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM contactEvents), 1), true)"
+      "SELECT setval(pg_get_serial_sequence('contact_events','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM contact_events), 1), true)"
     );
     await tx.run(
-      "SELECT setval(pg_get_serial_sequence('listingImages','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM listingImages), 1), true)"
+      "SELECT setval(pg_get_serial_sequence('listing_images','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM listing_images), 1), true)"
     );
   });
 
