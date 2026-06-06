@@ -111,11 +111,11 @@ const BuyerDashboard: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Year Range</label>
-                  <input required className="form-control" value={yearRange} onChange={e => setYearRange(e.target.value)} placeholder="e.g. 2019 – 2022" />
+                  <input required className="form-control" value={yearRange} onChange={e => setYearRange(e.target.value)} placeholder="e.g. 2019 - 2022" pattern="^(19|20)\d{2}(\s*-\s*(19|20)\d{2})?$" title="Enter a valid year (e.g. 2020) or range (e.g. 2019-2022)" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Budget</label>
-                  <input required className="form-control" value={budget} onChange={e => setBudget(e.target.value)} placeholder="e.g. ₹10–15 Lakh" />
+                  <label className="form-label">Budget (₹ Lakhs)</label>
+                  <input required type="number" min="0" step="0.5" className="form-control" value={budget} onChange={e => setBudget(e.target.value)} placeholder="e.g. 15.5" title="Enter budget in Lakhs" />
                 </div>
               </div>
               <div className="form-group">
@@ -209,9 +209,11 @@ const BuyerDashboard: React.FC = () => {
                           <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--color-dark)' }}>{offer.brokerName}</span>
                           <span style={{ fontWeight: 800, fontSize: '1.0625rem', color: 'var(--color-primary)' }}>{offer.price}</span>
                         </div>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginBottom: '6px' }}>
-                          Contact: {offer.brokerPhone}
-                        </p>
+                        {offer.status === 'accepted' && (
+                          <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginBottom: '6px' }}>
+                            Contact: {offer.brokerPhone}
+                          </p>
+                        )}
                         <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginBottom: '10px', lineHeight: 1.6 }}>{offer.details}</p>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                           {offer.status === 'pending' && req.status === 'open' && (
