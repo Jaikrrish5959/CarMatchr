@@ -25,7 +25,8 @@ const Home: React.FC = () => {
   const [heroMake, setHeroMake] = useState('');
   const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
-  const [heroYearRange, setHeroYearRange] = useState('');
+  const [heroMinYear, setHeroMinYear] = useState('');
+  const [heroMaxYear, setHeroMaxYear] = useState('');
   const [heroDescription, setHeroDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,6 +55,10 @@ const Home: React.FC = () => {
     if (!heroModel) { toast.error('Please select a car model.'); return; }
     if (!heroBudget.trim()) { toast.error('Please specify your budget range.'); return; }
 
+    const yearRange = heroMinYear && heroMaxYear ? `${heroMinYear}-${heroMaxYear}` : heroMinYear || heroMaxYear;
+    if (!yearRange) { toast.error('Please select at least a minimum year.'); return; }
+    if (heroMinYear && heroMaxYear && parseInt(heroMinYear) > parseInt(heroMaxYear)) { toast.error('Min year cannot be greater than Max year.'); return; }
+
     if (user) {
       if (user.role !== 'buyer') {
         toast.error('Only buyers can post requirements.');
@@ -65,7 +70,7 @@ const Home: React.FC = () => {
           buyerId: user.id,
           make: heroMake,
           model: heroModel,
-          yearRange: heroYearRange || '2020-2024',
+          yearRange,
           budget: heroBudget,
           preferredFeature: '',
           description: heroDescription || 'Looking for a clean vehicle in good condition.'
@@ -83,7 +88,7 @@ const Home: React.FC = () => {
         make: heroMake,
         model: heroModel,
         budget: heroBudget,
-        yearRange: heroYearRange || '2020-2024',
+        yearRange,
         description: heroDescription || 'Looking for a clean vehicle in good condition.'
       };
       sessionStorage.setItem('pending_requirement', JSON.stringify(reqDraft));
@@ -332,12 +337,25 @@ const Home: React.FC = () => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="form-group">
-                        <label className="form-label">{t('yourBudget')} *</label>
-                        <input required className="form-control" value={heroBudget} onChange={e => setHeroBudget(e.target.value)} placeholder="e.g. ₹10-15 Lakh" />
+                        <label className="form-label">{t('yourBudget')} (Lakhs) *</label>
+                        <input required type="number" min="0" step="0.5" className="form-control" value={heroBudget} onChange={e => setHeroBudget(e.target.value)} placeholder="e.g. 15.5" title="Enter budget in Lakhs" />
                       </div>
                       <div className="form-group">
                         <label className="form-label">Year Range</label>
-                        <input className="form-control" value={heroYearRange} onChange={e => setHeroYearRange(e.target.value)} placeholder="e.g. 2020-2024" />
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <select required className="form-control" value={heroMinYear} onChange={e => setHeroMinYear(e.target.value)}>
+                            <option value="">Min</option>
+                            {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                          <select className="form-control" value={heroMaxYear} onChange={e => setHeroMaxYear(e.target.value)}>
+                            <option value="">Max</option>
+                            {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
 
