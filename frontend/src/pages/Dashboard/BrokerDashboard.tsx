@@ -10,6 +10,7 @@ import {
 import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
 import { useCatalog } from '../../hooks/useCatalog';
 import { getToken } from '../../services/authService';
+import { API_BASE } from '../../services/api';
 import toast from 'react-hot-toast';
 import type { BrokerListing, Requirement } from '../../contexts/DataContext';
 
@@ -279,7 +280,7 @@ const BrokerDashboard: React.FC = () => {
       const uploadHeaders: Record<string, string> = {};
       if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
       try {
-        await fetch(`/api/listings/${listingId}/images`, { method: 'POST', headers: uploadHeaders, body: formData });
+        await fetch(`${API_BASE}/api/listings/${listingId}/images`, { method: 'POST', headers: uploadHeaders, body: formData });
         toast.success(`${imageFiles.length} image(s) uploaded`);
       } catch { toast.error('Image upload failed'); }
     }

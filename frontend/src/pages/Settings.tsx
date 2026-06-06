@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Settings as SettingsIcon, Phone, User, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -36,7 +37,7 @@ const Settings: React.FC = () => {
     try {
       // Persist to backend
       const token = localStorage.getItem('carmatchr_token');
-      const res = await fetch(`/api/users/${user!.id}/profile`, {
+      const res = await fetch(`${API_BASE}/api/users/${user!.id}/profile`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

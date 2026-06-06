@@ -1,5 +1,6 @@
 // authService.ts
 // Handles all authentication HTTP calls and localStorage token management.
+import { API_BASE } from './api';
 
 export interface AuthUser {
   id: number;
@@ -72,7 +73,7 @@ export async function login(
   const role = roleHint === 'broker' ? 'broker' : roleHint === 'admin' ? 'admin' : 'buyer';
 
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, role }),
@@ -99,7 +100,7 @@ export async function login(
  */
 export async function register(userData: Omit<AuthUser, 'id'> & { password: string }): Promise<RegisterResult> {
   try {
-    const res = await fetch('/api/auth/register', {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
@@ -143,7 +144,7 @@ export interface GoogleLoginResult {
 
 export async function loginWithGoogle(credential: string, role: string): Promise<GoogleLoginResult> {
   try {
-    const res = await fetch('/api/auth/google', {
+    const res = await fetch(`${API_BASE}/api/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential, role }),
@@ -183,7 +184,7 @@ export async function registerBrokerWithGoogle(data: {
   credential: string;
 }): Promise<LoginResult> {
   try {
-    const res = await fetch('/api/auth/google/register', {
+    const res = await fetch(`${API_BASE}/api/auth/google/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

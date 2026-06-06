@@ -1,4 +1,5 @@
 import React, { createContext, useEffect, useState } from 'react';
+import { API_BASE } from '../services/api';
 
 export interface CatalogFeature {
   id: number;
@@ -30,7 +31,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [brands, setBrands] = useState<CatalogBrand[]>([]);
 
   const refreshCatalog = async () => {
-    const res = await fetch('/api/catalog/brands');
+    const res = await fetch(`${API_BASE}/api/catalog/brands`);
     const data = await res.json();
     setBrands(Array.isArray(data) ? data : []);
   };

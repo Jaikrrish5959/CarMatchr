@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import type { CarListing } from '../data/carDatabase';
 import { getToken } from '../services/authService';
+import { API_BASE } from '../services/api';
 
 export interface Requirement {
   id: number;
@@ -63,7 +64,7 @@ interface DataContextType {
   rejectOffer: (offerId: number) => void;
   markOfferRead: (offerId: number) => void;
   addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<number | null>;
-  removeBrokerListing: (id: string) => void;
+  removeBrokerListing: (id: number) => void;
   refreshData: () => Promise<void>;
 }
 
@@ -92,7 +93,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/data', { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/data`, { headers: authHeaders() });
       if (!res.ok) { setIsLoaded(true); return; }
       const data = await res.json();
       if (Array.isArray(data.requirements)) setRequirements(data.requirements);
@@ -115,7 +116,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addRequirement = async (req: Omit<Requirement, 'id' | 'status' | 'createdAt'>) => {
     try {
-      const res = await fetch('/api/requirements', {
+      const res = await fetch(`${API_BASE}/api/requirements`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify(req),
@@ -147,7 +148,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((r) => (r.id === id ? { ...r, status: 'closed' } : r))
     );
     if (isLoaded) {
-      fetch(`/api/requirements/${id}/close`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
+      fetch(`${API_BASE}/api/requirements/${id}/close`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
@@ -161,7 +162,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setOffers((prev) => [newOffer, ...prev]);
     if (isLoaded) {
-      fetch('/api/offers', {
+      fetch(`${API_BASE}/api/offers`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify(offer),
@@ -175,7 +176,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     closeRequirement(reqId);
     if (isLoaded) {
-      fetch(`/api/offers/${offerId}/accept`, {
+      fetch(`${API_BASE}/api/offers/${offerId}/accept`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ reqId }),
@@ -188,7 +189,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((o) => (o.id === offerId ? { ...o, status: 'rejected' } : o))
     );
     if (isLoaded) {
-      fetch(`/api/offers/${offerId}/reject`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
+      fetch(`${API_BASE}/api/offers/${offerId}/reject`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
@@ -197,13 +198,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((o) => (o.id === offerId ? { ...o, isRead: true } : o))
     );
     if (isLoaded) {
-      fetch(`/api/offers/${offerId}/read`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
+      fetch(`${API_BASE}/api/offers/${offerId}/read`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 
   const addBrokerListing = async (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>): Promise<number | null> => {
     try {
-      const res = await fetch('/api/listings', {
+      const res = await fetch(`${API_BASE}/api/listings`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify(listing),
@@ -241,7 +242,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map((l) => (l.id === id ? { ...l, status: 'sold' } : l))
     );
     if (isLoaded) {
-      fetch(`/api/listings/${id}/sold`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
+      fetch(`${API_BASE}/api/listings/${id}/sold`, { method: 'PATCH', headers: authHeaders() }).catch(console.error);
     }
   };
 

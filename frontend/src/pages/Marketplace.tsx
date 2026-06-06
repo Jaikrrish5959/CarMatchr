@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_BASE } from '../services/api';
 import {
   Search, SlidersHorizontal, Heart, Fuel, Gauge,
   MapPin, Phone, X, ChevronLeft, ChevronRight
@@ -34,7 +35,7 @@ const Marketplace: React.FC = () => {
   // --- Convert broker listings to CarListing format ---
   const brokerCarsAsListings: CarListing[] = useMemo(() =>
     brokerListings.filter(l => l.status === 'active').map(l => ({
-      id: l.id,
+      id: `bl-${l.id}`,
       make: l.make,
       model: l.model,
       variant: l.variant || '',
@@ -78,16 +79,15 @@ const Marketplace: React.FC = () => {
   };
 
   const handleContactBroker = (car: CarListing) => {
-    const bl = brokerListings.find(l => l.id === car.id);
+    const numericId = car.id.startsWith('bl-') ? parseInt(car.id.replace('bl-', ''), 10) : parseInt(car.id, 10);
+    const bl = brokerListings.find(l => l.id === numericId);
     if (!bl) return;
-    setContactModal({ brokerName: bl.brokerName, phone: bl.brokerName, email: '', listingId: bl.id });
+    setContactModal({ brokerName: bl.brokerName, phone: user?.phone || 'N/A', email: '', listingId: car.id });
     
-    fetch(`/api/listings/${bl.id}/contact`, {
+    fetch(`${API_BASE}/api/listings/${bl.id}/contact`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ buyerName: user?.name || 'Anonymous', buyerEmail: user?.email || '', buyerPhone: user?.phone || '' }),
     }).catch(console.error);
-
-    setContactModal({ brokerName: bl.brokerName, phone: user?.phone || 'N/A', email: '', listingId: bl.id });
   };
 
   const activeFilterCount = [filters.make, filters.bodyType, filters.fuelType, filters.transmission].filter(Boolean).length
@@ -402,7 +402,8 @@ const Marketplace: React.FC = () => {
               <div style={{ padding: '14px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
                 <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{contactModal.brokerName}</p>
                 {(() => {
-                  const bl = brokerListings.find(l => l.id === contactModal.listingId);
+                  const numericId = contactModal.listingId.startsWith('bl-') ? parseInt(contactModal.listingId.replace('bl-', ''), 10) : parseInt(contactModal.listingId, 10);
+                  const bl = brokerListings.find(l => l.id === numericId);
                   return bl ? (
                     <>
                       <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '8px' }}>

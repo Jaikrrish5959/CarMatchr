@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useCatalog } from '../hooks/useCatalog';
 import { authHeaders } from '../services/authService';
+import { API_BASE } from '../services/api';
 
 function authJsonHeaders(): Record<string, string> {
   return { 'Content-Type': 'application/json', ...authHeaders() };
@@ -62,7 +63,7 @@ const AdminDashboard: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch('/api/admin/users', { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/admin/users`, { headers: authHeaders() });
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
     } catch {
@@ -72,7 +73,7 @@ const AdminDashboard: React.FC = () => {
 
   const loadFeatures = async () => {
     try {
-      const res = await fetch('/api/catalog/features');
+      const res = await fetch(`${API_BASE}/api/catalog/features`);
       const data = await res.json();
       setFeatures(Array.isArray(data) ? data : []);
     } catch {
@@ -83,7 +84,7 @@ const AdminDashboard: React.FC = () => {
   const loadBrandCatalog = async () => {
     setCatalogLoading(true);
     try {
-      const res = await fetch('/api/admin/brands', { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/admin/brands`, { headers: authHeaders() });
       const data = await res.json();
       setBrandRows(Array.isArray(data) ? data : []);
     } catch {
@@ -97,7 +98,7 @@ const AdminDashboard: React.FC = () => {
     setCatalogLoading(true);
     try {
       const query = modelFilterBrandId ? `?brandId=${modelFilterBrandId}` : '';
-      const res = await fetch(`/api/admin/models${query}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/admin/models${query}`, { headers: authHeaders() });
       const data = await res.json();
       setModelRows(Array.isArray(data) ? data : []);
     } catch {
@@ -153,7 +154,7 @@ const AdminDashboard: React.FC = () => {
   const loadMasterData = async (type = masterType) => {
     setMasterLoading(true);
     try {
-      const res = await fetch(`/api/admin/master-data/${type}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/admin/master-data/${type}`, { headers: authHeaders() });
       const data = await res.json();
       setMasterRows(Array.isArray(data) ? data : []);
     } catch {
@@ -180,7 +181,7 @@ const AdminDashboard: React.FC = () => {
 
   const approveBroker = async (userId: number) => {
     try {
-      await fetch(`/api/users/${userId}/status`, {
+      await fetch(`${API_BASE}/api/users/${userId}/status`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ status: 'active' }),
@@ -198,7 +199,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch(`/api/admin/brands/${selectedBrandId}/logo`, {
+      await fetch(`${API_BASE}/api/admin/brands/${selectedBrandId}/logo`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ logoUrl }),
@@ -217,7 +218,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch(`/api/admin/models/${selectedModelId}/image`, {
+      await fetch(`${API_BASE}/api/admin/models/${selectedModelId}/image`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ imageUrl }),
@@ -236,7 +237,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch('/api/admin/features', {
+      await fetch(`${API_BASE}/api/admin/features`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify({ name: featureName.trim() }),
@@ -255,7 +256,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch('/api/admin/model-features', {
+      await fetch(`${API_BASE}/api/admin/model-features`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify({ modelId: selectedModelId, featureId }),
@@ -269,7 +270,7 @@ const AdminDashboard: React.FC = () => {
 
   const removeFeature = async (mId: number, fId: number) => {
     try {
-      await fetch('/api/admin/model-features', {
+      await fetch(`${API_BASE}/api/admin/model-features`, {
         method: 'DELETE',
         headers: authJsonHeaders(),
         body: JSON.stringify({ modelId: mId, featureId: fId }),
@@ -299,7 +300,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch('/api/admin/brands', {
+      await fetch(`${API_BASE}/api/admin/brands`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify({ name: brandForm.name.trim(), logoUrl: brandForm.logoUrl.trim() || null }),
@@ -316,7 +317,7 @@ const AdminDashboard: React.FC = () => {
   const saveBrandEdit = async () => {
     if (!brandEditId) return;
     try {
-      await fetch(`/api/admin/brands/${brandEditId}`, {
+      await fetch(`${API_BASE}/api/admin/brands/${brandEditId}`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({
@@ -336,7 +337,7 @@ const AdminDashboard: React.FC = () => {
   const deleteBrand = async (id: number) => {
     if (!window.confirm('Delete this brand and all its models?')) return;
     try {
-      await fetch(`/api/admin/brands/${id}`, { method: 'DELETE', headers: authHeaders() });
+      await fetch(`${API_BASE}/api/admin/brands/${id}`, { method: 'DELETE', headers: authHeaders() });
       toast.success('Brand deleted.');
       await loadBrandCatalog();
       await refreshCatalog();
@@ -351,7 +352,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      await fetch('/api/admin/models', {
+      await fetch(`${API_BASE}/api/admin/models`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify({
@@ -372,7 +373,7 @@ const AdminDashboard: React.FC = () => {
   const saveModelEdit = async () => {
     if (!modelEditId) return;
     try {
-      await fetch(`/api/admin/models/${modelEditId}`, {
+      await fetch(`${API_BASE}/api/admin/models/${modelEditId}`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({
@@ -393,7 +394,7 @@ const AdminDashboard: React.FC = () => {
   const deleteModel = async (id: number) => {
     if (!window.confirm('Delete this model?')) return;
     try {
-      await fetch(`/api/admin/models/${id}`, { method: 'DELETE', headers: authHeaders() });
+      await fetch(`${API_BASE}/api/admin/models/${id}`, { method: 'DELETE', headers: authHeaders() });
       toast.success('Model deleted.');
       await loadModelCatalog();
       await refreshCatalog();
@@ -410,7 +411,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', brandBulkFile);
-      await fetch('/api/admin/brands/bulk', {
+      await fetch(`${API_BASE}/api/admin/brands/bulk`, {
         method: 'POST',
         headers: authHeaders(),
         body: formData,
@@ -432,7 +433,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', modelBulkFile);
-      await fetch('/api/admin/models/bulk', {
+      await fetch(`${API_BASE}/api/admin/models/bulk`, {
         method: 'POST',
         headers: authHeaders(),
         body: formData,
@@ -465,7 +466,7 @@ const AdminDashboard: React.FC = () => {
     }
 
     try {
-      await fetch(`/api/admin/master-data/${masterType}`, {
+      await fetch(`${API_BASE}/api/admin/master-data/${masterType}`, {
         method: 'POST',
         headers: authJsonHeaders(),
         body: JSON.stringify(payload),
@@ -490,7 +491,7 @@ const AdminDashboard: React.FC = () => {
   const saveMasterEdit = async () => {
     if (!masterEditId) return;
     try {
-      await fetch(`/api/admin/master-data/${masterType}/${masterEditId}`, {
+      await fetch(`${API_BASE}/api/admin/master-data/${masterType}/${masterEditId}`, {
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify(masterEditForm),
@@ -506,7 +507,7 @@ const AdminDashboard: React.FC = () => {
   const deleteMasterRow = async (rowId: number) => {
     if (!window.confirm('Delete this entry?')) return;
     try {
-      await fetch(`/api/admin/master-data/${masterType}/${rowId}`, {
+      await fetch(`${API_BASE}/api/admin/master-data/${masterType}/${rowId}`, {
         method: 'DELETE',
         headers: authHeaders(),
       });
@@ -525,7 +526,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', bulkFile);
-      await fetch(`/api/admin/master-data/${masterType}/bulk`, {
+      await fetch(`${API_BASE}/api/admin/master-data/${masterType}/bulk`, {
         method: 'POST',
         headers: authHeaders(),
         body: formData,
