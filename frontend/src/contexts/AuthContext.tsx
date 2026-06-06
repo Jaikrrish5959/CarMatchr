@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import * as authService from '../services/authService';
+import { API_BASE } from '../services/api';
 
 export type UserRole = 'buyer' | 'broker' | 'admin';
 
@@ -131,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ─── Dev helper – toggle status without reloading ────────────────────────────
   const updateStatus = async (status: 'active' | 'pending') => {
     if (!user) return;
-    await fetch(`/api/users/${user.id}/status`, {
+    await fetch(`${API_BASE}/api/users/${user.id}/status`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
