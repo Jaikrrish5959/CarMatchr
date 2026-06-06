@@ -13,7 +13,8 @@ const BuyerDashboard: React.FC = () => {
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [feature, setFeature] = useState('');
-  const [yearRange, setYearRange] = useState('');
+  const [minYear, setMinYear] = useState('');
+  const [maxYear, setMaxYear] = useState('');
   const [budget, setBudget] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -52,12 +53,16 @@ const BuyerDashboard: React.FC = () => {
     if (!budget.trim()) { toast.error('Please enter your budget range.'); return; }
     if (!user?.id) { toast.error('Please log in first.'); return; }
 
+    const yearRange = minYear && maxYear ? `${minYear}-${maxYear}` : minYear || maxYear;
+    if (!yearRange) { toast.error('Please select at least a minimum year.'); return; }
+    if (minYear && maxYear && parseInt(minYear) > parseInt(maxYear)) { toast.error('Min year cannot be greater than Max year.'); return; }
+
     setSubmitting(true);
     try {
       await addRequirement({ buyerId: user.id, make, model, yearRange, budget, preferredFeature: feature, description });
       toast.success('Requirement posted! Brokers will now send you offers.');
       setShowForm(false);
-      setMake(''); setModel(''); setFeature(''); setYearRange(''); setBudget(''); setDescription('');
+      setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setBudget(''); setDescription('');
     } catch {
       toast.error('Failed to post requirement. Please try again.');
     } finally {
@@ -109,9 +114,25 @@ const BuyerDashboard: React.FC = () => {
                     {modelFeatures.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Year Range</label>
-                  <input required className="form-control" value={yearRange} onChange={e => setYearRange(e.target.value)} placeholder="e.g. 2019 - 2022" pattern="^(19|20)\d{2}(\s*-\s*(19|20)\d{2})?$" title="Enter a valid year (e.g. 2020) or range (e.g. 2019-2022)" />
+                <div className="form-group" style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="form-label">Min Year</label>
+                    <select required className="form-control" value={minYear} onChange={e => setMinYear(e.target.value)}>
+                      <option value="">Select</option>
+                      {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="form-label">Max Year</label>
+                    <select className="form-control" value={maxYear} onChange={e => setMaxYear(e.target.value)}>
+                      <option value="">Select (Opt)</option>
+                      {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Budget (₹ Lakhs)</label>
