@@ -315,26 +315,32 @@ const BrokerDashboard: React.FC = () => {
         {/* ===== STATS BAR ===== */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
           {[
-            { icon: <Target size={20} />, value: openReqs.length, label: 'Active Requirements', color: '#2563eb', bg: '#eff6ff' },
-            { icon: <Send size={20} />, value: myOffers.length, label: 'Offers Submitted', color: '#7c3aed', bg: '#f5f3ff' },
-            { icon: <CheckCircle2 size={20} />, value: acceptedOffers.length, label: 'Deals Accepted', color: '#059669', bg: '#ecfdf5' },
+            { icon: <Target size={20} />, value: openReqs.length, label: 'Active Requirements', color: '#2563eb', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)' },
+            { icon: <Send size={20} />, value: myOffers.length, label: 'Offers Submitted', color: '#7c3aed', bg: 'linear-gradient(135deg,#f5f3ff,#ede9fe)' },
+            { icon: <CheckCircle2 size={20} />, value: acceptedOffers.length, label: 'Deals Accepted', color: '#059669', bg: 'linear-gradient(135deg,#ecfdf5,#d1fae5)' },
             {
               icon: <span style={{ fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1 }}>₹</span>,
               value: revenue > 0 ? `₹${revenue.toFixed(1)}L` : '₹0L',
-              label: 'Revenue Generated', color: '#d97706', bg: '#fffbeb',
+              label: 'Revenue Generated', color: '#b45309', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)',
             },
           ].map((stat, i) => (
-            <div key={i} className="card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div key={i} style={{
+              background: '#fff', borderRadius: '16px', padding: '20px',
+              display: 'flex', alignItems: 'center', gap: '14px',
+              boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
+              border: '1px solid rgba(15,23,42,0.06)',
+            }}>
               <div style={{
-                width: '48px', height: '48px', borderRadius: 'var(--radius-md)',
+                width: '48px', height: '48px', borderRadius: '12px',
                 background: stat.bg, color: stat.color,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                boxShadow: `0 4px 12px ${stat.color}22`,
               }}>
                 {stat.icon}
               </div>
               <div>
-                <p style={{ fontSize: '1.625rem', fontWeight: 800, color: 'var(--color-dark)', lineHeight: 1 }}>{stat.value}</p>
-                <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', marginTop: '4px', fontWeight: 500 }}>{stat.label}</p>
+                <p style={{ fontSize: '1.625rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{stat.value}</p>
+                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>{stat.label}</p>
               </div>
             </div>
           ))}
@@ -424,57 +430,76 @@ const BrokerDashboard: React.FC = () => {
                     );
 
                     return (
-                      <div key={req.id} className="card animate-in" style={{ padding: '20px' }}>
+                      <div key={req.id} className="animate-in" style={{
+                        background: '#fff', borderRadius: '18px', overflow: 'hidden',
+                        boxShadow: '0 4px 20px rgba(15,23,42,0.08)',
+                        border: '1px solid rgba(15,23,42,0.07)',
+                      }}>
 
-                        {/* Card header row */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                          <div>
-                            <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                              REQ #{String(req.id).slice(-8).toUpperCase()}
-                            </p>
-                            <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--color-dark)' }}>{req.make} {req.model}</h3>
-                            <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
-                              Budget: <strong style={{ color: 'var(--color-dark)' }}>{req.budget}</strong>
-                              {req.yearRange && ` · ${req.yearRange}`}
-                            </p>
+                        {/* Dark header stripe */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                          padding: '16px 20px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{
+                              width: '40px', height: '40px', borderRadius: '10px',
+                              background: 'rgba(255,255,255,0.08)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            }}>
+                              <Car size={18} color="#94a3b8" />
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '0.6rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
+                                REQ #{String(req.id).slice(-6).toUpperCase()}
+                              </p>
+                              <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, color: '#fff' }}>{req.make} {req.model}</h3>
+                              <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                                Budget: <strong style={{ color: '#f1f5f9' }}>{req.budget}</strong>
+                                {req.yearRange && <> · <span style={{ color: '#94a3b8' }}>{req.yearRange}</span></>}
+                              </p>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              {/* Verified Buyer badge */}
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                padding: '3px 8px', borderRadius: 'var(--radius-full)',
-                                background: '#ecfdf5', color: '#059669',
-                                fontSize: '0.6875rem', fontWeight: 700, whiteSpace: 'nowrap',
+                                padding: '3px 10px', borderRadius: '20px',
+                                background: 'rgba(16,185,129,0.15)', color: '#34d399',
+                                fontSize: '0.625rem', fontWeight: 700, whiteSpace: 'nowrap',
                               }}>
                                 <CheckCircle2 size={10} /> Verified Buyer
                               </span>
-                              {/* Save star */}
                               <button
                                 onClick={() => toggleSave(req.id)}
                                 title={isSaved ? 'Unsave' : 'Save requirement'}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: isSaved ? '#d97706' : 'var(--color-gray-300)', transition: 'color 0.2s' }}
+                                style={{ background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', color: isSaved ? '#fbbf24' : '#475569', transition: 'all 0.2s' }}
                               >
-                                <Star size={16} fill={isSaved ? '#d97706' : 'none'} />
+                                <Star size={15} fill={isSaved ? '#fbbf24' : 'none'} />
                               </button>
                             </div>
-                            {/* Timestamps */}
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>
+                              <span style={{ fontSize: '0.6875rem', color: '#475569' }}>
                                 Posted {timeAgo(req.createdAt)}
                               </span>
                               {expires && (
                                 <span style={{
                                   display: 'flex', alignItems: 'center', gap: '3px',
                                   fontSize: '0.6875rem', fontWeight: 700,
-                                  color: expires.urgent ? '#e63946' : '#d97706',
+                                  color: expires.urgent ? '#f87171' : '#fbbf24',
+                                  background: expires.urgent ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                                  padding: '2px 8px', borderRadius: '20px',
                                 }}>
-                                  <Clock size={10} /> Expires in {expires.text}
+                                  <Clock size={10} /> {expires.text} left
                                 </span>
                               )}
                             </div>
                           </div>
                         </div>
+
+                        {/* Card body */}
+                        <div style={{ padding: '18px 20px' }}>
 
                         {/* Description quote */}
                         {req.description && (
@@ -606,17 +631,24 @@ const BrokerDashboard: React.FC = () => {
                           <form
                             onSubmit={e => handleSubmitOffer(e, req.id)}
                             className="animate-in"
-                            style={{ marginTop: '12px', padding: '16px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}
+                            style={{
+                              marginTop: '12px', padding: '18px 20px',
+                              background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+                              borderRadius: '12px', border: '2px solid #e2e8f0',
+                            }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                              <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-dark)' }}>Your Offer</h4>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                              <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Send size={14} color="var(--color-primary)" /> Submit Offer
+                              </h4>
                               <button
                                 type="button"
                                 onClick={() => setShowTemplates(p => !p)}
                                 style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  fontSize: '0.75rem', color: 'var(--color-info)', fontWeight: 600,
+                                  background: 'rgba(37,99,235,0.08)', border: 'none', cursor: 'pointer',
+                                  fontSize: '0.75rem', color: '#2563eb', fontWeight: 700,
                                   fontFamily: 'var(--font)', display: 'flex', alignItems: 'center', gap: '4px',
+                                  padding: '5px 10px', borderRadius: '8px',
                                 }}
                               >
                                 <FileText size={12} /> Templates
@@ -625,56 +657,91 @@ const BrokerDashboard: React.FC = () => {
 
                             {/* Templates dropdown */}
                             {showTemplates && (
-                              <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <div style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 {OFFER_TEMPLATES.map((t, i) => (
                                   <button key={i} type="button" onClick={() => { setDetails(t.text); setShowTemplates(false); }}
                                     style={{
-                                      padding: '8px 12px', background: '#fff', border: '1px solid var(--color-gray-200)',
-                                      borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'var(--font)',
+                                      padding: '10px 14px', background: '#fff', border: '1.5px solid #e2e8f0',
+                                      borderRadius: '10px', cursor: 'pointer', fontFamily: 'var(--font)',
                                       textAlign: 'left', transition: 'border-color 0.15s',
                                     }}
                                     onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
-                                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-gray-200)')}
+                                    onMouseLeave={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
                                   >
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-dark)', display: 'block' }}>{t.name}</span>
-                                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>{t.text.slice(0, 65)}…</span>
+                                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '2px' }}>{t.name}</span>
+                                    <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>{t.text.slice(0, 65)}…</span>
                                   </button>
                                 ))}
                               </div>
                             )}
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '12px', marginBottom: '12px' }}>
-                              <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">Price (On Road)</label>
-                                <input className="form-control" value={price} onChange={e => setPrice(e.target.value)} placeholder="₹19.5L" required />
+                            <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px', marginBottom: '14px' }}>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#374151', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Price (On Road)</label>
+                                <input
+                                  style={{
+                                    width: '100%', padding: '10px 12px', borderRadius: '8px',
+                                    border: '2px solid #e2e8f0', fontFamily: 'var(--font)',
+                                    fontSize: '0.9375rem', outline: 'none', boxSizing: 'border-box',
+                                  }}
+                                  value={price} onChange={e => setPrice(e.target.value)}
+                                  placeholder="₹19.5L" required
+                                  onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
+                                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                                />
                               </div>
-                              <div className="form-group" style={{ margin: 0 }}>
-                                <label className="form-label">Details</label>
-                                <input className="form-control" value={details} onChange={e => setDetails(e.target.value)} placeholder="2021 XLE, 32K km, single owner" required />
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#374151', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Details</label>
+                                <input
+                                  style={{
+                                    width: '100%', padding: '10px 12px', borderRadius: '8px',
+                                    border: '2px solid #e2e8f0', fontFamily: 'var(--font)',
+                                    fontSize: '0.9375rem', outline: 'none', boxSizing: 'border-box',
+                                  }}
+                                  value={details} onChange={e => setDetails(e.target.value)}
+                                  placeholder="2021 XLE, 32K km, single owner" required
+                                  onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
+                                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                                />
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              <button type="submit" className="btn btn-primary btn-sm">Submit Offer</button>
+                              <button
+                                type="submit"
+                                style={{
+                                  padding: '10px 20px', background: 'linear-gradient(135deg,var(--color-primary),#c1121f)',
+                                  color: '#fff', border: 'none', borderRadius: '10px',
+                                  fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
+                                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                  boxShadow: '0 3px 10px rgba(230,57,70,0.3)',
+                                }}
+                              >
+                                <Send size={13} /> Submit Offer
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => { setOfferError(''); setActiveReqId(null); setShowTemplates(false); setInventoryPickerReqId(null); }}
-                                className="btn btn-ghost btn-sm"
+                                style={{
+                                  padding: '10px 16px', background: '#f1f5f9',
+                                  color: '#64748b', border: 'none', borderRadius: '10px',
+                                  fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer',
+                                }}
                               >
                                 Cancel
                               </button>
                             </div>
                             {offerError && (
-                              <p style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '8px' }}>{offerError}</p>
+                              <p style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '8px', fontWeight: 600 }}>{offerError}</p>
                             )}
                           </form>
                         )}
 
                         {/* Save footer row */}
                         {!alreadyOffered && activeReqId !== req.id && (
-                          <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--color-gray-100)', display: 'flex', justifyContent: 'flex-end' }}>
+                          <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
                             <button onClick={() => toggleSave(req.id)} style={{
                               background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
-                              fontSize: '0.75rem', color: isSaved ? '#d97706' : 'var(--color-gray-400)',
+                              fontSize: '0.75rem', color: isSaved ? '#d97706' : '#cbd5e1',
                               display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600,
                             }}>
                               <Star size={13} fill={isSaved ? '#d97706' : 'none'} />
@@ -682,6 +749,7 @@ const BrokerDashboard: React.FC = () => {
                             </button>
                           </div>
                         )}
+                        </div>{/* end card body */}
                       </div>
                     );
                   })}
