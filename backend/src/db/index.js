@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  connectionTimeoutMillis: 5000, // 5 seconds timeout to prevent hanging on startup
 });
 
 async function runQuery(text, params, client = pool) {
@@ -207,5 +208,13 @@ async function seedAdmin() {
   }
 }
 
-await initDb();
-await seedAdmin();
+console.log('Connecting to database...');
+try {
+  await initDb();
+  console.log('Database tables initialized/verified successfully.');
+  await seedAdmin();
+  console.log('Admin user seeded/verified successfully.');
+} catch (err) {
+  console.error('CRITICAL DATABASE ERROR:', err);
+  process.exit(1);
+}
