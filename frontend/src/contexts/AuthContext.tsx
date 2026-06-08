@@ -15,6 +15,7 @@ export interface User {
   phone?: string;
   license?: string;
   city?: string;
+  dealerType?: 'new' | 'used' | 'both';
 }
 
 interface AuthContextType {
@@ -30,6 +31,7 @@ interface AuthContextType {
     city: string;
     phone: string;
     credential: string;
+    dealerType: 'new' | 'used' | 'both';
   }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -103,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       city: string;
       phone: string;
       credential: string;
+      dealerType: 'new' | 'used' | 'both';
     }
   ): Promise<{ ok: boolean; error?: string; user?: User }> => {
     const result = await authService.registerBrokerWithGoogle(data);

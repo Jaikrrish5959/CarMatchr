@@ -59,6 +59,7 @@ export async function initDb() {
       phone VARCHAR(20),
       license VARCHAR(100),
       city VARCHAR(100),
+      dealer_type VARCHAR(50) CHECK (dealer_type IN ('new', 'used', 'both')),
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(email, role)
     );
@@ -186,6 +187,16 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_contact_listing ON contact_events(listing_id);
     CREATE INDEX IF NOT EXISTS idx_listing_images_listing ON listing_images(listing_id);
   `);
+
+  // Migrate existing databases safely
+  try {
+    await db.run("ALTER TABLE users ADD COLUMN dealer_type VARCHAR(50) CHECK (dealer_type IN ('new', 'used', 'both'));");
+  } catch (err) {
+    // Column already exists or another error, ignore if column exists
+    if (!err.message.includes('already exists')) {
+      console.error('Migration error:', err);
+    }
+  }
 }
 
 async function seedAdmin() {

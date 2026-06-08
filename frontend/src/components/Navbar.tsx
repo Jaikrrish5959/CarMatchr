@@ -13,9 +13,19 @@ const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const [showLang, setShowLang] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => { logout(); navigate('/', { replace: true }); setMobileOpen(false); };
+
+  // Scroll-aware glass effect
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Close language dropdown on outside click
   useEffect(() => {
@@ -34,29 +44,36 @@ const Navbar: React.FC = () => {
   const langPicker = (
     <div ref={langRef} style={{ position: 'relative' }}>
       <button onClick={() => setShowLang(!showLang)} className="btn btn-ghost btn-sm"
-        style={{ gap: '4px', fontSize: '0.8125rem' }} title="Change language">
+        style={{
+          gap: '4px', fontSize: '0.8125rem',
+          color: 'var(--color-gray-700)',
+        }} title="Change language">
         <Globe size={15} />
         <span style={{ fontSize: '0.75rem' }}>{languageNames[lang].slice(0, 3)}</span>
       </button>
       {showLang && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: '6px',
-          background: '#fff', borderRadius: 'var(--radius-md)',
-          boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-gray-200)',
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(18px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
+          border: '1px solid rgba(15, 23, 42, 0.08)',
           minWidth: '140px', zIndex: 200, overflow: 'hidden',
         }}>
           {(Object.entries(languageNames) as [Language, string][]).map(([code, name]) => (
             <button key={code} onClick={() => { setLang(code); setShowLang(false); }}
               style={{
                 display: 'block', width: '100%', padding: '10px 16px', border: 'none',
-                background: lang === code ? 'var(--color-primary-light)' : '#fff',
+                background: lang === code ? 'rgba(230,57,70,0.08)' : 'transparent',
                 color: lang === code ? 'var(--color-primary)' : 'var(--color-gray-700)',
                 fontWeight: lang === code ? 700 : 500, fontSize: '0.8125rem',
                 textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={e => { if (lang !== code) e.currentTarget.style.background = 'var(--color-gray-50)'; }}
-              onMouseLeave={e => { if (lang !== code) e.currentTarget.style.background = '#fff'; }}
+              onMouseEnter={e => { if (lang !== code) e.currentTarget.style.background = 'rgba(15, 23, 42, 0.04)'; }}
+              onMouseLeave={e => { if (lang !== code) e.currentTarget.style.background = 'transparent'; }}
             >
               {name}
             </button>
@@ -67,7 +84,7 @@ const Navbar: React.FC = () => {
   );
 
   return (
-    <nav className="navbar">
+    <nav ref={navRef} className={`navbar${scrolled ? ' scrolled' : ''}`}>
       <div className="container">
         {/* ── Top bar ── */}
         <div className="navbar-inner">
@@ -76,15 +93,18 @@ const Navbar: React.FC = () => {
               <Car size={24} strokeWidth={2.5} />
               CarMatchr
             </Link>
-            {/* Marketplace link hidden on very small screens — shown in mobile menu */}
-            <Link to="/marketplace" style={{
-              fontSize: '0.875rem', fontWeight: 700,
-              color: 'var(--color-gray-600)', textDecoration: 'none', transition: 'color 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--color-primary)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--color-gray-600)'}>
-              Marketplace
-            </Link>
+            <div style={{ display: 'flex', gap: '16px' }} className="desktop-links">
+              <Link to="/dealers/new" style={{ color: 'var(--color-gray-700)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600, transition: 'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--color-primary)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--color-gray-700)'}>
+                New Car Dealers
+              </Link>
+              <Link to="/dealers/used" style={{ color: 'var(--color-gray-700)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600, transition: 'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--color-primary)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--color-gray-700)'}>
+                Used Car Dealers
+              </Link>
+            </div>
           </div>
 
           {/* Desktop actions */}
@@ -113,13 +133,13 @@ const Navbar: React.FC = () => {
                 <Link to={user.role === 'buyer' ? '/buyer-dashboard' : user.role === 'broker' ? '/broker-dashboard' : '/admin'} className="btn btn-primary btn-sm">
                   {t('dashboard')}
                 </Link>
-                <button onClick={handleLogout} className="btn btn-ghost btn-sm">
+                <button onClick={handleLogout} className="btn btn-ghost btn-sm" style={{ color: 'var(--color-gray-700)' }}>
                   <LogOut size={14} /> {t('logout')}
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="btn btn-ghost btn-sm">{t('login')}</Link>
+                <Link to="/login" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-gray-700)' }}>{t('login')}</Link>
                 <Link to="/register" className="btn btn-primary btn-sm">{t('getStarted')}</Link>
               </>
             )}
@@ -139,7 +159,9 @@ const Navbar: React.FC = () => {
         {/* ── Mobile dropdown menu ── */}
         {mobileOpen && (
           <div className="navbar-mobile-menu open">
-            <Link to="/marketplace" className="btn btn-ghost" onClick={() => setMobileOpen(false)}>Marketplace</Link>
+            <Link to="/dealers/new" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>New Car Dealers</Link>
+            <Link to="/dealers/used" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>Used Car Dealers</Link>
+            <hr style={{ margin: '8px 0', borderColor: 'rgba(15, 23, 42, 0.08)' }} />
             {user ? (
               <>
                 <Link
@@ -149,13 +171,13 @@ const Navbar: React.FC = () => {
                 >
                   {t('dashboard')}
                 </Link>
-                <button onClick={handleLogout} className="btn btn-ghost btn-block">
+                <button onClick={handleLogout} className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)' }}>
                   <LogOut size={14} /> {t('logout')}
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="btn btn-ghost btn-block" onClick={() => setMobileOpen(false)}>{t('login')}</Link>
+                <Link to="/login" className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)' }} onClick={() => setMobileOpen(false)}>{t('login')}</Link>
                 <Link to="/register" className="btn btn-primary btn-block" onClick={() => setMobileOpen(false)}>{t('getStarted')}</Link>
               </>
             )}

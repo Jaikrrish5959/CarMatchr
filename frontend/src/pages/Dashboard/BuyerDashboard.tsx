@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
-import { Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles, Phone, Tag, CalendarRange } from 'lucide-react';
+import { Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles, Phone, Tag, CalendarRange, Star, Bell } from 'lucide-react';
 import { useCatalog } from '../../hooks/useCatalog';
 import toast from 'react-hot-toast';
 
@@ -463,7 +463,7 @@ const BuyerDashboard: React.FC = () => {
                         display: 'inline-flex', alignItems: 'center', gap: '4px',
                         animation: 'pulse 2s infinite',
                       }}>
-                        🔔 {newOffers.length} new offer{newOffers.length > 1 ? 's' : ''}
+                        <Bell size={12} fill="#fff" /> {newOffers.length} new offer{newOffers.length > 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
@@ -491,7 +491,7 @@ const BuyerDashboard: React.FC = () => {
                         padding: '4px 12px', borderRadius: '20px',
                         fontSize: '0.75rem', fontWeight: 700,
                       }}>
-                        ⭐ Preferred: {req.preferredFeature}
+                        <Star size={12} fill="#7c3aed" color="#7c3aed" /> Preferred: {req.preferredFeature}
                       </span>
                     </div>
                   )}

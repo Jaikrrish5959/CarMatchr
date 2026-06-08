@@ -26,6 +26,7 @@ const registerSchema = z.object({
   phone: z.string().optional().nullable(),
   license: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
+  dealerType: z.enum(['new', 'used', 'both']).optional().nullable(),
 }).refine(data => {
   if (data.role === 'broker' && !data.phone) return false;
   return true;
@@ -44,6 +45,7 @@ const googleBrokerRegisterSchema = z.object({
   city: z.string().min(1, 'City is required.'),
   phone: z.string().min(1, 'Phone number is required.'),
   credential: z.string().min(1, 'Google credential is required.'),
+  dealerType: z.enum(['new', 'used', 'both'], { required_error: 'Dealer Type is required.' }),
 });
 
 const requirementSchema = z.object({
@@ -182,6 +184,7 @@ const mapUser = (row) => ({
   phone: row.phone ?? undefined,
   license: row.license ?? undefined,
   city: row.city ?? undefined,
+  dealerType: row.dealer_type ?? undefined,
 });
 
 function parseBudgetNumber(value) {
@@ -323,7 +326,7 @@ app.post('/api/auth/google/register', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
-  const { email, businessName, license, city, phone, credential } = result.data;
+  const { email, businessName, license, city, phone, credential, dealerType } = result.data;
 
   try {
     const payload = await verifyGoogleToken(credential);
@@ -345,8 +348,8 @@ app.post('/api/auth/google/register', async (req, res) => {
 
     const created = await db.get(
       `
-        INSERT INTO users (email, password, role, status, business_name, license, city, phone)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO users (email, password, role, status, business_name, license, city, phone, dealer_type)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `,
       [
@@ -358,6 +361,7 @@ app.post('/api/auth/google/register', async (req, res) => {
         license,
         city,
         phone,
+        dealerType,
       ]
     );
     const token = signToken(created);
@@ -387,8 +391,8 @@ app.post('/api/auth/register', async (req, res) => {
 
   const created = await db.get(
     `
-      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, dealer_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `,
     [
@@ -401,6 +405,7 @@ app.post('/api/auth/register', async (req, res) => {
       user.phone ?? null,
       user.license ?? null,
       user.city ?? null,
+      user.dealerType ?? null,
     ]
   );
   const token = signToken(created);
@@ -797,6 +802,137 @@ app.get('/api/listings/:id/images', async (req, res) => {
 });
 
 // ========== CONTACT EVENTS (public — buyers contact brokers) ==========
+
+// ========== DEALER DIRECTORY (public) ==========
+
+app.get('/api/dealers', async (req, res) => {
+  const { type, city, sort } = req.query;
+  
+  let query = "SELECT id, email, role, status, business_name, phone, city, dealer_type, created_at FROM users WHERE role = 'broker' AND status = 'active'";
+  const params = [];
+  let paramIndex = 1;
+
+  if (type === 'new') {
+    query += ` AND dealer_type IN ('new', 'both')`;
+  } else if (type === 'used') {
+    query += ` AND dealer_type IN ('used', 'both')`;
+  }
+
+  if (city) {
+    query += ` AND LOWER(city) = LOWER($${paramIndex})`;
+    params.push(city);
+    paramIndex++;
+  }
+
+  if (sort === 'newest') {
+    query += ` ORDER BY created_at DESC`;
+  } else {
+    query += ` ORDER BY business_name ASC`;
+  }
+
+  try {
+    const rows = await db.all(query, params);
+    
+    // Fetch stats for each dealer (number of listings, etc.)
+    const dealers = await Promise.all(rows.map(async (row) => {
+      const listingCountRow = await db.get('SELECT COUNT(*) as count FROM broker_listings WHERE broker_id = $1 AND status = $2', [row.id, 'active']);
+      return {
+        id: row.id,
+        businessName: row.business_name,
+        city: row.city,
+        phone: row.phone,
+        dealerType: row.dealer_type,
+        createdAt: row.created_at,
+        activeListings: Number(listingCountRow?.count || 0),
+        // Placeholder values for directory UI
+        rating: (Math.random() * (5.0 - 4.0) + 4.0).toFixed(1),
+        reviews: Math.floor(Math.random() * 500) + 10,
+        yearsInBusiness: Math.floor(Math.random() * 20) + 1,
+        verified: true,
+      };
+    }));
+
+    if (sort === 'listings') {
+      dealers.sort((a, b) => b.activeListings - a.activeListings);
+    } else if (sort === 'rating') {
+       dealers.sort((a, b) => Number(b.rating) - Number(a.rating));
+    }
+
+    res.json(dealers);
+  } catch (err) {
+    console.error('Error fetching dealers:', err);
+    res.status(500).json({ error: 'Failed to fetch dealers.' });
+  }
+});
+
+app.get('/api/dealers/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = await db.get("SELECT id, email, role, status, business_name, phone, city, dealer_type, created_at, license FROM users WHERE id = $1 AND role = 'broker' AND status = 'active'", [id]);
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Dealer not found.' });
+    }
+
+    const listingRows = await db.all(`
+      SELECT bl.*, b.name AS brand_name, m.name AS model_name
+      FROM broker_listings bl
+      LEFT JOIN brands b ON b.id = bl.brand_id
+      LEFT JOIN models m ON m.id = bl.model_id
+      WHERE bl.broker_id = $1 AND bl.status = 'active'
+      ORDER BY bl.created_at DESC
+    `, [id]);
+
+    const listingsWithExtras = await Promise.all(
+      listingRows.map(async (l) => {
+        const images = await db.all(
+          'SELECT image_url, sort_order FROM listing_images WHERE listing_id = $1 ORDER BY sort_order',
+          [l.id]
+        );
+        return {
+          id: l.id,
+          make: l.brand_name ?? '',
+          model: l.model_name ?? '',
+          variant: l.variant ?? '',
+          year: l.year,
+          price: Number(l.price ?? 0),
+          fuelType: l.fuel_type ?? 'Petrol',
+          transmission: l.transmission ?? 'Manual',
+          bodyType: l.body_type ?? 'SUV',
+          color: l.color ?? '',
+          city: l.city ?? '',
+          kmDriven: l.km_driven ?? 0,
+          owners: l.owners ?? 1,
+          description: l.description ?? '',
+          createdAt: l.created_at,
+          images: images.map((r) => r.image_url),
+        };
+      })
+    );
+
+    const dealerProfile = {
+       id: row.id,
+       businessName: row.business_name,
+       city: row.city,
+       phone: row.phone,
+       email: row.email,
+       dealerType: row.dealer_type,
+       createdAt: row.created_at,
+       license: row.license,
+       // Placeholders
+       rating: (Math.random() * (5.0 - 4.0) + 4.0).toFixed(1),
+       reviews: Math.floor(Math.random() * 500) + 10,
+       yearsInBusiness: Math.floor(Math.random() * 20) + 1,
+       verified: true,
+       listings: listingsWithExtras
+    };
+
+    res.json(dealerProfile);
+  } catch (err) {
+    console.error('Error fetching dealer profile:', err);
+    res.status(500).json({ error: 'Failed to fetch dealer profile.' });
+  }
+});
 
 app.post('/api/listings/:id/contact', async (req, res) => {
   const listingId = req.params.id;

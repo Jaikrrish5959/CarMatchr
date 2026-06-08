@@ -954,7 +954,7 @@ const BrokerDashboard: React.FC = () => {
                   {[
                     {
                       icon: <MessageCircle size={18} />, label: 'Chat with Buyer',
-                      action: () => toast('Chat feature coming soon!', { icon: '💬' }),
+                      action: () => toast('Chat feature coming soon!'),
                     },
                     {
                       icon: <Car size={18} />, label: 'View Inventory',
@@ -964,12 +964,12 @@ const BrokerDashboard: React.FC = () => {
                       icon: <FileText size={18} />, label: 'Offer Templates',
                       action: () => {
                         if (sortedReqs[0]) { setActiveReqId(sortedReqs[0].id); setShowTemplates(true); }
-                        else toast('Open a requirement first to use templates.', { icon: '📋' });
+                        else toast.error('Open a requirement first to use templates.');
                       },
                     },
                     {
                       icon: <HelpCircle size={18} />, label: 'Help Center',
-                      action: () => toast('Email: support@carmatchr.com', { icon: '🤝' }),
+                      action: () => toast('Email: support@carmatchr.com'),
                     },
                   ].map(({ icon, label, action }) => (
                     <button

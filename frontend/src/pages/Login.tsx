@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { LogIn, Loader2 } from 'lucide-react';
+import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cities } from '../data/carDatabase';
 import toast from 'react-hot-toast';
@@ -34,6 +34,7 @@ const Login: React.FC = () => {
     license: '',
     city: '',
     phone: '',
+    dealerType: 'new' as 'new' | 'used' | 'both',
   });
 
   const { login, loginWithGoogle, registerBrokerWithGoogle } = useAuth();
@@ -148,13 +149,14 @@ const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      const result = await registerBrokerWithGoogle({
+       const result = await registerBrokerWithGoogle({
         email: googleProfileData.email,
         businessName: brokerForm.businessName.trim(),
         license: brokerForm.license.trim(),
         city: brokerForm.city,
         phone: brokerForm.phone.trim(),
         credential: googleProfileData.credential,
+        dealerType: brokerForm.dealerType,
       });
 
       if (!result.ok) {
@@ -274,19 +276,33 @@ const Login: React.FC = () => {
                       onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
                     >
                       <option value="">Select city</option>
-                      {cities.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
+                      {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Phone Number *</label>
-                  <input
-                    type="tel" className="form-control" required
-                    placeholder="+91 9876543210"
-                    value={brokerForm.phone}
-                    onChange={e => setBrokerForm({ ...brokerForm, phone: e.target.value })}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number *</label>
+                    <input
+                      type="tel" className="form-control" required
+                      placeholder="+91 9876543210"
+                      value={brokerForm.phone}
+                      onChange={e => setBrokerForm({ ...brokerForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Dealer Type *</label>
+                    <select
+                      className="form-control" required
+                      value={brokerForm.dealerType}
+                      onChange={e => setBrokerForm({ ...brokerForm, dealerType: e.target.value as any })}
+                    >
+                      <option value="new">New Car Dealer</option>
+                      <option value="used">Used Car Dealer</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
@@ -348,13 +364,13 @@ const Login: React.FC = () => {
                   {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Logging in…</> : 'Log In'}
                 </button>
                 {error && (
-                  <div style={{
-                    marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
-                    background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
-                    fontSize: '0.8125rem', fontWeight: 500,
-                  }}>
-                    ⚠️ {error}
-                  </div>
+                    <div style={{
+                      marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                      background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                      fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                    }}>
+                      <AlertCircle size={15} /> {error}
+                    </div>
                 )}
               </form>
 

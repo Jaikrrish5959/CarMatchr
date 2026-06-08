@@ -71,7 +71,13 @@ const CitySelector: React.FC<CitySelectorProps> = ({ onSelect, onClose }) => {
                   border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)',
                   cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'var(--font)',
                 }}>
-                <span style={{ fontSize: '1.5rem' }}>{city.icon}</span>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  background: 'rgba(230,57,70,0.08)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <MapPin size={16} color="var(--color-primary)" />
+                </div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-gray-700)' }}>{city.name}</span>
               </button>
             ))}

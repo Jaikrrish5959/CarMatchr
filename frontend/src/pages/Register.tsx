@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { UserPlus, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cities } from '../data/carDatabase';
 
@@ -15,7 +15,7 @@ const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '' });
+  const [form, setForm] = useState<{name: string, businessName: string, license: string, phone: string, city: string, email: string, password: string, dealerType: 'new' | 'used' | 'both' | ''}>({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '', dealerType: '' });
 
   // Google OAuth specific states
   const [googleProfileData, setGoogleProfileData] = useState<{
@@ -24,11 +24,12 @@ const Register: React.FC = () => {
     credential: string;
   } | null>(null);
 
-  const [brokerForm, setBrokerForm] = useState({
+  const [brokerForm, setBrokerForm] = useState<{businessName: string, license: string, city: string, phone: string, dealerType: 'new' | 'used' | 'both' | ''}>({
     businessName: '',
     license: '',
     city: '',
     phone: '',
+    dealerType: '',
   });
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -135,6 +136,10 @@ const Register: React.FC = () => {
       toast.error('Please enter a valid phone number.');
       return;
     }
+    if (!brokerForm.dealerType) {
+      toast.error('Please select your Dealer Type.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -145,6 +150,7 @@ const Register: React.FC = () => {
         city: brokerForm.city,
         phone: brokerForm.phone.trim(),
         credential: googleProfileData.credential,
+        dealerType: brokerForm.dealerType as 'new' | 'used' | 'both',
       });
 
       if (!result.ok) {
@@ -175,6 +181,7 @@ const Register: React.FC = () => {
       if (!form.license.trim()) return 'Please enter your license number.';
       if (!form.city) return 'Please select your city.';
       if (!form.phone.trim()) return 'Phone number is required for broker accounts.';
+      if (!form.dealerType) return 'Please select your Dealer Type.';
     }
     if (!form.email.trim()) return 'Please enter your email address.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
@@ -205,6 +212,7 @@ const Register: React.FC = () => {
         phone: form.phone.trim() || undefined,
         license: role === 'broker' ? form.license.trim() : undefined,
         city: form.city || undefined,
+        dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
       });
       if (!result.ok) {
         const message = result.error ?? 'Unable to create account.';
@@ -282,9 +290,23 @@ const Register: React.FC = () => {
                       onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
                     >
                       <option value="">Select city</option>
-                      {cities.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
+                      {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Dealer Type *</label>
+                  <select
+                    className="form-control" required
+                    value={brokerForm.dealerType}
+                    onChange={e => setBrokerForm({ ...brokerForm, dealerType: e.target.value as any })}
+                  >
+                    <option value="">Select dealer type</option>
+                    <option value="new">New Car Dealer</option>
+                    <option value="used">Used Car Dealer</option>
+                    <option value="both">Both (New & Used)</option>
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -358,9 +380,18 @@ const Register: React.FC = () => {
                         <label className="form-label">City *</label>
                         <select name="city" className="form-control" value={form.city} onChange={handleChange} required>
                           <option value="">Select your city</option>
-                          {cities.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
+                          {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                         </select>
                       </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Dealer Type *</label>
+                      <select name="dealerType" className="form-control" value={form.dealerType} onChange={handleChange} required>
+                        <option value="">Select dealer type</option>
+                        <option value="new">New Car Dealer</option>
+                        <option value="used">Used Car Dealer</option>
+                        <option value="both">Both (New & Used)</option>
+                      </select>
                     </div>
                   </>
                 )}
@@ -386,9 +417,9 @@ const Register: React.FC = () => {
                   <div style={{
                     marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
                     background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
-                    fontSize: '0.8125rem', fontWeight: 500,
+                    fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
                   }}>
-                    ⚠️ {error}
+                    <AlertCircle size={15} /> {error}
                   </div>
                 )}
               </form>

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import {
   Home, Users, Image as ImageIcon, Cpu, Settings, Car,
   MessageSquare, BookOpen, ArrowUpRight, Plus, Trash2,
-  Check, TrendingUp, Sparkles, ShieldCheck
+  Check, TrendingUp, Sparkles, ShieldCheck, Sun, Moon
 } from 'lucide-react';
 import { useCatalog } from '../hooks/useCatalog';
 import { authHeaders } from '../services/authService';
@@ -727,7 +727,7 @@ const AdminDashboard: React.FC = () => {
                 boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s'
               }}
             >
-              {isDarkMode ? '🌙' : '☀️'}
+              {isDarkMode ? <Moon size={18} color="#64748b" /> : <Sun size={18} color="#d97706" />}
             </button>
 
             {/* Pale Lime Button */}

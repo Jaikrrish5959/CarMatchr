@@ -13,6 +13,7 @@ export interface AuthUser {
   status: 'active' | 'pending';
   license?: string;
   city?: string;
+  dealerType?: 'new' | 'used' | 'both';
 }
 
 export interface LoginResult {
@@ -182,6 +183,7 @@ export async function registerBrokerWithGoogle(data: {
   city: string;
   phone: string;
   credential: string;
+  dealerType: 'new' | 'used' | 'both';
 }): Promise<LoginResult> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/google/register`, {
