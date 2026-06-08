@@ -5,7 +5,7 @@ import {
   Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel,
   Gauge, ImagePlus, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   MessageCircle, FileText, HelpCircle, Target, ChevronLeft, ChevronRight,
-  Zap, ArrowRight,
+  Zap, ArrowRight, Phone,
 } from 'lucide-react';
 import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
 import { useCatalog } from '../../hooks/useCatalog';
@@ -177,7 +177,7 @@ const BrokerDashboard: React.FC = () => {
   const [offerError, setOfferError] = useState('');
 
   // — Tab / list car state —
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'inventory'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'inventory' | 'offers'>('marketplace');
   const [showListForm, setShowListForm] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
@@ -315,21 +315,35 @@ const BrokerDashboard: React.FC = () => {
         {/* ===== STATS BAR ===== */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
           {[
-            { icon: <Target size={20} />, value: openReqs.length, label: 'Active Requirements', color: '#2563eb', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)' },
-            { icon: <Send size={20} />, value: myOffers.length, label: 'Offers Submitted', color: '#7c3aed', bg: 'linear-gradient(135deg,#f5f3ff,#ede9fe)' },
-            { icon: <CheckCircle2 size={20} />, value: acceptedOffers.length, label: 'Deals Accepted', color: '#059669', bg: 'linear-gradient(135deg,#ecfdf5,#d1fae5)' },
+            { icon: <Target size={20} />, value: openReqs.length, label: 'Active Requirements', color: '#2563eb', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)', action: () => setActiveTab('marketplace') },
+            { icon: <Send size={20} />, value: myOffers.length, label: 'Offers Submitted', color: '#7c3aed', bg: 'linear-gradient(135deg,#f5f3ff,#ede9fe)', action: () => setActiveTab('offers') },
+            { icon: <CheckCircle2 size={20} />, value: acceptedOffers.length, label: 'Deals Accepted', color: '#059669', bg: 'linear-gradient(135deg,#ecfdf5,#d1fae5)', action: () => setActiveTab('offers') },
             {
               icon: <span style={{ fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1 }}>₹</span>,
               value: revenue > 0 ? `₹${revenue.toFixed(1)}L` : '₹0L',
               label: 'Revenue Generated', color: '#b45309', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)',
+              action: () => setActiveTab('offers'),
             },
           ].map((stat, i) => (
-            <div key={i} style={{
-              background: '#fff', borderRadius: '16px', padding: '20px',
-              display: 'flex', alignItems: 'center', gap: '14px',
-              boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
-              border: '1px solid rgba(15,23,42,0.06)',
-            }}>
+            <div key={i} 
+              onClick={stat.action}
+              style={{
+                background: '#fff', borderRadius: '16px', padding: '20px',
+                display: 'flex', alignItems: 'center', gap: '14px',
+                boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
+                border: '1px solid rgba(15,23,42,0.06)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 18px rgba(15,23,42,0.08)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 12px rgba(15,23,42,0.06)';
+              }}
+            >
               <div style={{
                 width: '48px', height: '48px', borderRadius: '12px',
                 background: stat.bg, color: stat.color,
@@ -348,7 +362,7 @@ const BrokerDashboard: React.FC = () => {
 
         {/* ===== TAB SWITCHER ===== */}
         <div style={{ display: 'flex', marginBottom: '24px', borderBottom: '2px solid var(--color-gray-200)' }}>
-          {(['marketplace', 'inventory'] as const).map(tab => (
+          {(['marketplace', 'inventory', 'offers'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
               padding: '12px 24px', border: 'none', cursor: 'pointer',
               fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
@@ -357,7 +371,11 @@ const BrokerDashboard: React.FC = () => {
               borderBottom: activeTab === tab ? '2px solid var(--color-primary)' : '2px solid transparent',
               marginBottom: '-2px', transition: 'all 0.2s',
             }}>
-              {tab === 'marketplace' ? `Buyer Requirements (${openReqs.length})` : `My Inventory (${activeListings.length})`}
+              {tab === 'marketplace' 
+                ? `Buyer Requirements (${openReqs.length})` 
+                : tab === 'inventory' 
+                ? `My Inventory (${activeListings.length})` 
+                : `My Offers & History (${myOffers.length})`}
             </button>
           ))}
         </div>
@@ -873,14 +891,16 @@ const BrokerDashboard: React.FC = () => {
                     }}>
                       {latestOffer.status}
                     </span>
-                    <button style={{
-                      marginTop: '12px', width: '100%', padding: '8px',
-                      border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)',
-                      background: '#fff', cursor: 'pointer', fontFamily: 'var(--font)',
-                      fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-gray-700)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                      transition: 'background 0.15s',
-                    }}
+                    <button 
+                      onClick={() => setActiveTab('offers')}
+                      style={{
+                        marginTop: '12px', width: '100%', padding: '8px',
+                        border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)',
+                        background: '#fff', cursor: 'pointer', fontFamily: 'var(--font)',
+                        fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-gray-700)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                        transition: 'background 0.15s',
+                      }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gray-50)')}
                       onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                     >
@@ -1177,6 +1197,135 @@ const BrokerDashboard: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== OFFERS TAB ===== */}
+        {activeTab === 'offers' && (
+          <div>
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--color-dark)', marginBottom: '4px' }}>
+                Offers Submitted & History
+              </h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
+                Track responses, updates, and status of your offers sent to buyer requirements.
+              </p>
+            </div>
+
+            {myOffers.length === 0 ? (
+              <div className="empty-state" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <div className="empty-state-icon">
+                  <Send size={24} />
+                </div>
+                <h4 className="empty-state-title">No Offers Sent Yet</h4>
+                <p className="empty-state-text" style={{ maxWidth: '360px', margin: '0 auto 16px' }}>
+                  Browse the buyer marketplace requirements and submit competitive price offers to start generating leads.
+                </p>
+                <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary btn-sm">
+                  Go to Marketplace
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {myOffers.map(offer => {
+                  const req = requirements.find(r => r.id === offer.requirementId);
+                  const statusColors = {
+                    pending: { text: '#d97706', bg: '#fffbeb', border: '#fef3c7' },
+                    accepted: { text: '#059669', bg: '#ecfdf5', border: '#d1fae5' },
+                    rejected: { text: '#e63946', bg: '#fef2f2', border: '#fee2e2' },
+                  }[offer.status] || { text: '#64748b', bg: '#f8fafc', border: '#e2e8f0' };
+
+                  return (
+                    <div key={offer.id} className="card animate-in" style={{ padding: '20px', borderLeft: `4px solid ${statusColors.text}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-dark)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {req ? `${req.make} ${req.model}` : 'Unknown Car'}
+                            <span style={{
+                              fontSize: '0.625rem', fontWeight: 800, textTransform: 'uppercase',
+                              padding: '3px 8px', borderRadius: '12px',
+                              color: statusColors.text, background: statusColors.bg, border: `1px solid ${statusColors.border}`,
+                            }}>
+                              {offer.status}
+                            </span>
+                          </h4>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
+                            Submitted {timeAgo(offer.createdAt)}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                            ₹{offer.price}
+                          </span>
+                          <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)', fontWeight: 600 }}>Offered Price</p>
+                        </div>
+                      </div>
+
+                      {/* Offer details / Message */}
+                      <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px', marginBottom: '14px', border: '1px solid var(--color-gray-100)' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.02em' }}>
+                          Broker Offer Message
+                        </p>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-700)', margin: 0, lineHeight: 1.4 }}>
+                          {offer.details || 'No additional details provided.'}
+                        </p>
+                      </div>
+
+                      {/* Original Buyer Requirement Details */}
+                      {req && (
+                        <div style={{ padding: '12px', borderRadius: '8px', border: '1px dashed var(--color-gray-200)', fontSize: '0.75rem' }}>
+                          <p style={{ fontWeight: 700, color: 'var(--color-gray-600)', marginBottom: '8px' }}>
+                            Original Requirement Posted:
+                          </p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+                            <div>
+                              <span style={{ color: 'var(--color-gray-400)' }}>Buyer's Budget:</span>{' '}
+                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.budget}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--color-gray-400)' }}>Year Range:</span>{' '}
+                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.yearRange}</span>
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--color-gray-400)' }}>Pref. Features:</span>{' '}
+                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.preferredFeature || '—'}</span>
+                            </div>
+                          </div>
+                          {req.description && (
+                            <p style={{ color: 'var(--color-gray-500)', margin: 0, fontSize: '0.75rem', borderTop: '1px solid var(--color-gray-100)', paddingTop: '6px' }}>
+                              <span style={{ color: 'var(--color-gray-400)' }}>Description:</span> {req.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Successful Deal Lead Details */}
+                      {offer.status === 'accepted' && (
+                        <div style={{
+                          marginTop: '12px', background: 'rgba(5, 150, 105, 0.05)',
+                          border: '1px solid rgba(5, 150, 105, 0.15)', borderRadius: '8px',
+                          padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'
+                        }}>
+                          <div>
+                            <span style={{ fontSize: '0.6875rem', color: '#059669', fontWeight: 800, textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
+                              Deal Accepted!
+                            </span>
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-dark)', fontWeight: 600 }}>
+                              You can now contact the buyer directly to finalize details.
+                            </span>
+                          </div>
+                          <a href={`tel:${offer.brokerPhone || '9876543210'}`} style={{ textDecoration: 'none' }}>
+                            <button className="btn btn-success btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              <Phone size={12} /> Contact Buyer
+                            </button>
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
