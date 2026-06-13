@@ -6,6 +6,7 @@ import {
   Shield, Clock, BadgeDollarSign, Lock, Send,
   Car, Wrench, Cpu, Settings, Users, ClipboardList, Leaf,
   Building2, BadgeCheck, Phone,
+  Trophy, TrendingUp, Activity, ChevronRight, ChevronLeft, ExternalLink, Flame,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
@@ -157,7 +158,6 @@ const VideoScrollCanvas: React.FC<{ frames: React.MutableRefObject<HTMLImageElem
   );
 };
 
-const YEARS = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 const FUEL_TYPES = ['Petrol', 'Diesel', 'Hybrid', 'Electric'] as const;
 const TRANSMISSION_TYPES = ['Manual', 'Automatic', 'Any'] as const;
 
@@ -168,6 +168,27 @@ const TRANS_ICONS: Record<string, React.ReactNode> = {
   Manual: <Wrench size={14} />, Automatic: <Cpu size={14} />, Any: <Settings size={14} />,
 };
 
+// ── Static data for right-panel widgets ─────────────────────────────────────
+const TOP_DEALERS = [
+  { rank: 1, name: 'Tata Motors Trichy', avgResponse: '6 min', rating: 4.8, color: '#0d9488' },
+  { rank: 2, name: 'Sree Hyundai', avgResponse: '8 min', rating: 4.7, color: '#1e3a8a' },
+  { rank: 3, name: 'VST Motors Cuddalore', avgResponse: '9 min', rating: 4.7, color: '#7c3aed' },
+];
+
+const MOST_REQUESTED = [
+  { rank: 1, model: 'Hyundai Creta', count: 482 },
+  { rank: 2, model: 'Tata Nexon', count: 391 },
+  { rank: 3, model: 'Mahindra XUV700', count: 318 },
+  { rank: 4, model: 'Maruti Brezza', count: 271 },
+];
+
+const LIVE_FEED_INITIAL = [
+  { id: 1, type: 'offer', actor: 'Dealer from Chennai', action: 'submitted an offer', time: '2 mins ago', color: '#0d9488' },
+  { id: 2, type: 'quote', actor: 'Buyer from Coimbatore', action: 'received 9 quotes', time: '4 mins ago', color: '#7c3aed' },
+  { id: 3, type: 'offer', actor: 'Dealer from Madurai', action: 'submitted an offer', time: '5 mins ago', color: '#e63946' },
+  { id: 4, type: 'quote', actor: 'Buyer from Trichy', action: 'received 6 quotes', time: '7 mins ago', color: '#d97706' },
+];
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { addRequirement } = useData();
@@ -176,60 +197,12 @@ const Home: React.FC = () => {
   const { user } = useAuth();
   const { frames, loaded } = useVideoFrames();
 
-  // ── Parallax refs (direct DOM mutation, no re-renders) ──────────────────
-  const badgeRef    = useRef<HTMLDivElement>(null);
-  const headingRef  = useRef<HTMLHeadingElement>(null);
-  const subTextRef  = useRef<HTMLParagraphElement>(null);
-  const statsRef    = useRef<HTMLDivElement>(null);
-  const formCardRef = useRef<HTMLDivElement>(null);
-  const scrollHintRef = useRef<HTMLDivElement>(null);
+  // Refs for scroll container fading
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentOverlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
-      const sy = window.scrollY;
-      const vh = window.innerHeight;
-
-      // Each layer drifts upward at a different rate → depth illusion
-      if (badgeRef.current) {
-        const t = sy * -0.22;
-        const o = Math.max(0, 1 - sy / (vh * 1.2));
-        badgeRef.current.style.transform = `translateY(${t}px)`;
-        badgeRef.current.style.opacity   = String(o);
-      }
-      if (headingRef.current) {
-        const t = sy * -0.16;
-        const o = Math.max(0, 1 - sy / (vh * 1.5));
-        headingRef.current.style.transform = `translateY(${t}px)`;
-        headingRef.current.style.opacity   = String(o);
-      }
-      if (subTextRef.current) {
-        const t = sy * -0.10;
-        const o = Math.max(0, 1 - sy / (vh * 1.8));
-        subTextRef.current.style.transform = `translateY(${t}px)`;
-        subTextRef.current.style.opacity   = String(o);
-      }
-      if (statsRef.current) {
-        const t = sy * -0.06;
-        const o = Math.max(0, 1 - sy / (vh * 2.2));
-        statsRef.current.style.transform = `translateY(${t}px)`;
-        statsRef.current.style.opacity   = String(o);
-      }
-      // Form card: parallax drift and fade out
-      if (formCardRef.current) {
-        const t = sy * -0.08;
-        const o = Math.max(0, 1 - sy / (vh * 2.2));
-        formCardRef.current.style.transform = `translateY(${t}px)`;
-        formCardRef.current.style.opacity   = String(o);
-      }
-      // Scroll hint fades out once user starts scrolling
-      if (scrollHintRef.current) {
-        const o = Math.max(0, 1 - sy / (vh * 0.3));
-        scrollHintRef.current.style.opacity = String(o);
-      }
-
-      // Fade out overlay and content near the end of scroll
       const container = document.getElementById('scroll-hero-container');
       if (container) {
         const rect = container.getBoundingClientRect();
@@ -257,9 +230,9 @@ const Home: React.FC = () => {
   const [heroMake, setHeroMake] = useState('');
   const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
-  const [heroMinYear, setHeroMinYear] = useState('');
-  const [heroMaxYear, setHeroMaxYear] = useState('');
-  const [heroDescription, setHeroDescription] = useState('');
+  const [heroMinYear] = useState('');
+  const [heroMaxYear] = useState('');
+  const [heroDescription] = useState('');
   const [heroFuel, setHeroFuel] = useState('');
   const [heroTransmission, setHeroTransmission] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -310,16 +283,16 @@ const Home: React.FC = () => {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 12px', borderRadius: '8px',
+    width: '100%', padding: '5px 8px', borderRadius: '6px',
     border: '1.5px solid var(--color-gray-200)', fontFamily: 'var(--font)',
-    fontSize: '0.875rem', color: 'var(--color-gray-900)', background: 'var(--color-white)',
+    fontSize: '0.75rem', color: 'var(--color-gray-900)', background: 'var(--color-white)',
     outline: 'none', boxSizing: 'border-box', appearance: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
 
   const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.75rem', fontWeight: 700,
-    color: 'var(--color-gray-600)', marginBottom: '5px', letterSpacing: '0.01em',
+    display: 'block', fontSize: '0.625rem', fontWeight: 700,
+    color: 'var(--color-gray-600)', marginBottom: '2px', letterSpacing: '0.01em',
   };
 
 
@@ -363,11 +336,11 @@ const Home: React.FC = () => {
         title={`View profile of ${dealer.name}`}
         style={{
           flexShrink: 0,
-          width: '320px',
-          padding: '24px 20px',
+          width: '200px',
+          padding: '14px 14px 12px',
           background: '#fff',
           border: '1px solid var(--color-gray-200)',
-          borderRadius: '16px',
+          borderRadius: '14px',
           cursor: 'pointer',
           transition: 'transform 0.2s, box-shadow 0.2s',
           position: 'relative',
@@ -379,7 +352,7 @@ const Home: React.FC = () => {
           boxShadow: 'var(--shadow-sm)',
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.transform = 'translateY(-6px)';
+          e.currentTarget.style.transform = 'translateY(-4px)';
           e.currentTarget.style.boxShadow = 'var(--shadow-md)';
           e.currentTarget.style.borderColor = 'var(--color-primary-light)';
         }}
@@ -392,39 +365,39 @@ const Home: React.FC = () => {
         {/* Top rated / Fast response badge */}
         <div style={{
           position: 'absolute',
-          top: '12px',
-          left: '12px',
+          top: '8px',
+          left: '8px',
           background: isTopRated ? '#fef3c7' : '#dcfce7',
           color: isTopRated ? '#d97706' : '#15803d',
-          padding: '2px 8px',
-          borderRadius: '12px',
-          fontSize: '0.625rem',
+          padding: '1px 6px',
+          borderRadius: '8px',
+          fontSize: '0.5rem',
           fontWeight: 800,
           textTransform: 'uppercase',
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
+          gap: '3px',
           zIndex: 2,
         }}>
-          {isTopRated ? <Star size={10} fill="currentColor" /> : <Zap size={10} />}
+          {isTopRated ? <Star size={8} fill="currentColor" /> : <Zap size={8} />}
           {isTopRated ? 'TOP RATED' : 'FAST RESPONSE'}
         </div>
 
         {/* Logo Icon */}
         <div style={{
-          width: '64px',
-          height: '64px',
+          width: '44px',
+          height: '44px',
           borderRadius: '50%',
           background: logoInfo.bg,
           border: `2px solid ${logoInfo.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '1.25rem',
+          fontSize: '0.875rem',
           fontWeight: 800,
           color: logoInfo.text,
-          marginTop: '12px',
-          marginBottom: '12px',
+          marginTop: '18px',
+          marginBottom: '8px',
           boxShadow: 'var(--shadow-xs)',
           flexShrink: 0,
         }}>
@@ -435,69 +408,62 @@ const Home: React.FC = () => {
         <div style={{ flex: 1, width: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h3 style={{
-              fontSize: '1.0625rem',
+              fontSize: '0.8rem',
               fontWeight: 800,
               color: 'var(--color-gray-900)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.375rem',
-              marginBottom: '4px',
-              marginTop: '4px',
-              justifyContent: 'center'
+              gap: '0.25rem',
+              marginBottom: '2px',
+              marginTop: '2px',
+              justifyContent: 'center',
+              lineHeight: 1.3,
             }}>
               {dealer.name}
-              {dealer.verified && <BadgeCheck size={16} color="var(--color-primary)" />}
+              {dealer.verified && <BadgeCheck size={11} color="var(--color-primary)" />}
             </h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--color-gray-500)', fontSize: '0.8125rem', marginBottom: '6px' }}>
-              <MapPin size={12} /> {dealer.city}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--color-gray-500)', fontSize: '0.6875rem', marginBottom: '4px' }}>
+              <MapPin size={9} /> {dealer.city}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fbbf24', fontSize: '0.8125rem', fontWeight: 700, marginBottom: '12px' }}>
-              <Star size={12} fill="currentColor" /> {dealer.rating.toFixed(1)} <span style={{ fontWeight: 400, color: 'var(--color-gray-400)', marginLeft: '2px' }}>({dealer.reviews} reviews)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#fbbf24', fontSize: '0.6875rem', fontWeight: 700, marginBottom: '8px' }}>
+              <Star size={9} fill="currentColor" /> {dealer.rating.toFixed(1)} <span style={{ fontWeight: 400, color: 'var(--color-gray-400)', marginLeft: '2px' }}>({dealer.reviews})</span>
             </div>
           </div>
         </div>
 
-        {/* Metrics and Brands */}
+        {/* Metrics */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           width: '100%',
           borderTop: '1px solid var(--color-gray-100)',
-          paddingTop: '12px',
-          marginBottom: '12px',
+          paddingTop: '8px',
+          marginBottom: '8px',
+          gap: '4px',
         }}>
-          <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--color-gray-600)', fontSize: '0.8125rem', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Car size={14} color="var(--color-primary)" /> {dealer.vehicles}+ Vehicles
+          <div style={{ display: 'flex', gap: '10px', color: 'var(--color-gray-600)', fontSize: '0.6875rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <BadgeDollarSign size={10} color="var(--color-primary)" /> {dealer.vehicles}+ Offers
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Shield size={14} color="var(--color-primary)" /> {dealer.yearsInBusiness} yrs exp
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Clock size={10} color="var(--color-primary)" /> {dealer.yearsInBusiness}yr Exp
             </div>
-          </div>
-          {/* Brands list tag */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
-            <span>Brands:</span>
-            {(dealer.brand || 'Maruti Suzuki, Hyundai').split(',').slice(0, 2).map((brandName, idx) => (
-              <span key={idx} style={{ background: 'var(--color-gray-50)', border: '1px solid var(--color-gray-200)', borderRadius: '4px', padding: '1px 6px', fontSize: '0.6875rem', fontWeight: 600, color: 'var(--color-gray-600)' }}>
-                {brandName.trim()}
-              </span>
-            ))}
           </div>
         </div>
 
-        {/* Actions Column */}
+        {/* Actions */}
         <div style={{ 
           display: 'flex', 
           width: '100%', 
-          gap: '8px', 
+          gap: '6px', 
           marginTop: 'auto',
           flexShrink: 0,
         }}>
           <button 
             className="btn btn-outline btn-sm" 
             onClick={(e) => { e.stopPropagation(); navigate(`/dealers/${dealer.id}`); }}
-            style={{ border: '1.5px solid var(--color-primary)', color: 'var(--color-primary)', fontWeight: 700, flex: 1 }}
+            style={{ border: '1.5px solid var(--color-primary)', color: 'var(--color-primary)', fontWeight: 700, flex: 1, fontSize: '0.625rem', padding: '5px 8px' }}
           >
             View Profile
           </button>
@@ -506,8 +472,8 @@ const Home: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
             style={{ textDecoration: 'none' }}
           >
-            <button className="btn btn-primary btn-sm" style={{ background: 'var(--color-primary)', padding: '8px 10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Phone size={14} />
+            <button className="btn btn-primary btn-sm" style={{ background: 'var(--color-primary)', padding: '5px 7px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Phone size={11} />
             </button>
           </a>
         </div>
@@ -536,42 +502,42 @@ const Home: React.FC = () => {
         <div ref={contentOverlayRef} style={{
           position: 'sticky', top: 0, height: '100vh',
           marginTop: '-100vh',
-          display: 'flex', alignItems: 'center',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           zIndex: 2, pointerEvents: 'none',
+          paddingTop: '48px', paddingBottom: '12px', boxSizing: 'border-box',
         }}>
-          <div className="container" style={{ padding: '0 32px', pointerEvents: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 430px', gap: '52px', alignItems: 'center' }}>
+          {/* Top: Unified Hero Grid */}
+          <div className="container" style={{ pointerEvents: 'auto' }}>
+            <div className="hero-unified-grid">
 
-              {/* ---- LEFT: Headline ---- */}
-              <div className="animate-in">
+              {/* ---- COLUMN 1: Headline & Stats ---- */}
+              <div className="hero-grid-left-col animate-in">
                 {/* Badge */}
-                <div ref={badgeRef} style={{
+                <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: '6px',
                   background: 'transparent', color: 'var(--color-gray-700)',
-                  padding: '5px 14px', borderRadius: '20px',
+                  padding: '4px 12px', borderRadius: '20px',
                   fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em',
-                  marginBottom: '22px', textTransform: 'uppercase',
+                  marginBottom: '0px', textTransform: 'uppercase',
                   border: '1px solid var(--color-gray-300)',
-                  willChange: 'transform, opacity',
+                  alignSelf: 'flex-start',
                 }}>
                   <Star size={10} color="#ff6b7a" fill="#ff6b7a" /> India's #1 Reverse Car Marketplace
                 </div>
 
                 {/* Heading */}
-                <h1 ref={headingRef} style={{
-                  fontSize: 'clamp(2.2rem, 4vw, 3.4rem)', fontWeight: 900, color: 'var(--color-gray-900)',
-                  lineHeight: 1.1, letterSpacing: '-0.03em', marginBottom: '18px',
-                  willChange: 'transform, opacity',
+                <h1 style={{
+                  fontSize: 'clamp(1.5rem, 2.6vw, 2.2rem)', fontWeight: 900, color: 'var(--color-gray-900)',
+                  lineHeight: 1.1, letterSpacing: '-0.03em', marginBottom: '0px',
                 }}>
                   You tell us what<br />you want,<br />
                   <span style={{ color: '#ff6b7a' }}>We'll find your<br />perfect deal.</span>
                 </h1>
 
                 {/* Sub-text */}
-                <p ref={subTextRef} style={{
-                  fontSize: '1.05rem', color: 'var(--color-gray-600)',
-                  lineHeight: 1.7, marginBottom: '32px', maxWidth: '460px',
-                  willChange: 'transform, opacity',
+                <p style={{
+                  fontSize: '0.875rem', color: 'var(--color-gray-600)',
+                  lineHeight: 1.5, marginBottom: '0px', maxWidth: '440px',
                 }}>
                   Post your car requirements and get verified brokers<br />
                   competing to bring you the best offers.<br />
@@ -579,144 +545,117 @@ const Home: React.FC = () => {
                 </p>
 
                 {/* Stats */}
-                <div ref={statsRef} style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', willChange: 'transform, opacity' }}>
+                <div style={{ display: 'flex', gap: '5px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '2px', width: '100%' }}>
                   {[
-                    { icon: <Users size={15} color="#ff6b7a" />, value: '10,000+', label: 'Active Buyers' },
-                    { icon: <Shield size={15} color="#ff6b7a" />, value: '2,500+', label: 'Verified Brokers' },
-                    { icon: <ClipboardList size={15} color="#ff6b7a" />, value: '50,000+', label: 'Deals Done' },
-                    { icon: <Star size={15} color="#ff6b7a" fill="#ff6b7a" />, value: '4.8 ★', label: 'Rating' },
+                    { icon: <Users size={11} color="#ff6b7a" />, value: '10,000+', label: 'Active Buyers' },
+                    { icon: <Shield size={11} color="#ff6b7a" />, value: '2,500+', label: 'Verified Brokers' },
+                    { icon: <ClipboardList size={11} color="#ff6b7a" />, value: '50,000+', label: 'Deals Done' },
+                    { icon: <Star size={11} color="#ff6b7a" fill="#ff6b7a" />, value: '4.8 ★', label: 'Rating' },
                   ].map(s => (
                     <div key={s.label} style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '9px 14px',
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '5px 9px',
                       background: 'rgba(255,255,255,0.72)',
                       backdropFilter: 'blur(12px)',
-                      borderRadius: '10px', border: '1px solid var(--color-gray-200)',
+                      borderRadius: '9px', border: '1px solid var(--color-gray-200)',
                     }}>
                       <span style={{ display: 'flex', alignItems: 'center' }}>{s.icon}</span>
                       <div>
-                        <div style={{ fontSize: '0.9375rem', fontWeight: 800, color: 'var(--color-gray-900)', lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontSize: '0.6rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{s.label}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)', lineHeight: 1 }}>{s.value}</div>
+                        <div style={{ fontSize: '0.5rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{s.label}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* ---- RIGHT: Form card ---- */}
-              <div ref={formCardRef} className="animate-in animate-delay-1" style={{
-                background: 'rgba(255, 255, 255, 0.82)',
+              {/* ---- COLUMN 2: Form Card ---- */}
+              <div className="hero-grid-form-col animate-in animate-delay-1" style={{
+                background: 'rgba(255, 255, 255, 0.88)',
                 backdropFilter: 'blur(24px) saturate(160%)',
                 WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-                borderRadius: '20px',
-                boxShadow: '0 24px 80px rgba(15, 23, 42, 0.08)',
+                borderRadius: '14px',
+                boxShadow: '0 20px 60px rgba(15, 23, 42, 0.10)',
                 border: '1px solid rgba(15, 23, 42, 0.08)',
-                maxHeight: '90vh', overflowY: 'auto',
-                willChange: 'transform, opacity',
               }}>
                 {/* Card Header */}
                 <div style={{
-                  padding: '18px 22px 14px',
+                  padding: '8px 12px 6px',
                   borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
-                  display: 'flex', alignItems: 'center', gap: '12px',
+                  display: 'flex', alignItems: 'center', gap: '8px',
                 }}>
                   <div style={{
-                    width: '42px', height: '42px', borderRadius: '12px',
-                    background: 'rgba(230,57,70,0.2)',
-                    border: '1px solid rgba(230,57,70,0.3)',
+                    width: '26px', height: '26px', borderRadius: '8px',
+                    background: 'rgba(230,57,70,0.15)',
+                    border: '1px solid rgba(230,57,70,0.25)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <Car size={20} color="#ff6b7a" />
+                    <Car size={13} color="#ff6b7a" />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-gray-900)', marginBottom: '1px' }}>Post Your Requirement</h2>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>It's quick, easy and free</p>
+                    <h2 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-900)', marginBottom: '0px' }}>Post Your Requirement</h2>
+                    <p style={{ fontSize: '0.5625rem', color: 'var(--color-gray-500)' }}>It's quick, easy and free</p>
                   </div>
                 </div>
 
-                <form onSubmit={handlePostRequirement} style={{ padding: '18px 22px 20px' }}>
+                <form onSubmit={handlePostRequirement} style={{ padding: '8px 12px 10px' }}>
 
                   {/* Brand + Model */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
                     <div>
                       <label style={labelStyle}>Select Brand *</label>
-                      <div style={{ position: 'relative' }}>
-                        <select required style={inputStyle} value={heroMake}
-                          onChange={e => { setHeroMake(e.target.value); setHeroModel(''); }}
-                          onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                          onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
-                          <option value="">Select Brand</option>
-                          {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                        </select>
-                      </div>
+                      <select required style={inputStyle} value={heroMake}
+                        onChange={e => { setHeroMake(e.target.value); setHeroModel(''); }}
+                        onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
+                        <option value="">Select Brand</option>
+                        {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                      </select>
                     </div>
                     <div>
                       <label style={labelStyle}>Select Model *</label>
-                      <div style={{ position: 'relative' }}>
-                        <select required style={inputStyle} value={heroModel}
-                          onChange={e => setHeroModel(e.target.value)}
-                          disabled={!heroMake}
-                          onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                          onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
-                          <option value="">Select Model</option>
-                          {selectedBrand?.models.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                        </select>
-                      </div>
+                      <select required style={inputStyle} value={heroModel}
+                        onChange={e => setHeroModel(e.target.value)}
+                        disabled={!heroMake}
+                        onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
+                        <option value="">Select Model</option>
+                        {selectedBrand?.models.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                      </select>
                     </div>
                   </div>
 
-                  {/* Budget + Year Range */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                    <div>
-                      <label style={labelStyle}>Your Budget *</label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)', fontWeight: 700, fontSize: '0.9rem' }}>₹</span>
-                        <input
-                          required type="number" min="0" step="0.5"
-                          value={heroBudget} onChange={e => setHeroBudget(e.target.value)}
-                          placeholder="e.g. 10-15 Lakh"
-                          style={{ ...inputStyle, paddingLeft: '24px' }}
-                          onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                          onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Year Range</label>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <select style={inputStyle} value={heroMinYear} onChange={e => setHeroMinYear(e.target.value)}
-                          onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                          onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
-                          <option value="">Min</option>
-                          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                        <span style={{ color: 'var(--color-gray-300)', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>–</span>
-                        <select style={inputStyle} value={heroMaxYear} onChange={e => setHeroMaxYear(e.target.value)}
-                          onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                          onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}>
-                          <option value="">Max</option>
-                          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                      </div>
+                  {/* Budget */}
+                  <div style={{ marginBottom: '6px' }}>
+                    <label style={labelStyle}>Your Budget *</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)', fontWeight: 700, fontSize: '0.75rem' }}>₹</span>
+                      <input
+                        required type="number" min="0" step="0.5"
+                        value={heroBudget} onChange={e => setHeroBudget(e.target.value)}
+                        placeholder="e.g. 10-15 Lakh"
+                        style={{ ...inputStyle, paddingLeft: '18px' }}
+                        onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}
+                      />
                     </div>
                   </div>
 
                   {/* Fuel Type Pills */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={labelStyle}>Preferred Fuel Type</label>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ marginBottom: '6px' }}>
+                    <label style={labelStyle}>Fuel Type</label>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'nowrap' }}>
                       {FUEL_TYPES.map(f => (
                         <button key={f} type="button"
                           onClick={() => setHeroFuel(heroFuel === f ? '' : f)}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '5px',
-                            padding: '7px 14px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '2px',
+                            padding: '2px 5px', borderRadius: '6px',
                             border: `1.5px solid ${heroFuel === f ? 'rgba(230,57,70,0.8)' : 'var(--color-gray-200)'}`,
-                            background: heroFuel === f ? 'rgba(230,57,70,0.18)' : 'var(--color-gray-50)',
+                            background: heroFuel === f ? 'rgba(230,57,70,0.15)' : 'var(--color-gray-50)',
                             color: heroFuel === f ? '#ff6b7a' : 'var(--color-gray-600)',
-                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.8125rem',
-                            cursor: 'pointer', transition: 'all 0.15s',
-                            boxShadow: heroFuel === f ? '0 0 12px rgba(230,57,70,0.25)' : 'none',
+                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.5625rem',
+                            cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
                           }}>
                           <span>{FUEL_ICONS[f]}</span> {f}
                         </button>
@@ -725,21 +664,20 @@ const Home: React.FC = () => {
                   </div>
 
                   {/* Transmission Pills */}
-                  <div style={{ marginBottom: '12px' }}>
+                  <div style={{ marginBottom: '8px' }}>
                     <label style={labelStyle}>Transmission</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '4px' }}>
                       {TRANSMISSION_TYPES.map(tr => (
                         <button key={tr} type="button"
                           onClick={() => setHeroTransmission(heroTransmission === tr ? '' : tr)}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '5px',
-                            padding: '7px 14px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '2px',
+                            padding: '2px 6px', borderRadius: '6px',
                             border: `1.5px solid ${heroTransmission === tr ? 'rgba(230,57,70,0.8)' : 'var(--color-gray-200)'}`,
-                            background: heroTransmission === tr ? 'rgba(230,57,70,0.18)' : 'var(--color-gray-50)',
+                            background: heroTransmission === tr ? 'rgba(230,57,70,0.15)' : 'var(--color-gray-50)',
                             color: heroTransmission === tr ? '#ff6b7a' : 'var(--color-gray-600)',
-                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.8125rem',
+                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.5625rem',
                             cursor: 'pointer', transition: 'all 0.15s',
-                            boxShadow: heroTransmission === tr ? '0 0 12px rgba(230,57,70,0.25)' : 'none',
                           }}>
                           <span>{TRANS_ICONS[tr]}</span> {tr}
                         </button>
@@ -747,31 +685,14 @@ const Home: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Additional Details */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={labelStyle}>Additional Details <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(Optional)</span></label>
-                    <textarea
-                      rows={3}
-                      value={heroDescription}
-                      onChange={e => setHeroDescription(e.target.value.slice(0, 250))}
-                      placeholder="Condition, color, features, mileage, urgency, budget flexibility..."
-                      style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6, minHeight: '76px' }}
-                      onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
-                      onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}
-                    />
-                    <div style={{ textAlign: 'right', fontSize: '0.6875rem', color: 'var(--color-gray-400)', marginTop: '3px' }}>
-                      {heroDescription.length}/250
-                    </div>
-                  </div>
-
                   {/* Submit */}
                   <button type="submit" disabled={submitting} style={{
-                    width: '100%', padding: '14px',
+                    width: '100%', padding: '6px 12px',
                     background: submitting ? 'rgba(148,163,184,0.3)' : 'linear-gradient(135deg, #e63946 0%, #c1121f 100%)',
-                    color: '#fff', border: 'none', borderRadius: '10px',
-                    fontFamily: 'var(--font)', fontWeight: 800, fontSize: '1rem',
+                    color: '#fff', border: 'none', borderRadius: '8px',
+                    fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.75rem',
                     cursor: submitting ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     transition: 'opacity 0.2s, transform 0.15s',
                     boxShadow: submitting ? 'none' : '0 4px 20px rgba(230,57,70,0.4)',
                     letterSpacing: '0.02em',
@@ -779,106 +700,161 @@ const Home: React.FC = () => {
                     onMouseEnter={e => { if (!submitting) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    <Send size={16} /> {submitting ? 'Posting...' : 'Post Requirement'}
+                    <Send size={11} /> {submitting ? 'Posting...' : 'Post Requirement'}
                   </button>
 
                   {/* Trust signal */}
-                  <div style={{ textAlign: 'center', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>
-                    <Lock size={11} /> Your details are secure and private
+                  <div style={{ textAlign: 'center', marginTop: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.5625rem', color: 'var(--color-gray-400)' }}>
+                    <Lock size={8} /> Your details are secure and private
                   </div>
                 </form>
               </div>
 
+              {/* ---- ROW 2: Sponsored Banner spans Col 1 & 2 ---- */}
+              <div className="hero-grid-banner">
+                <SponsoredBanner />
+              </div>
+
+              {/* ---- COLUMN 3: Widgets Top Stack ---- */}
+              <div className="hero-grid-widgets-top">
+
+                {/* 🏆 Top Responsive Dealers */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.92)',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '10px 12px 8px',
+                    borderBottom: '1px solid rgba(15,23,42,0.06)',
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                  }}>
+                    <Trophy size={14} color="#f59e0b" fill="#f59e0b" />
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Top Responsive Dealers</span>
+                  </div>
+                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {TOP_DEALERS.map((dealer) => (
+                      <div key={dealer.rank} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '6px 8px', borderRadius: '8px',
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                      }}>
+                        <div style={{
+                          width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                          background: dealer.rank === 1 ? '#ffedd5' : dealer.rank === 2 ? '#eff6ff' : '#f3e8ff',
+                          color: dealer.rank === 1 ? '#c2410c' : dealer.rank === 2 ? '#1d4ed8' : '#7c3aed',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.6875rem', fontWeight: 800,
+                        }}>{dealer.rank}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dealer.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
+                            <TrendingUp size={9} color="#059669" />
+                            <span style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)' }}>Avg Response: <strong style={{ color: '#059669', fontWeight: 700 }}>{dealer.avgResponse}</strong></span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-700)' }}>
+                          <Star size={10} color="#f59e0b" fill="#f59e0b" />
+                          <span>{dealer.rating}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+                      View Full Leaderboard <ArrowRight size={10} />
+                    </a>
+                  </div>
+                </div>
+
+                {/* 🔥 Most Requested Today */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.92)',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '10px 12px 8px',
+                    borderBottom: '1px solid rgba(15,23,42,0.06)',
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                  }}>
+                    <Flame size={14} color="#e63946" fill="#e63946" />
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Most Requested Today</span>
+                  </div>
+                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {MOST_REQUESTED.map((item, idx) => (
+                      <div key={item.rank} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '4px 6px', borderRadius: '6px',
+                      }}>
+                        <div style={{
+                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                          background: idx === 0 ? '#fee2e2' : idx === 1 ? '#ffedd5' : idx === 2 ? '#fef9c3' : '#eff6ff',
+                          color: idx === 0 ? '#ef4444' : idx === 1 ? '#ea580c' : idx === 2 ? '#ca8a04' : '#2563eb',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.625rem', fontWeight: 800,
+                        }}>{item.rank}</div>
+                        <span style={{ flex: 1, fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-800)' }}>{item.model}</span>
+                        <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{item.count} Requests</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+                      View All Popular Cars <ArrowRight size={10} />
+                    </a>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* ---- COLUMN 3: Live Activity Widget ---- */}
+              <div className="hero-grid-widgets-bottom">
+                {/* ⚡ Live Activity Feed */}
+                <LiveActivityFeed />
+              </div>
+
             </div>
           </div>
         </div>
-
-        {/* Scroll-down hint */}
-        <div ref={scrollHintRef} style={{
-          position: 'absolute', bottom: '36px', left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-          zIndex: 10, pointerEvents: 'none', transition: 'opacity 0.3s',
-        }}>
-          <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-gray-600)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Scroll to explore</span>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{
-                width: '6px', height: '6px', borderRight: '2px solid var(--color-gray-500)',
-                borderBottom: '2px solid var(--color-gray-500)',
-                transform: 'rotate(45deg)',
-                animation: `chevron-bounce 1.4s ease-in-out ${i * 0.18}s infinite`,
-              }} />
-            ))}
-          </div>
-        </div>
-
-        <style>{`
-          @keyframes chevron-bounce {
-            0%, 100% { opacity: 0.2; transform: rotate(45deg) translateY(-3px); }
-            50% { opacity: 1; transform: rotate(45deg) translateY(3px); }
-          }
-        `}</style>
       </div>
 
-
       {/* ===== ALL CONTENT — single unified section ===== */}
-      <section style={{ position: 'relative' }}>
+      <section style={{ position: 'relative', background: '#f8fafc', paddingTop: '40px' }}>
 
-        {/* ── Popular Dealers in Tamil Nadu (full-bleed, outside container) ── */}
-        <div style={{ paddingTop: '56px', paddingBottom: '56px' }}>
-
-          {/* Section header */}
-          <div className="container" style={{ marginBottom: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  fontSize: '0.6875rem', fontWeight: 800, color: '#ff6b7a',
-                  letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: '8px',
-                }}>
-                  <Building2 size={12} />
-                  Tamil Nadu
+        {/* ── Trusted Dealers strip — normal flow ── */}
+        <div style={{ width: '100%', marginBottom: '40px' }}>
+          {/* Label row */}
+          <div className="container" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Building2 size={14} color="#ff6b7a" />
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#ff6b7a', letterSpacing: '0.10em', textTransform: 'uppercase' }}>Tamil Nadu</span>
+              <span style={{ width: '1px', height: '12px', background: 'var(--color-gray-300)', margin: '0 4px' }} />
+              <span style={{ fontSize: '0.9375rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Trusted Dealers Across Tamil Nadu</span>
+            </div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              {[{ value: '500+', label: 'Dealers' }, { value: '32', label: 'Cities' }, { value: '15', label: 'Brands' }].map(stat => (
+                <div key={stat.label} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{stat.value}</div>
+                  <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>{stat.label}</div>
                 </div>
-                <h2 style={{
-                  fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)', fontWeight: 800,
-                  color: 'var(--color-gray-900)', letterSpacing: '-0.02em', marginBottom: '6px',
-                }}>
-                  Trusted Dealers Across Tamil Nadu
-                </h2>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)' }}>
-                  Explore verified dealers from Chennai, Coimbatore, Madurai, Trichy&nbsp;&amp;&nbsp;more.
-                </p>
-              </div>
-
-              {/* Live stats */}
-              <div style={{ display: 'flex', gap: '20px', flexShrink: 0 }}>
-                {[
-                  { value: '500+', label: 'Dealers' },
-                  { value: '32', label: 'Cities' },
-                  { value: '15', label: 'Brands' },
-                ].map(stat => (
-                  <div key={stat.label} style={{ textAlign: 'center' }}>
-                    <div style={{
-                      fontSize: '1.375rem', fontWeight: 900, color: '#ff6b7a',
-                      lineHeight: 1, letterSpacing: '-0.03em',
-                    }}>{stat.value}</div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', fontWeight: 600, marginTop: '2px' }}>
-                      {stat.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* New Car Dealers Marquee */}
-          <div style={{ marginBottom: '28px' }}>
-            <div className="container" style={{ marginBottom: '12px' }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                fontSize: '0.75rem', fontWeight: 800, color: '#ff6b7a',
-                letterSpacing: '0.05em', textTransform: 'uppercase'
-              }}>
+          {/* New Car Dealers row */}
+          <div style={{ marginBottom: '16px' }}>
+            <div className="container" style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 800, color: '#ff6b7a', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff6b7a' }} />
                 New Car Showrooms
               </div>
@@ -890,14 +866,10 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          {/* Used Car Dealers Marquee */}
-          <div style={{ marginTop: '28px' }}>
-            <div className="container" style={{ marginBottom: '12px' }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                fontSize: '0.75rem', fontWeight: 800, color: '#34d399',
-                letterSpacing: '0.05em', textTransform: 'uppercase'
-              }}>
+          {/* Pre-Owned Dealers row */}
+          <div>
+            <div className="container" style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 800, color: '#34d399', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399' }} />
                 Pre-Owned Car Dealers
               </div>
@@ -912,10 +884,10 @@ const Home: React.FC = () => {
 
         {/* glass divider */}
         <div className="container">
-          <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, rgba(15, 23, 42, 0.08), transparent)', marginBottom: '0' }} />
+          <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, rgba(15, 23, 42, 0.08), transparent)', marginBottom: '40px' }} />
         </div>
 
-        <div className="container" style={{ paddingTop: '48px', paddingBottom: '80px' }}>
+        <div className="container" style={{ paddingTop: '40px', paddingBottom: '80px' }}>
 
           {/* — Why Buyers Love CarMatchr — */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '48px' }}>
@@ -1026,6 +998,278 @@ const Home: React.FC = () => {
 
         </div>
       </section>
+    </div>
+  );
+};
+
+// ── Live Activity Feed Component ────────────────────────────────────────────
+const LiveActivityFeed: React.FC = () => {
+  const [feed, setFeed] = useState(LIVE_FEED_INITIAL);
+  const [newEntryId, setNewEntryId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const cities = ['Salem', 'Erode', 'Vellore', 'Tirunelveli', 'Thanjavur', 'Pondicherry', 'Hosur', 'Dindigul'];
+    const actions = [
+      { type: 'offer', action: 'submitted an offer', color: '#0d9488' },
+      { type: 'quote', action: 'received 5 quotes', color: '#7c3aed' },
+      { type: 'offer', action: 'submitted an offer', color: '#e63946' },
+      { type: 'quote', action: 'received 8 quotes', color: '#d97706' },
+    ];
+    let nextId = 100;
+    const interval = setInterval(() => {
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      const act = actions[Math.floor(Math.random() * actions.length)];
+      const isDealer = act.type === 'offer';
+      const newEntry = {
+        id: nextId++,
+        type: act.type,
+        actor: `${isDealer ? 'Dealer' : 'Buyer'} from ${city}`,
+        action: act.action,
+        time: 'just now',
+        color: act.color,
+      };
+      setFeed(prev => [newEntry, ...prev.slice(0, 3)]);
+      setNewEntryId(newEntry.id);
+      setTimeout(() => setNewEntryId(null), 600);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.90)',
+      backdropFilter: 'blur(20px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+      borderRadius: '12px',
+      border: '1px solid rgba(15,23,42,0.08)',
+      boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '10px 12px 8px',
+        borderBottom: '1px solid rgba(15,23,42,0.06)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Activity size={13} color="#059669" />
+          <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Live Activity</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669', display: 'inline-block', animation: 'pulse-dot 1.5s ease-in-out infinite' }} />
+          <span style={{ fontSize: '0.5rem', fontWeight: 700, color: '#059669' }}>LIVE</span>
+        </div>
+      </div>
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {feed.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '10px',
+              padding: '8px 10px', borderRadius: '8px',
+              background: newEntryId === item.id ? 'rgba(5,150,105,0.06)' : 'transparent',
+              border: newEntryId === item.id ? '1px solid rgba(5,150,105,0.15)' : '1px solid transparent',
+              transition: 'background 0.4s, border-color 0.4s',
+            }}
+          >
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+              background: item.type === 'offer' ? '#dcfce7' : '#eff6ff',
+              border: `1px solid ${item.type === 'offer' ? '#bbf7d0' : '#bfdbfe'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: item.type === 'offer' ? '#15803d' : '#1d4ed8',
+            }}>
+              {item.type === 'offer'
+                ? <Send size={12} />
+                : <Users size={12} />
+              }
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-900)' }}>{item.actor}</span>
+                <span style={{ fontSize: '0.625rem', color: 'var(--color-gray-400)' }}>{item.time}</span>
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>
+                {item.action}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+        <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+          View All <ChevronRight size={10} />
+        </a>
+      </div>
+    </div>
+  );
+};
+
+// ── Sponsored Dealer Banner ──────────────────────────────────────────────────
+const SponsoredBanner: React.FC = () => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  const slides = [
+    {
+      id: 1,
+      brand: 'Tata Motors Trichy',
+      headline: 'Get Exclusive June Offers',
+      subheadline: 'from Tata Motors Trichy',
+      cta: 'View Offers',
+      gradient: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #0d4f7c 100%)',
+      accentColor: '#38bdf8',
+      badgeColor: '#f59e0b',
+    },
+    {
+      id: 2,
+      brand: 'Sree Hyundai Chennai',
+      headline: 'Zero Down Payment This Month',
+      subheadline: 'at Sree Hyundai Chennai',
+      cta: 'Check Deals',
+      gradient: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 100%)',
+      accentColor: '#a78bfa',
+      badgeColor: '#818cf8',
+    },
+    {
+      id: 3,
+      brand: 'VST Motors Coimbatore',
+      headline: 'Best Exchange Bonuses',
+      subheadline: 'at VST Motors Coimbatore',
+      cta: 'Get Quote',
+      gradient: 'linear-gradient(135deg, #0f172a 0%, #14532d 40%, #166534 100%)',
+      accentColor: '#4ade80',
+      badgeColor: '#86efac',
+    },
+  ];
+
+  const handleNext = () => setCurrentSlide(p => (p + 1) % slides.length);
+  const handlePrev = () => setCurrentSlide(p => (p - 1 + slides.length) % slides.length);
+
+  useEffect(() => {
+    const timer = setInterval(handleNext, 5000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  const slide = slides[currentSlide];
+
+  return (
+    <div style={{
+      position: 'relative',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      backgroundImage: slide.id === 1 ? `url('/tata_showroom.png')` : 'none',
+      backgroundColor: slide.id !== 1 ? '#0f172a' : 'transparent',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      padding: '12px 24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '20px',
+      boxShadow: '0 8px 32px rgba(15,23,42,0.20)',
+      transition: 'all 0.6s ease',
+      minHeight: '76px',
+    }}>
+      {/* Background pattern */}
+      {slide.id !== 1 && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: `radial-gradient(${slide.accentColor}18 1px, transparent 1px)`,
+          backgroundSize: '28px 28px',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }} />
+      )}
+      {/* Glow orb */}
+      <div style={{
+        position: 'absolute', right: '-40px', top: '-40px',
+        width: '200px', height: '200px', borderRadius: '50%',
+        background: `radial-gradient(circle, ${slide.accentColor}25 0%, transparent 70%)`,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+      {/* Dark gradient overlay to ensure readability */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: slide.id === 1
+          ? 'linear-gradient(90deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 50%, rgba(15,23,42,0.3) 100%)'
+          : slide.gradient,
+        zIndex: 0,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Left: Badge + Text */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+          <Star size={9} color={slide.badgeColor} fill={slide.badgeColor} />
+          <span style={{ fontSize: '0.5rem', fontWeight: 800, color: slide.badgeColor, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Sponsored Dealer</span>
+        </div>
+        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '2px' }}>{slide.headline}</h3>
+        <p style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.70)', fontWeight: 500 }}>{slide.subheadline}</p>
+      </div>
+
+      {/* Center: Brand Tag */}
+      <div style={{
+        position: 'relative', zIndex: 1, flexShrink: 0,
+        padding: '6px 12px',
+        background: 'rgba(255,255,255,0.08)',
+        border: `1px solid ${slide.accentColor}40`,
+        borderRadius: '8px',
+        backdropFilter: 'blur(8px)',
+      }}>
+        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '2px' }}>Authorized Dealer</div>
+        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fff' }}>{slide.brand}</div>
+      </div>
+
+      {/* Right: CTA + Nav */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+        <button style={{
+          padding: '6px 14px',
+          background: '#e63946',
+          color: '#fff', border: 'none', borderRadius: '8px',
+          fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.75rem',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+          boxShadow: '0 3px 12px rgba(230,57,70,0.4)',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(230,57,70,0.5)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(230,57,70,0.45)'; }}
+        >
+          {slide.cta} <ExternalLink size={11} />
+        </button>
+        {/* Slide indicators */}
+        <div style={{ display: 'flex', gap: '5px' }}>
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentSlide(i)}
+              style={{
+                width: i === currentSlide ? '16px' : '6px',
+                height: '6px',
+                borderRadius: '3px',
+                background: i === currentSlide ? '#fff' : 'rgba(255,255,255,0.3)',
+                border: 'none', cursor: 'pointer', padding: 0,
+                transition: 'width 0.3s, background 0.3s',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Navigation Arrows */}
+      <button onClick={handlePrev} style={{
+        position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+        background: 'none', border: 'none', color: '#fff', cursor: 'pointer', zIndex: 2,
+        opacity: 0.7, padding: '4px',
+      }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}>
+        <ChevronLeft size={20} />
+      </button>
+      <button onClick={handleNext} style={{
+        position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+        background: 'none', border: 'none', color: '#fff', cursor: 'pointer', zIndex: 2,
+        opacity: 0.7, padding: '4px',
+      }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}>
+        <ChevronRight size={20} />
+      </button>
     </div>
   );
 };
