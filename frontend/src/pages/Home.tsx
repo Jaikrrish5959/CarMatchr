@@ -283,16 +283,16 @@ const Home: React.FC = () => {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '5px 8px', borderRadius: '6px',
+    width: '100%', padding: '8px 12px', borderRadius: '8px',
     border: '1.5px solid var(--color-gray-200)', fontFamily: 'var(--font)',
-    fontSize: '0.75rem', color: 'var(--color-gray-900)', background: 'var(--color-white)',
+    fontSize: '0.8125rem', color: 'var(--color-gray-900)', background: 'var(--color-white)',
     outline: 'none', boxSizing: 'border-box', appearance: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
 
   const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.625rem', fontWeight: 700,
-    color: 'var(--color-gray-600)', marginBottom: '2px', letterSpacing: '0.01em',
+    display: 'block', fontSize: '0.75rem', fontWeight: 700,
+    color: 'var(--color-gray-600)', marginBottom: '4px', letterSpacing: '0.02em',
   };
 
 
@@ -504,7 +504,7 @@ const Home: React.FC = () => {
           marginTop: '-100vh',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           zIndex: 2, pointerEvents: 'none',
-          paddingTop: '48px', paddingBottom: '12px', boxSizing: 'border-box',
+          paddingTop: '32px', paddingBottom: '8px', boxSizing: 'border-box',
         }}>
           {/* Top: Unified Hero Grid */}
           <div className="container" style={{ pointerEvents: 'auto' }}>
@@ -514,21 +514,21 @@ const Home: React.FC = () => {
               <div className="hero-grid-left-col animate-in">
                 {/* Badge */}
                 <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
                   background: 'transparent', color: 'var(--color-gray-700)',
-                  padding: '4px 12px', borderRadius: '20px',
-                  fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em',
+                  padding: '6px 14px', borderRadius: '20px',
+                  fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em',
                   marginBottom: '0px', textTransform: 'uppercase',
                   border: '1px solid var(--color-gray-300)',
                   alignSelf: 'flex-start',
                 }}>
-                  <Star size={10} color="#ff6b7a" fill="#ff6b7a" /> India's #1 Reverse Car Marketplace
+                  <Star size={12} color="#ff6b7a" fill="#ff6b7a" /> India's #1 Reverse Car Marketplace
                 </div>
 
                 {/* Heading */}
                 <h1 style={{
-                  fontSize: 'clamp(1.5rem, 2.6vw, 2.2rem)', fontWeight: 900, color: 'var(--color-gray-900)',
-                  lineHeight: 1.1, letterSpacing: '-0.03em', marginBottom: '0px',
+                  fontSize: 'clamp(2rem, 3.4vw, 3rem)', fontWeight: 900, color: 'var(--color-gray-900)',
+                  lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: '0px',
                 }}>
                   You tell us what<br />you want,<br />
                   <span style={{ color: '#ff6b7a' }}>We'll find your<br />perfect deal.</span>
@@ -536,8 +536,8 @@ const Home: React.FC = () => {
 
                 {/* Sub-text */}
                 <p style={{
-                  fontSize: '0.875rem', color: 'var(--color-gray-600)',
-                  lineHeight: 1.5, marginBottom: '0px', maxWidth: '440px',
+                  fontSize: '0.95rem', color: 'var(--color-gray-600)',
+                  lineHeight: 1.6, marginBottom: '0px', maxWidth: '480px',
                 }}>
                   Post your car requirements and get verified brokers<br />
                   competing to bring you the best offers.<br />
@@ -545,24 +545,24 @@ const Home: React.FC = () => {
                 </p>
 
                 {/* Stats */}
-                <div style={{ display: 'flex', gap: '5px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '2px', width: '100%' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '2px', width: '100%' }}>
                   {[
-                    { icon: <Users size={11} color="#ff6b7a" />, value: '10,000+', label: 'Active Buyers' },
-                    { icon: <Shield size={11} color="#ff6b7a" />, value: '2,500+', label: 'Verified Brokers' },
-                    { icon: <ClipboardList size={11} color="#ff6b7a" />, value: '50,000+', label: 'Deals Done' },
-                    { icon: <Star size={11} color="#ff6b7a" fill="#ff6b7a" />, value: '4.8 ★', label: 'Rating' },
+                    { icon: <Users size={13} color="#ff6b7a" />, value: '10,000+', label: 'Active Buyers' },
+                    { icon: <Shield size={13} color="#ff6b7a" />, value: '2,500+', label: 'Verified Brokers' },
+                    { icon: <ClipboardList size={13} color="#ff6b7a" />, value: '50,000+', label: 'Deals Done' },
+                    { icon: <Star size={13} color="#ff6b7a" fill="#ff6b7a" />, value: '4.8 ★', label: 'Rating' },
                   ].map(s => (
                     <div key={s.label} style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      padding: '5px 9px',
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '6px 12px',
                       background: 'rgba(255,255,255,0.72)',
                       backdropFilter: 'blur(12px)',
-                      borderRadius: '9px', border: '1px solid var(--color-gray-200)',
+                      borderRadius: '10px', border: '1px solid var(--color-gray-200)',
                     }}>
                       <span style={{ display: 'flex', alignItems: 'center' }}>{s.icon}</span>
                       <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)', lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontSize: '0.5rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{s.label}</div>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--color-gray-900)', lineHeight: 1 }}>{s.value}</div>
+                        <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{s.label}</div>
                       </div>
                     </div>
                   ))}
@@ -574,34 +574,34 @@ const Home: React.FC = () => {
                 background: 'rgba(255, 255, 255, 0.88)',
                 backdropFilter: 'blur(24px) saturate(160%)',
                 WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-                borderRadius: '14px',
+                borderRadius: '16px',
                 boxShadow: '0 20px 60px rgba(15, 23, 42, 0.10)',
                 border: '1px solid rgba(15, 23, 42, 0.08)',
               }}>
                 {/* Card Header */}
                 <div style={{
-                  padding: '8px 12px 6px',
+                  padding: '10px 14px 8px',
                   borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
-                  display: 'flex', alignItems: 'center', gap: '8px',
+                  display: 'flex', alignItems: 'center', gap: '10px',
                 }}>
                   <div style={{
-                    width: '26px', height: '26px', borderRadius: '8px',
+                    width: '32px', height: '32px', borderRadius: '10px',
                     background: 'rgba(230,57,70,0.15)',
                     border: '1px solid rgba(230,57,70,0.25)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <Car size={13} color="#ff6b7a" />
+                    <Car size={16} color="#ff6b7a" />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-900)', marginBottom: '0px' }}>Post Your Requirement</h2>
-                    <p style={{ fontSize: '0.5625rem', color: 'var(--color-gray-500)' }}>It's quick, easy and free</p>
+                    <h2 style={{ fontSize: '0.9375rem', fontWeight: 800, color: 'var(--color-gray-900)', marginBottom: '0px' }}>Post Your Requirement</h2>
+                    <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>It's quick, easy and free</p>
                   </div>
                 </div>
 
-                <form onSubmit={handlePostRequirement} style={{ padding: '8px 12px 10px' }}>
+                <form onSubmit={handlePostRequirement} style={{ padding: '10px 14px 10px' }}>
 
                   {/* Brand + Model */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
                     <div>
                       <label style={labelStyle}>Select Brand *</label>
                       <select required style={inputStyle} value={heroMake}
@@ -626,15 +626,15 @@ const Home: React.FC = () => {
                   </div>
 
                   {/* Budget */}
-                  <div style={{ marginBottom: '6px' }}>
+                  <div style={{ marginBottom: '8px' }}>
                     <label style={labelStyle}>Your Budget *</label>
                     <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)', fontWeight: 700, fontSize: '0.75rem' }}>₹</span>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)', fontWeight: 700, fontSize: '0.875rem' }}>₹</span>
                       <input
                         required type="number" min="0" step="0.5"
                         value={heroBudget} onChange={e => setHeroBudget(e.target.value)}
                         placeholder="e.g. 10-15 Lakh"
-                        style={{ ...inputStyle, paddingLeft: '18px' }}
+                        style={{ ...inputStyle, paddingLeft: '22px' }}
                         onFocus={e => { e.target.style.borderColor = 'rgba(230,57,70,0.7)'; e.target.style.boxShadow = '0 0 0 2px rgba(230,57,70,0.15)'; }}
                         onBlur={e => { e.target.style.borderColor = 'var(--color-gray-200)'; e.target.style.boxShadow = 'none'; }}
                       />
@@ -642,19 +642,19 @@ const Home: React.FC = () => {
                   </div>
 
                   {/* Fuel Type Pills */}
-                  <div style={{ marginBottom: '6px' }}>
+                  <div style={{ marginBottom: '8px' }}>
                     <label style={labelStyle}>Fuel Type</label>
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap' }}>
                       {FUEL_TYPES.map(f => (
                         <button key={f} type="button"
-                          onClick={() => setHeroFuel(heroFuel === f ? '' : f)}
+                           onClick={() => setHeroFuel(heroFuel === f ? '' : f)}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '2px',
-                            padding: '2px 5px', borderRadius: '6px',
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 7px', borderRadius: '8px',
                             border: `1.5px solid ${heroFuel === f ? 'rgba(230,57,70,0.8)' : 'var(--color-gray-200)'}`,
                             background: heroFuel === f ? 'rgba(230,57,70,0.15)' : 'var(--color-gray-50)',
                             color: heroFuel === f ? '#ff6b7a' : 'var(--color-gray-600)',
-                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.5625rem',
+                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.71875rem',
                             cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
                           }}>
                           <span>{FUEL_ICONS[f]}</span> {f}
@@ -664,19 +664,19 @@ const Home: React.FC = () => {
                   </div>
 
                   {/* Transmission Pills */}
-                  <div style={{ marginBottom: '8px' }}>
+                  <div style={{ marginBottom: '10px' }}>
                     <label style={labelStyle}>Transmission</label>
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       {TRANSMISSION_TYPES.map(tr => (
                         <button key={tr} type="button"
                           onClick={() => setHeroTransmission(heroTransmission === tr ? '' : tr)}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '2px',
-                            padding: '2px 6px', borderRadius: '6px',
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 8px', borderRadius: '8px',
                             border: `1.5px solid ${heroTransmission === tr ? 'rgba(230,57,70,0.8)' : 'var(--color-gray-200)'}`,
                             background: heroTransmission === tr ? 'rgba(230,57,70,0.15)' : 'var(--color-gray-50)',
                             color: heroTransmission === tr ? '#ff6b7a' : 'var(--color-gray-600)',
-                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.5625rem',
+                            fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.71875rem',
                             cursor: 'pointer', transition: 'all 0.15s',
                           }}>
                           <span>{TRANS_ICONS[tr]}</span> {tr}
@@ -687,10 +687,10 @@ const Home: React.FC = () => {
 
                   {/* Submit */}
                   <button type="submit" disabled={submitting} style={{
-                    width: '100%', padding: '6px 12px',
+                    width: '100%', padding: '8px 14px',
                     background: submitting ? 'rgba(148,163,184,0.3)' : 'linear-gradient(135deg, #e63946 0%, #c1121f 100%)',
                     color: '#fff', border: 'none', borderRadius: '8px',
-                    fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.75rem',
+                    fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.8125rem',
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     transition: 'opacity 0.2s, transform 0.15s',
@@ -700,12 +700,12 @@ const Home: React.FC = () => {
                     onMouseEnter={e => { if (!submitting) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    <Send size={11} /> {submitting ? 'Posting...' : 'Post Requirement'}
+                    <Send size={13} /> {submitting ? 'Posting...' : 'Post Requirement'}
                   </button>
 
                   {/* Trust signal */}
-                  <div style={{ textAlign: 'center', marginTop: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.5625rem', color: 'var(--color-gray-400)' }}>
-                    <Lock size={8} /> Your details are secure and private
+                  <div style={{ textAlign: 'center', marginTop: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>
+                    <Lock size={10} /> Your details are secure and private
                   </div>
                 </form>
               </div>
@@ -723,51 +723,51 @@ const Home: React.FC = () => {
                   background: 'rgba(255,255,255,0.92)',
                   backdropFilter: 'blur(20px) saturate(180%)',
                   WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                  borderRadius: '12px',
+                  borderRadius: '14px',
                   border: '1px solid rgba(15,23,42,0.08)',
                   boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
                   overflow: 'hidden',
                 }}>
                   <div style={{
-                    padding: '10px 12px 8px',
+                    padding: '12px 14px 10px',
                     borderBottom: '1px solid rgba(15,23,42,0.06)',
-                    display: 'flex', alignItems: 'center', gap: '5px',
+                    display: 'flex', alignItems: 'center', gap: '6px',
                   }}>
-                    <Trophy size={14} color="#f59e0b" fill="#f59e0b" />
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Top Responsive Dealers</span>
+                    <Trophy size={16} color="#f59e0b" fill="#f59e0b" />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Top Responsive Dealers</span>
                   </div>
-                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {TOP_DEALERS.map((dealer) => (
                       <div key={dealer.rank} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
+                        display: 'flex', alignItems: 'center', gap: '10px',
                         padding: '6px 8px', borderRadius: '8px',
                         background: 'transparent',
                         border: '1px solid transparent',
                       }}>
                         <div style={{
-                          width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                          width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
                           background: dealer.rank === 1 ? '#ffedd5' : dealer.rank === 2 ? '#eff6ff' : '#f3e8ff',
                           color: dealer.rank === 1 ? '#c2410c' : dealer.rank === 2 ? '#1d4ed8' : '#7c3aed',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.6875rem', fontWeight: 800,
+                          fontSize: '0.8125rem', fontWeight: 800,
                         }}>{dealer.rank}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dealer.name}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
-                            <TrendingUp size={9} color="#059669" />
-                            <span style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)' }}>Avg Response: <strong style={{ color: '#059669', fontWeight: 700 }}>{dealer.avgResponse}</strong></span>
+                          <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-gray-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dealer.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                            <TrendingUp size={11} color="#059669" />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>Avg Response: <strong style={{ color: '#059669', fontWeight: 700 }}>{dealer.avgResponse}</strong></span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-700)' }}>
-                          <Star size={10} color="#f59e0b" fill="#f59e0b" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-gray-700)' }}>
+                          <Star size={12} color="#f59e0b" fill="#f59e0b" />
                           <span>{dealer.rating}</span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
-                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
-                      View Full Leaderboard <ArrowRight size={10} />
+                  <div style={{ padding: '10px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+                      View Full Leaderboard <ArrowRight size={12} />
                     </a>
                   </div>
                 </div>
@@ -777,40 +777,40 @@ const Home: React.FC = () => {
                   background: 'rgba(255,255,255,0.92)',
                   backdropFilter: 'blur(20px) saturate(180%)',
                   WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                  borderRadius: '12px',
+                  borderRadius: '14px',
                   border: '1px solid rgba(15,23,42,0.08)',
                   boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
                   overflow: 'hidden',
                 }}>
                   <div style={{
-                    padding: '10px 12px 8px',
+                    padding: '12px 14px 10px',
                     borderBottom: '1px solid rgba(15,23,42,0.06)',
-                    display: 'flex', alignItems: 'center', gap: '5px',
+                    display: 'flex', alignItems: 'center', gap: '6px',
                   }}>
-                    <Flame size={14} color="#e63946" fill="#e63946" />
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Most Requested Today</span>
+                    <Flame size={16} color="#e63946" fill="#e63946" />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Most Requested Today</span>
                   </div>
-                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {MOST_REQUESTED.map((item, idx) => (
                       <div key={item.rank} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '4px 6px', borderRadius: '6px',
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '6px 8px', borderRadius: '8px',
                       }}>
                         <div style={{
-                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                           background: idx === 0 ? '#fee2e2' : idx === 1 ? '#ffedd5' : idx === 2 ? '#fef9c3' : '#eff6ff',
                           color: idx === 0 ? '#ef4444' : idx === 1 ? '#ea580c' : idx === 2 ? '#ca8a04' : '#2563eb',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.625rem', fontWeight: 800,
+                          fontSize: '0.75rem', fontWeight: 800,
                         }}>{item.rank}</div>
-                        <span style={{ flex: 1, fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-800)' }}>{item.model}</span>
-                        <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{item.count} Requests</span>
+                        <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-gray-800)' }}>{item.model}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>{item.count} Requests</span>
                       </div>
                     ))}
                   </div>
-                  <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
-                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
-                      View All Popular Cars <ArrowRight size={10} />
+                  <div style={{ padding: '10px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+                    <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+                      View All Popular Cars <ArrowRight size={12} />
                     </a>
                   </div>
                 </div>
@@ -1040,64 +1040,64 @@ const LiveActivityFeed: React.FC = () => {
       background: 'rgba(255,255,255,0.90)',
       backdropFilter: 'blur(20px) saturate(160%)',
       WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-      borderRadius: '12px',
+      borderRadius: '14px',
       border: '1px solid rgba(15,23,42,0.08)',
       boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
       overflow: 'hidden',
     }}>
       <div style={{
-        padding: '10px 12px 8px',
+        padding: '12px 14px 10px',
         borderBottom: '1px solid rgba(15,23,42,0.06)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Activity size={13} color="#059669" />
-          <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Live Activity</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity size={16} color="#059669" />
+          <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Live Activity</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669', display: 'inline-block', animation: 'pulse-dot 1.5s ease-in-out infinite' }} />
-          <span style={{ fontSize: '0.5rem', fontWeight: 700, color: '#059669' }}>LIVE</span>
+          <span style={{ fontSize: '0.625rem', fontWeight: 700, color: '#059669' }}>LIVE</span>
         </div>
       </div>
-      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {feed.map((item) => (
           <div
             key={item.id}
             style={{
-              display: 'flex', alignItems: 'flex-start', gap: '10px',
-              padding: '8px 10px', borderRadius: '8px',
+              display: 'flex', alignItems: 'flex-start', gap: '12px',
+              padding: '10px 12px', borderRadius: '8px',
               background: newEntryId === item.id ? 'rgba(5,150,105,0.06)' : 'transparent',
               border: newEntryId === item.id ? '1px solid rgba(5,150,105,0.15)' : '1px solid transparent',
               transition: 'background 0.4s, border-color 0.4s',
             }}
           >
             <div style={{
-              width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+              width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
               background: item.type === 'offer' ? '#dcfce7' : '#eff6ff',
               border: `1px solid ${item.type === 'offer' ? '#bbf7d0' : '#bfdbfe'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: item.type === 'offer' ? '#15803d' : '#1d4ed8',
             }}>
               {item.type === 'offer'
-                ? <Send size={12} />
-                : <Users size={12} />
+                ? <Send size={14} />
+                : <Users size={14} />
               }
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-gray-900)' }}>{item.actor}</span>
-                <span style={{ fontSize: '0.625rem', color: 'var(--color-gray-400)' }}>{item.time}</span>
+                <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-gray-900)' }}>{item.actor}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)' }}>{item.time}</span>
               </div>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
                 {item.action}
               </div>
             </div>
           </div>
         ))}
       </div>
-      <div style={{ padding: '8px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
-        <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
-          View All <ChevronRight size={10} />
+      <div style={{ padding: '10px', textAlign: 'center', borderTop: '1px solid rgba(15,23,42,0.06)' }}>
+        <a href="#" onClick={e => { e.preventDefault(); }} style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+          View All <ChevronRight size={12} />
         </a>
       </div>
     </div>
@@ -1160,14 +1160,14 @@ const SponsoredBanner: React.FC = () => {
       backgroundColor: slide.id !== 1 ? '#0f172a' : 'transparent',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      padding: '12px 24px',
+      padding: '20px 28px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: '20px',
       boxShadow: '0 8px 32px rgba(15,23,42,0.20)',
       transition: 'all 0.6s ease',
-      minHeight: '76px',
+      minHeight: '108px',
     }}>
       {/* Background pattern */}
       {slide.id !== 1 && (
@@ -1199,42 +1199,42 @@ const SponsoredBanner: React.FC = () => {
 
       {/* Left: Badge + Text */}
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-          <Star size={9} color={slide.badgeColor} fill={slide.badgeColor} />
-          <span style={{ fontSize: '0.5rem', fontWeight: 800, color: slide.badgeColor, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Sponsored Dealer</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+          <Star size={11} color={slide.badgeColor} fill={slide.badgeColor} />
+          <span style={{ fontSize: '0.625rem', fontWeight: 800, color: slide.badgeColor, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Sponsored Dealer</span>
         </div>
-        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '2px' }}>{slide.headline}</h3>
-        <p style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.70)', fontWeight: 500 }}>{slide.subheadline}</p>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '4px' }}>{slide.headline}</h3>
+        <p style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.70)', fontWeight: 500 }}>{slide.subheadline}</p>
       </div>
 
       {/* Center: Brand Tag */}
       <div style={{
         position: 'relative', zIndex: 1, flexShrink: 0,
-        padding: '6px 12px',
+        padding: '8px 14px',
         background: 'rgba(255,255,255,0.08)',
         border: `1px solid ${slide.accentColor}40`,
         borderRadius: '8px',
         backdropFilter: 'blur(8px)',
       }}>
-        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '2px' }}>Authorized Dealer</div>
-        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fff' }}>{slide.brand}</div>
+        <div style={{ fontSize: '0.625rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '3px' }}>Authorized Dealer</div>
+        <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#fff' }}>{slide.brand}</div>
       </div>
 
       {/* Right: CTA + Nav */}
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px', flexShrink: 0 }}>
         <button style={{
-          padding: '6px 14px',
+          padding: '8px 16px',
           background: '#e63946',
           color: '#fff', border: 'none', borderRadius: '8px',
-          fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.75rem',
-          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+          fontFamily: 'var(--font)', fontWeight: 800, fontSize: '0.8125rem',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
           boxShadow: '0 3px 12px rgba(230,57,70,0.4)',
           transition: 'transform 0.15s, box-shadow 0.15s',
         }}
           onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(230,57,70,0.5)'; }}
           onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(230,57,70,0.45)'; }}
         >
-          {slide.cta} <ExternalLink size={11} />
+          {slide.cta} <ExternalLink size={13} />
         </button>
         {/* Slide indicators */}
         <div style={{ display: 'flex', gap: '5px' }}>
