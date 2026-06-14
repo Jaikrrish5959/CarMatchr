@@ -149,6 +149,7 @@ const listingSchema = z.object({
 
 
 const app = express();
+app.set('trust proxy', 1);
 const isVercel = !!process.env.VERCEL;
 
 await seedCatalog();
