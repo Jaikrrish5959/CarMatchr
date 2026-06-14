@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import type { CarListing } from '../data/carDatabase';
 import { getToken } from '../services/authService';
 import { API_BASE } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export interface Requirement {
   id: number;
@@ -105,10 +106,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoaded(true);
   };
 
-  // Load from server on mount
+  const { user } = useAuth();
+
+  // Load from server when user changes
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadData();
+    } else {
+      setRequirements([]);
+      setOffers([]);
+      setBrokerListings([]);
+      setIsLoaded(true);
+    }
+  }, [user]);
 
   const refreshData = async () => {
     await loadData();
