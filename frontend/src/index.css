@@ -68,14 +68,9 @@ html {
 
 body {
   font-family: var(--font);
-  /* Global light canvas */
-  background:
-    radial-gradient(ellipse at 85% 95%, rgba(230, 57, 70, 0.08) 0%, transparent 52%),
-    radial-gradient(ellipse at 5% 75%, rgba(230, 57, 70, 0.04) 0%, transparent 40%),
-    linear-gradient(160deg, #f8fafc 0%, #f1f5f9 35%, #e2e8f0 100%);
-  background-attachment: fixed;
+  background: #F8F8F8;
   min-height: 100vh;
-  color: var(--color-gray-700);
+  color: #444;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -120,7 +115,7 @@ textarea {
 /* === LAYOUT === */
 .container {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -138,46 +133,41 @@ textarea {
 }
 
 /* === NAVBAR === */
-/* Base: transparent, sits over scroll-video hero */
 .navbar {
-  background: transparent;
-  border-bottom: 1px solid transparent;
+  background: #ffffff;
+  border-bottom: 1px solid #EEEEEE;
   position: sticky;
   top: 0;
   z-index: 100;
-  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, backdrop-filter 0.35s ease;
 }
 
-/* Added by JS once user scrolls 20px – frosted glass */
 .navbar.scrolled {
-  background: rgba(255, 255, 255, 0.80);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  background: #ffffff;
+  border-bottom: 1px solid #EEEEEE;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .navbar-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  height: 60px;
 }
 
 .navbar-brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.375rem;
-  font-weight: 800;
-  color: var(--color-primary) !important;
-  letter-spacing: -0.02em;
+  font-size: 20px;
+  font-weight: 700;
+  color: #E53935 !important;
+  letter-spacing: -0.01em;
 }
 
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .navbar-user {
@@ -953,87 +943,69 @@ textarea.form-control {
 /* === HERO RESPONSIVE GRID & SIDEBAR === */
 .hero-unified-grid {
   display: grid;
-  grid-template-columns: 1.2fr 340px 280px;
-  grid-template-rows: auto auto;
-  gap: 12px 24px;
+  grid-template-columns: 1fr 480px;
+  grid-template-rows: auto;
+  gap: 16px 40px;
   align-items: start;
   align-content: start;
   width: 100%;
 }
-
 .hero-grid-left-col {
   grid-column: 1;
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  padding-top: 28px;
+  padding-bottom: 28px;
+  gap: 0;
 }
 
 .hero-grid-form-col {
   grid-column: 2;
   grid-row: 1;
-}
-
-.hero-grid-banner {
-  grid-column: 1 / 3;
-  grid-row: 2;
-}
-
-.hero-grid-widgets-top {
-  grid-column: 3;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 280px;
-}
-
-.hero-grid-widgets-bottom {
-  grid-column: 3;
-  grid-row: 2;
-  width: 280px;
+  margin-top: 20px;
+}/* === DEALER CARDS GRID (bottom section) === */
+.dealer-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 32px;
 }
 
 @media (max-width: 1024px) {
   .hero-unified-grid {
-    grid-template-columns: 1fr 340px;
-    grid-template-rows: auto auto auto;
+    grid-template-columns: 1fr 420px;
+    grid-template-rows: auto;
     height: auto;
   }
   .hero-grid-left-col {
     grid-column: 1;
     grid-row: 1;
+    padding-top: 32px;
+    padding-bottom: 24px;
   }
   .hero-grid-form-col {
     grid-column: 2;
     grid-row: 1;
-  }
-  .hero-grid-banner {
-    grid-column: 1 / 3;
-    grid-row: 2;
-  }
-  .hero-grid-widgets-top,
-  .hero-grid-widgets-bottom {
-    display: none;
+    margin-top: 32px;
   }
 }
 
 @media (max-width: 768px) {
   .hero-unified-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
     gap: 24px;
   }
   .hero-grid-left-col {
     grid-column: 1;
     grid-row: 1;
+    padding-top: 24px;
+    padding-bottom: 16px;
   }
   .hero-grid-form-col {
     grid-column: 1;
     grid-row: 2;
-  }
-  .hero-grid-banner {
-    grid-column: 1;
-    grid-row: 3;
+    margin-top: 0;
   }
 }

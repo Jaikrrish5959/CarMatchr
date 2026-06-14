@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, LogOut, User as UserIcon, Globe, Bell, Menu, X } from 'lucide-react';
+import { Car, LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
@@ -12,10 +12,13 @@ const Navbar: React.FC = () => {
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
   const [showLang, setShowLang] = useState(false);
+  const [showLoc, setShowLoc] = useState(false);
+  const [loc, setLoc] = useState('India');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const locRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => { logout(); navigate('/', { replace: true }); setMobileOpen(false); };
 
@@ -27,10 +30,11 @@ const Navbar: React.FC = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Close language dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLang(false);
+      if (locRef.current && !locRef.current.contains(e.target as Node)) setShowLoc(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -40,6 +44,60 @@ const Navbar: React.FC = () => {
   const unreadCount = offers.filter(
     o => !o.isRead && requirements.find(r => r.id === o.requirementId)?.buyerId === user?.id
   ).length;
+
+  const locations = [
+    'India',
+    'Tamil Nadu',
+    'Karnataka',
+    'Maharashtra',
+    'Delhi NCR',
+    'Telangana',
+    'Gujarat',
+    'Kerala'
+  ];
+
+  const locPicker = (
+    <div ref={locRef} style={{ position: 'relative' }}>
+      <button onClick={() => setShowLoc(!showLoc)} className="btn btn-ghost btn-sm"
+        style={{
+          gap: '6px', fontSize: '0.8125rem',
+          color: 'var(--color-gray-700)',
+          display: 'flex', alignItems: 'center'
+        }} title="Select location">
+        <MapPin size={15} color="var(--color-primary)" />
+        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{loc}</span>
+      </button>
+      {showLoc && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: '6px',
+          background: 'rgba(255, 255, 255, 0.92)',
+          backdropFilter: 'blur(18px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
+          border: '1px solid rgba(15, 23, 42, 0.08)',
+          minWidth: '140px', zIndex: 200, overflow: 'hidden',
+        }}>
+          {locations.map((name) => (
+            <button key={name} onClick={() => { setLoc(name); setShowLoc(false); }}
+              style={{
+                display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                background: loc === name ? 'rgba(230,57,70,0.08)' : 'transparent',
+                color: loc === name ? 'var(--color-primary)' : 'var(--color-gray-700)',
+                fontWeight: loc === name ? 700 : 500, fontSize: '0.8125rem',
+                textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => { if (loc !== name) e.currentTarget.style.background = 'rgba(15, 23, 42, 0.04)'; }}
+              onMouseLeave={e => { if (loc !== name) e.currentTarget.style.background = 'transparent'; }}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const langPicker = (
     <div ref={langRef} style={{ position: 'relative' }}>
@@ -109,6 +167,7 @@ const Navbar: React.FC = () => {
 
           {/* Desktop actions */}
           <div className="navbar-actions">
+            {locPicker}
             {langPicker}
             {user ? (
               <>
@@ -161,6 +220,32 @@ const Navbar: React.FC = () => {
           <div className="navbar-mobile-menu open">
             <Link to="/dealers/new" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>New Car Dealers</Link>
             <Link to="/dealers/used" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>Used Car Dealers</Link>
+            
+            {/* Mobile Location Selector */}
+            <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid rgba(15, 23, 42, 0.04)' }}>
+              <MapPin size={15} color="var(--color-primary)" />
+              <select
+                value={loc}
+                onChange={e => setLoc(e.target.value)}
+                style={{
+                  border: '1px solid rgba(15, 23, 42, 0.08)',
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: 'var(--color-gray-700)',
+                  outline: 'none',
+                  flex: 1,
+                  fontFamily: 'var(--font)',
+                }}
+              >
+                {locations.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+
             <hr style={{ margin: '8px 0', borderColor: 'rgba(15, 23, 42, 0.08)' }} />
             {user ? (
               <>
