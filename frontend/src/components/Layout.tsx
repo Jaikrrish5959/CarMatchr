@@ -15,7 +15,10 @@ const Layout: React.FC = () => {
         <div className="container">
           <div className="footer-grid">
             <div>
-              <div className="footer-brand">CarMatchr</div>
+              <div className="footer-brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <img src="/logo.png" alt="CarMatchr" style={{ height: '32px', width: 'auto', display: 'block', borderRadius: '4px' }} />
+                CarMatchr
+              </div>
               <p className="footer-desc">
                 The reverse marketplace for used cars. Post your requirements and let verified brokers bring the best offers to you.
               </p>

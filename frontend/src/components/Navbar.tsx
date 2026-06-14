@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X } from 'lucide-react';
+import { LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
@@ -147,8 +147,8 @@ const Navbar: React.FC = () => {
         {/* ── Top bar ── */}
         <div className="navbar-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-            <Link to="/" className="navbar-brand" style={{ marginRight: 0 }}>
-              <Car size={24} strokeWidth={2.5} />
+            <Link to="/" className="navbar-brand" style={{ marginRight: 0, gap: '10px' }}>
+              <img src="/logo.png" alt="CarMatchr" style={{ height: '36px', width: 'auto', display: 'block', borderRadius: '6px' }} />
               CarMatchr
             </Link>
             <div style={{ display: 'flex', gap: '16px' }} className="desktop-links">
