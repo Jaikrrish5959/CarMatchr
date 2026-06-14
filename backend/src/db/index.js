@@ -197,6 +197,22 @@ export async function initDb() {
       console.error('Migration error:', err);
     }
   }
+
+  try {
+    await db.run("ALTER TABLE users ADD COLUMN otp_code VARCHAR(10);");
+  } catch (err) {
+    if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+      console.error('Migration error (otp_code):', err);
+    }
+  }
+
+  try {
+    await db.run("ALTER TABLE users ADD COLUMN otp_expires_at TIMESTAMP;");
+  } catch (err) {
+    if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+      console.error('Migration error (otp_expires_at):', err);
+    }
+  }
 }
 
 async function seedAdmin() {

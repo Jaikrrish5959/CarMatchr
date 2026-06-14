@@ -37,8 +37,14 @@ const Login: React.FC = () => {
     dealerType: 'new' as 'new' | 'used' | 'both',
   });
 
-  const { login, loginWithGoogle, registerBrokerWithGoogle } = useAuth();
+  const { login, verifyLogin, loginWithGoogle, registerBrokerWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  // Verification flow states
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [verificationRole, setVerificationRole] = useState<'buyer' | 'broker' | 'admin'>('buyer');
+  const [otp, setOtp] = useState('');
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -197,8 +203,50 @@ const Login: React.FC = () => {
       const normalizedEmail = email.trim().toLowerCase();
       const roleForLogin = normalizedEmail === 'admin@carmatchr.com' ? 'admin' : role;
       const result = await login(normalizedEmail, password, roleForLogin);
-      if (!result.ok || !result.user) {
+      if (!result.ok) {
         const msg = result.error ?? 'Unable to log in. Please try again.';
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      if (result.requiresVerification) {
+        setVerificationEmail(result.email || normalizedEmail);
+        setVerificationRole(roleForLogin);
+        setVerificationPending(true);
+        toast.success('Verification code sent to your email!');
+        return;
+      }
+
+      if (result.user) {
+        toast.success(`Welcome back, ${result.user.name || result.user.email}!`);
+        if (!result.user.phone) {
+          navigate('/settings');
+        } else if (result.user.role === 'broker') {
+          navigate('/broker-dashboard');
+        } else if (result.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/buyer-dashboard');
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim() || otp.length < 6) {
+      toast.error('Please enter a valid 6-digit verification code.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await verifyLogin(verificationEmail, verificationRole, otp.trim());
+      if (!result.ok || !result.user) {
+        const msg = result.error ?? 'Verification failed. Please try again.';
         setError(msg);
         toast.error(msg);
         return;
@@ -213,6 +261,8 @@ const Login: React.FC = () => {
       } else {
         navigate('/buyer-dashboard');
       }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during verification.');
     } finally {
       setLoading(false);
     }
@@ -222,7 +272,82 @@ const Login: React.FC = () => {
     <section className="section">
       <div className="container" style={{ maxWidth: '440px' }}>
         <div className="card" style={{ padding: '36px' }}>
-          {googleProfileData ? (
+          {verificationPending ? (
+            /* OTP Verification Form */
+            <>
+              <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                <div style={{
+                  width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
+                  background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}>
+                  <LogIn size={22} />
+                </div>
+                <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Verify Your Email</h2>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', lineHeight: 1.5 }}>
+                  We sent a 6-digit verification code to <br/>
+                  <strong style={{ color: 'var(--color-gray-800)' }}>{verificationEmail}</strong>
+                </p>
+              </div>
+
+              <form onSubmit={handleVerifyOtp} noValidate>
+                <div className="form-group">
+                  <label className="form-label" style={{ display: 'block', textAlign: 'center', marginBottom: '10px' }}>
+                    Enter 6-Digit Code
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    className="form-control"
+                    style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      letterSpacing: '10px',
+                      textAlign: 'center',
+                      padding: '12px',
+                    }}
+                    value={otp}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setOtp(val);
+                      setError('');
+                    }}
+                    placeholder="000000"
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '16px' }} disabled={loading}>
+                  {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Verifying…</> : 'Verify & Log In'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-block"
+                  style={{ marginTop: '10px' }}
+                  onClick={() => {
+                    setVerificationPending(false);
+                    setOtp('');
+                    setError('');
+                  }}
+                  disabled={loading}
+                >
+                  Back to Login
+                </button>
+
+                {error && (
+                  <div style={{
+                    marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                    background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                    fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                  }}>
+                    <AlertCircle size={15} /> {error}
+                  </div>
+                )}
+              </form>
+            </>
+          ) : googleProfileData ? (
             /* Google OAuth: Finish Broker Profile Form */
             <>
               <div style={{ textAlign: 'center', marginBottom: '24px' }}>

@@ -21,6 +21,9 @@ export interface LoginResult {
   user?: AuthUser;
   token?: string;
   error?: string;
+  requiresVerification?: boolean;
+  email?: string;
+  role?: string;
 }
 
 export interface RegisterResult {
@@ -84,6 +87,37 @@ export async function login(
 
     if (!res.ok) {
       return { ok: false, error: data.error || `Login failed. Please check your credentials.` };
+    }
+
+    if (data.requiresVerification) {
+      return { ok: true, requiresVerification: true, email: data.email, role: data.role };
+    }
+
+    const { token, user } = data as { token: string; user: AuthUser };
+    saveSession(token, user);
+
+    return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function verifyLogin(
+  email: string,
+  role: string,
+  otp: string
+): Promise<LoginResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/verify-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role, otp }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Verification failed. Please check your code.' };
     }
 
     const { token, user } = data as { token: string; user: AuthUser };

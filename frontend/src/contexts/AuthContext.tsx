@@ -21,7 +21,8 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; email?: string; role?: string }>;
+  verifyLogin: (email: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   register: (user: Omit<User, 'id'> & { password: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithGoogle: (credential: string, role: string) => Promise<authService.GoogleLoginResult>;
   registerBrokerWithGoogle: (data: {
@@ -57,10 +58,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     roleHint?: string
-  ): Promise<{ ok: boolean; error?: string; user?: User }> => {
-    // authService.login → POST /api/auth/login → gets { token, user } back
-    // → saves token & user to localStorage
+  ): Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; email?: string; role?: string }> => {
     const result = await authService.login(email, password, roleHint);
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+
+    if (result.requiresVerification) {
+      return { ok: true, requiresVerification: true, email: result.email, role: result.role };
+    }
+
+    setUser(result.user as User);
+    return { ok: true, user: result.user as User };
+  };
+
+  const verifyLogin = async (
+    email: string,
+    role: string,
+    otp: string
+  ): Promise<{ ok: boolean; error?: string; user?: User }> => {
+    const result = await authService.verifyLogin(email, role, otp);
 
     if (!result.ok || !result.user) {
       return { ok: false, error: result.error };
@@ -152,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         login,
+        verifyLogin,
         register,
         loginWithGoogle,
         registerBrokerWithGoogle,

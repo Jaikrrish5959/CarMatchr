@@ -15,6 +15,82 @@ import { OAuth2Client } from 'google-auth-library';
 import { db } from './db/index.js';
 import { seedCatalog } from './services/catalogSeeder.js';
 import { authenticate, requireRole, requireOwnership, JWT_SECRET } from './middleware/auth.js';
+import nodemailer from 'nodemailer';
+
+// ========== EMAIL VERIFICATION SETUP ==========
+let transporter = null;
+
+async function getTransporter() {
+  if (transporter) return transporter;
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+    console.log('Using configured SMTP transporter for email verification.');
+  } else {
+    try {
+      const testAccount = await nodemailer.createTestAccount();
+      transporter = nodemailer.createTransport({
+        host: testAccount.smtp.host,
+        port: testAccount.smtp.port,
+        secure: testAccount.smtp.secure,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      console.log('Created temporary Ethereal SMTP test account for email verification.');
+    } catch (err) {
+      console.warn('Could not create Ethereal SMTP test account, fallback to console logging only.', err.message);
+    }
+  }
+  return transporter;
+}
+
+async function sendOtpEmail(email, otp) {
+  console.log(`\n==================================================\n[VERIFICATION EMAIL] Sent to: ${email}\nOTP Code: ${otp}\n==================================================\n`);
+  
+  try {
+    const mailTransporter = await getTransporter();
+    if (!mailTransporter) return;
+
+    const info = await mailTransporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_USER || 'no-reply@carmatchr.com'}>`,
+      to: email,
+      subject: 'CarMatchr - Login Verification Code',
+      text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 10 minutes.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #E53935; text-align: center;">CarMatchr</h2>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+          <p>Hello,</p>
+          <p>You requested to log in to your CarMatchr account. Please use the following 6-digit verification code to complete your login:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; background: #f1f5f9; padding: 12px 24px; border-radius: 6px; border: 1px dashed #cbd5e1;">${otp}</span>
+          </div>
+          <p style="color: #64748b; font-size: 14px;">This code is valid for 10 minutes. If you did not request this login, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 15px;" />
+          <p style="font-size: 12px; color: #94a3b8; text-align: center;">&copy; ${new Date().getFullYear()} CarMatchr. All rights reserved.</p>
+        </div>
+      `,
+    });
+    
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) {
+      console.log(`[Ethereal Verification Mail Preview URL]: ${previewUrl}`);
+    }
+  } catch (err) {
+    console.error('Error sending verification email:', err.message);
+  }
+}
+
 
 // ========== ZOD SCHEMAS ==========
 const registerSchema = z.object({
@@ -440,6 +516,60 @@ app.post('/api/auth/login', async (req, res) => {
   if (!passwordMatch) {
     return res.status(401).json({ error: 'Invalid credentials. Please check your password.' });
   }
+
+  if (found.role === 'admin') {
+    const token = signToken(found);
+    return res.json({ token, user: mapUser(found) });
+  }
+
+  // Generate 6-digit verification code
+  const otp = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await db.run(
+    'UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3',
+    [otp, expiresAt, found.id]
+  );
+
+  // Send the verification code email
+  sendOtpEmail(found.email, otp);
+
+  return res.json({
+    requiresVerification: true,
+    email: found.email,
+    role: found.role
+  });
+});
+
+app.post('/api/auth/verify-login', async (req, res) => {
+  const { email, role, otp } = req.body;
+  if (!email || !role || !otp) {
+    return res.status(400).json({ error: 'Email, role, and verification code (OTP) are required.' });
+  }
+
+  const found = await db.get(
+    'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+    [email.toLowerCase(), role]
+  );
+  if (!found) {
+    return res.status(401).json({ error: 'Invalid credentials or role.' });
+  }
+
+  if (!found.otp_code || found.otp_code !== otp) {
+    return res.status(401).json({ error: 'Invalid verification code.' });
+  }
+
+  const expiresAt = new Date(found.otp_expires_at);
+  if (expiresAt < new Date()) {
+    return res.status(401).json({ error: 'Verification code has expired. Please log in again to request a new code.' });
+  }
+
+  // Clear OTP on successful verification
+  await db.run(
+    'UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = $1',
+    [found.id]
+  );
+
   const token = signToken(found);
   return res.json({ token, user: mapUser(found) });
 });
