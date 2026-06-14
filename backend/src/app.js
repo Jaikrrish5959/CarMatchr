@@ -104,7 +104,15 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173').spl
 app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin) return cb(null, true);
+    
+    // Check if the origin matches allowed origins or is a domain/subdomain of carmatchr.com
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin === 'https://carmatchr.com' || 
+                      origin === 'https://www.carmatchr.com' ||
+                      origin.endsWith('.carmatchr.com');
+                      
+    if (isAllowed) return cb(null, true);
     cb(new Error('Not allowed by CORS'));
   },
   credentials: true,
