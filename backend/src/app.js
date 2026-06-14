@@ -20,7 +20,7 @@ import nodemailer from 'nodemailer';
 // ========== EMAIL VERIFICATION SETUP ==========
 let transporter = null;
 
-async function getTransporter() {
+function getTransporter() {
   if (transporter) return transporter;
 
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -35,34 +35,21 @@ async function getTransporter() {
     });
     console.log('Using configured SMTP transporter for email verification.');
   } else {
-    try {
-      const testAccount = await nodemailer.createTestAccount();
-      transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-      console.log('Created temporary Ethereal SMTP test account for email verification.');
-    } catch (err) {
-      console.warn('Could not create Ethereal SMTP test account, fallback to console logging only.', err.message);
-    }
+    console.error('CRITICAL: SMTP configuration is missing! Real email verification will fail.');
   }
   return transporter;
 }
 
 async function sendOtpEmail(email, otp) {
-  console.log(`\n==================================================\n[VERIFICATION EMAIL] Sent to: ${email}\nOTP Code: ${otp}\n==================================================\n`);
-  
   try {
-    const mailTransporter = await getTransporter();
-    if (!mailTransporter) return;
+    const mailTransporter = getTransporter();
+    if (!mailTransporter) {
+      console.error(`Cannot send verification email to ${email} - SMTP is not configured.`);
+      return;
+    }
 
-    const info = await mailTransporter.sendMail({
-      from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_USER || 'no-reply@carmatchr.com'}>`,
+    await mailTransporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
       to: email,
       subject: 'CarMatchr - Login Verification Code',
       text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 10 minutes.`,
@@ -81,11 +68,7 @@ async function sendOtpEmail(email, otp) {
         </div>
       `,
     });
-    
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) {
-      console.log(`[Ethereal Verification Mail Preview URL]: ${previewUrl}`);
-    }
+    console.log(`Verification email successfully sent to ${email}.`);
   } catch (err) {
     console.error('Error sending verification email:', err.message);
   }
