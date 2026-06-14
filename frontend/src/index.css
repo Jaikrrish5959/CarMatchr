@@ -188,15 +188,26 @@ textarea {
   font-weight: 600;
   color: var(--color-gray-700);
 }
+.mobile-navbar-location {
+  display: none;
+}
 
 /* Navbar responsive */
 @media (max-width: 640px) {
+  .mobile-navbar-location {
+    display: flex !important;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 12px;
+  }
+
   .navbar-inner {
     height: 56px;
   }
 
   .navbar-brand {
     font-size: 1.1rem;
+    margin-right: 0 !important;
   }
 
   /* Hide user name text on very small screens, keep icon + badge */

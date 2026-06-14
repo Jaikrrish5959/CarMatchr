@@ -204,6 +204,11 @@ const Navbar: React.FC = () => {
             )}
           </div>
 
+          {/* Mobile Location Picker (visible on <= 640px) */}
+          <div className="mobile-navbar-location">
+            {locPicker}
+          </div>
+
           {/* Hamburger — visible only on mobile (CSS: display:none by default, flex on ≤640px) */}
           <button
             className="hamburger"
@@ -220,32 +225,6 @@ const Navbar: React.FC = () => {
           <div className="navbar-mobile-menu open">
             <Link to="/dealers/new" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>New Car Dealers</Link>
             <Link to="/dealers/used" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>Used Car Dealers</Link>
-            
-            {/* Mobile Location Selector */}
-            <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid rgba(15, 23, 42, 0.04)' }}>
-              <MapPin size={15} color="var(--color-primary)" />
-              <select
-                value={loc}
-                onChange={e => setLoc(e.target.value)}
-                style={{
-                  border: '1px solid rgba(15, 23, 42, 0.08)',
-                  background: 'rgba(255, 255, 255, 0.8)',
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  color: 'var(--color-gray-700)',
-                  outline: 'none',
-                  flex: 1,
-                  fontFamily: 'var(--font)',
-                }}
-              >
-                {locations.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-
             <hr style={{ margin: '8px 0', borderColor: 'rgba(15, 23, 42, 0.08)' }} />
             {user ? (
               <>
