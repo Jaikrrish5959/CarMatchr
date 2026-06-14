@@ -188,17 +188,18 @@ textarea {
   font-weight: 600;
   color: var(--color-gray-700);
 }
-.mobile-navbar-location {
+.mobile-header-actions {
   display: none;
 }
 
 /* Navbar responsive */
 @media (max-width: 640px) {
-  .mobile-navbar-location {
+  .mobile-header-actions {
     display: flex !important;
     align-items: center;
     margin-left: auto;
-    margin-right: 12px;
+    margin-right: 8px;
+    gap: 8px;
   }
 
   .navbar-inner {

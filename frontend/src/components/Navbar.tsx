@@ -204,9 +204,15 @@ const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Mobile Location Picker (visible on <= 640px) */}
-          <div className="mobile-navbar-location">
+          {/* Mobile Header Actions (visible on <= 640px) */}
+          <div className="mobile-header-actions">
             {locPicker}
+            {langPicker}
+            {!user && (
+              <Link to="/login" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-gray-700)', padding: '6px 12px', fontSize: '0.8125rem' }}>
+                {t('login')}
+              </Link>
+            )}
           </div>
 
           {/* Hamburger — visible only on mobile (CSS: display:none by default, flex on ≤640px) */}
@@ -228,6 +234,20 @@ const Navbar: React.FC = () => {
             <hr style={{ margin: '8px 0', borderColor: 'rgba(15, 23, 42, 0.08)' }} />
             {user ? (
               <>
+                {/* User Profile Info Card inside dropdown */}
+                <div style={{
+                  padding: '12px 16px',
+                  background: 'rgba(15, 23, 42, 0.03)',
+                  borderRadius: '8px',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ fontSize: '0.75rem', color: '#888', fontWeight: 600 }}>Logged in as</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-gray-900)' }}>{user.name || user.businessName}</div>
+                  <span className={`badge ${user.status === 'active' ? 'badge-active' : 'badge-pending'}`} style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{user.status}</span>
+                </div>
                 <Link
                   to={user.role === 'buyer' ? '/buyer-dashboard' : user.role === 'broker' ? '/broker-dashboard' : '/admin'}
                   className="btn btn-primary btn-block"
@@ -235,13 +255,12 @@ const Navbar: React.FC = () => {
                 >
                   {t('dashboard')}
                 </Link>
-                <button onClick={handleLogout} className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)' }}>
+                <button onClick={handleLogout} className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)', marginTop: '8px' }}>
                   <LogOut size={14} /> {t('logout')}
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)' }} onClick={() => setMobileOpen(false)}>{t('login')}</Link>
                 <Link to="/register" className="btn btn-primary btn-block" onClick={() => setMobileOpen(false)}>{t('getStarted')}</Link>
               </>
             )}
