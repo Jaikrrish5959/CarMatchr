@@ -192,8 +192,16 @@ textarea {
   display: none;
 }
 
+.desktop-links {
+  display: flex;
+}
+
 /* Navbar responsive */
 @media (max-width: 640px) {
+  .desktop-links {
+    display: none !important;
+  }
+
   .mobile-header-actions {
     display: flex !important;
     align-items: center;
