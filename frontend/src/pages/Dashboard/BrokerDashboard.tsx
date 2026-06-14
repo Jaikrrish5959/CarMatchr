@@ -42,55 +42,7 @@ function expiresIn(dateStr: string): { text: string; urgent: boolean } | null {
   return { text: `${h}h ${m}m`, urgent: h < 6 };
 }
 
-function calcMatchScore(req: Requirement, myListings: BrokerListing[]): number {
-  const active = myListings.filter(l => l.status === 'active');
-  let score = 35;
-  if (active.some(l => l.make.toLowerCase() === req.make.toLowerCase())) score += 25;
-  if (active.some(l => l.model.toLowerCase() === req.model.toLowerCase())) score += 25;
-  const budget = parseBudgetLakh(req.budget);
-  if (budget && active.some(l => Math.abs(l.price - budget) / budget < 0.25)) score += 10;
-  if (req.yearRange) {
-    const parts = req.yearRange.split(/[-–]/);
-    const minY = parseInt(parts[0]);
-    const maxY = parseInt(parts[1] || parts[0]);
-    if (!isNaN(minY) && active.some(l => l.year >= minY && l.year <= (isNaN(maxY) ? 2026 : maxY))) score += 5;
-  }
-  return Math.min(score, 99);
-}
 
-function matchLabel(score: number): string {
-  if (score >= 85) return 'Excellent Match';
-  if (score >= 70) return 'Good Match';
-  if (score >= 55) return 'Fair Match';
-  return 'Partial Match';
-}
-
-function matchColor(score: number): string {
-  if (score >= 85) return '#059669';
-  if (score >= 70) return '#d97706';
-  return '#e63946';
-}
-
-function getMatchReasons(req: Requirement, myListings: BrokerListing[]): string[] {
-  const active = myListings.filter(l => l.status === 'active');
-  const reasons: string[] = [];
-  if (active.some(l => l.model.toLowerCase() === req.model.toLowerCase())) {
-    reasons.push('Model Exact Match');
-  } else if (active.some(l => l.make.toLowerCase() === req.make.toLowerCase())) {
-    reasons.push('Brand Match');
-  }
-  const budget = parseBudgetLakh(req.budget);
-  if (budget && active.some(l => Math.abs(l.price - budget) / budget < 0.25)) {
-    reasons.push('Budget Fits');
-  }
-  const desc = (req.description || '').toLowerCase();
-  if (active.some(l => l.city && desc.includes(l.city.toLowerCase()))) {
-    reasons.push('Location Match');
-  }
-  if (reasons.length < 2) reasons.push('Inventory Available');
-  if (reasons.length < 3) reasons.push('Quick Turnaround');
-  return reasons.slice(0, 3);
-}
 
 interface PriceSuggestion {
   avg: number | null;
@@ -117,34 +69,7 @@ function getSuggestedPrice(req: Requirement, myListings: BrokerListing[]): Price
   return { avg: Math.round(avg * 10) / 10, low, high, trend };
 }
 
-// ============================================================
-//  CircularProgress SVG ring
-// ============================================================
-function CircularProgress({ score }: { score: number }) {
-  const r = 22;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (score / 100) * circ;
-  const color = matchColor(score);
-  return (
-    <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }}>
-      <svg width={56} height={56} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={28} cy={28} r={r} fill="none" stroke="var(--color-gray-100)" strokeWidth={4} />
-        <circle
-          cx={28} cy={28} r={r} fill="none" stroke={color} strokeWidth={4}
-          strokeDasharray={circ} strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-        />
-      </svg>
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: '0.75rem', fontWeight: 800, color }}>{score}%</span>
-      </div>
-    </div>
-  );
-}
+
 
 // ============================================================
 //  Constants
@@ -155,9 +80,9 @@ const OFFER_TEMPLATES = [
   { name: 'Competitive Pricing', text: 'Best market price, flexible on negotiation. Test drive available at our dealership location.' },
 ];
 
-type SortOrder = 'newest' | 'oldest' | 'budget' | 'match';
+type SortOrder = 'newest' | 'oldest' | 'budget';
 const SORT_LABELS: Record<SortOrder, string> = {
-  newest: 'Newest', oldest: 'Oldest', budget: 'Highest Budget', match: 'Best Match',
+  newest: 'Newest', oldest: 'Oldest', budget: 'Highest Budget',
 };
 
 // ============================================================
@@ -236,7 +161,6 @@ const BrokerDashboard: React.FC = () => {
     switch (sortOrder) {
       case 'oldest':  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       case 'budget':  return (parseBudgetLakh(b.budget) ?? 0) - (parseBudgetLakh(a.budget) ?? 0);
-      case 'match':   return calcMatchScore(b, myListings) - calcMatchScore(a, myListings);
       default:        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
   });
@@ -435,10 +359,6 @@ const BrokerDashboard: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {sortedReqs.map(req => {
                     const alreadyOffered = offers.some(o => o.requirementId === req.id && o.brokerId === user?.id);
-                    const score = calcMatchScore(req, myListings);
-                    const color = matchColor(score);
-                    const label = matchLabel(score);
-                    const reasons = getMatchReasons(req, myListings);
                     const competition = offers.filter(o => o.requirementId === req.id).length;
                     const isSaved = savedReqIds.includes(req.id);
                     const expires = expiresIn(req.createdAt);
@@ -532,49 +452,16 @@ const BrokerDashboard: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Match score + reasons + competition row */}
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch', marginBottom: '14px', flexWrap: 'wrap' }}>
-
-                          {/* Match ring */}
+                        {/* Competition count row */}
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px' }}>
                           <div style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            padding: '10px 12px', background: 'var(--color-gray-50)',
-                            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)', flex: '0 0 auto',
-                          }}>
-                            <CircularProgress score={score} />
-                            <div>
-                              <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)', textTransform: 'uppercase', marginBottom: '2px' }}>Match Score</p>
-                              <p style={{ fontSize: '0.8125rem', fontWeight: 700, color }}>{label}</p>
-                            </div>
-                          </div>
-
-                          {/* Match reasons */}
-                          <div style={{
-                            flex: 1, minWidth: '160px', padding: '10px 12px',
-                            background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)',
-                            border: '1px solid var(--color-gray-100)',
-                          }}>
-                            <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-400)', textTransform: 'uppercase', marginBottom: '7px' }}>Top Match Reasons</p>
-                            {reasons.map((r, i) => (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-                                <CheckCircle2 size={11} color="#059669" />
-                                <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-600)', fontWeight: 500 }}>{r}</span>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Competition count */}
-                          <div style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                            padding: '10px 14px', background: 'var(--color-gray-50)',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px 12px', background: 'var(--color-gray-50)',
                             borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)',
-                            flex: '0 0 auto', textAlign: 'center',
+                            fontSize: '0.8125rem', color: 'var(--color-gray-600)', fontWeight: 500
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-                              <Users size={14} color="var(--color-gray-500)" />
-                              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-dark)' }}>{competition}</span>
-                            </div>
-                            <span style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 500, whiteSpace: 'nowrap' }}>Brokers responded</span>
+                            <Users size={14} color="var(--color-gray-500)" />
+                            <span>{competition} {competition === 1 ? 'broker has' : 'brokers have'} responded</span>
                           </div>
                         </div>
 
@@ -805,8 +692,6 @@ const BrokerDashboard: React.FC = () => {
                     {openReqs
                       .filter(r => r.id !== sortedReqs[0]?.id)
                       .map(req => {
-                        const score = calcMatchScore(req, myListings);
-                        const color = matchColor(score);
                         return (
                           <div
                             key={req.id}
@@ -833,14 +718,6 @@ const BrokerDashboard: React.FC = () => {
                             <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', marginBottom: '8px' }}>
                               {req.budget}{req.yearRange ? ` · ${req.yearRange}` : ''}
                             </p>
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '3px',
-                              padding: '2px 8px', borderRadius: 'var(--radius-full)',
-                              background: color + '18', color,
-                              fontSize: '0.625rem', fontWeight: 700,
-                            }}>
-                              {score}% Match
-                            </span>
                           </div>
                         );
                       })}
