@@ -148,8 +148,10 @@ const Navbar: React.FC = () => {
         <div className="navbar-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             <Link to="/" className="navbar-brand" style={{ marginRight: 0, gap: '10px' }}>
-              <img src="/logo.png" alt="CarMatchr" style={{ height: '36px', width: 'auto', display: 'block', borderRadius: '6px' }} />
-              CarMatchr
+              <img src="/logo.png" alt="CarMatchr" style={{ height: '75px', width: 'auto', display: 'block', margin: '-24px 0' }} />
+              <span>
+                <span style={{ color: '#000000' }}>Car</span><span>Matchr</span>
+              </span>
             </Link>
             <div style={{ display: 'flex', gap: '16px' }} className="desktop-links">
               <Link to="/dealers/new" style={{ color: 'var(--color-gray-700)', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600, transition: 'color 0.15s' }}
