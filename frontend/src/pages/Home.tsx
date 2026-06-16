@@ -300,7 +300,7 @@ const Home: React.FC = () => {
 
                 {/* H1 */}
                 <h1 style={{
-                  fontSize: '40px', fontWeight: 800, color: '#1A1A1A',
+                  fontSize: 'clamp(26px, 6vw, 40px)', fontWeight: 800, color: '#1A1A1A',
                   lineHeight: 1.15, letterSpacing: '-0.02em', marginBottom: '20px',
                 }}>
                   You tell us what you want <br></br>
@@ -312,8 +312,7 @@ const Home: React.FC = () => {
                   fontSize: '14px', color: '#555', lineHeight: 1.6,
                   marginBottom: '8px',
                 }}>
-                  Post your car requirements and get verified brokers<br />
-                  competing to bring you the best offers.
+                  Post your car requirements and get verified brokers competing to bring you the best offers.
                 </p>
                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#1A1A1A', marginBottom: '24px' }}>
                   No searching. No calling. No hassle.
@@ -321,7 +320,7 @@ const Home: React.FC = () => {
               </div>
 
               {/* Stats row — pushed down */}
-              <div style={{ display: 'flex', gap: '20px', flexWrap: 'nowrap', marginTop: '28px' }}>
+              <div style={{ display: 'flex', gap: '16px 20px', flexWrap: 'wrap', marginTop: '28px' }}>
                 {[
                   { icon: <Users size={14} color="#E53935" />, value: '10,000+', label: 'Active Buyers' },
                   { icon: <Shield size={14} color="#E53935" />, value: '2,500+', label: 'Verified Brokers' },

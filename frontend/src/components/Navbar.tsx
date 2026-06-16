@@ -289,7 +289,7 @@ const Navbar: React.FC = () => {
         <div className="navbar-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             <Link to="/" className="navbar-brand" style={{ marginRight: 0, gap: '10px' }}>
-              <img src="/logo.png" alt="CarMatchr" style={{ height: '75px', width: 'auto', display: 'block', margin: '-24px 0' }} />
+              <img src="/logo.png" alt="CarMatchr" className="navbar-logo" style={{ height: '75px', width: 'auto', display: 'block', margin: '-24px 0' }} />
               <span>
                 <span style={{ color: '#000000' }}>Car</span><span>Matchr</span>
               </span>
@@ -363,16 +363,15 @@ const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Mobile Header Actions (visible on <= 640px) */}
-          <div className="mobile-header-actions">
-            <LocationPicker />
-            {langPicker}
-            {!user && (
-              <Link to="/login" className="btn btn-ghost btn-sm" style={{ color: 'var(--color-gray-700)', padding: '6px 12px', fontSize: '0.8125rem' }}>
-                {t('login')}
-              </Link>
-            )}
-          </div>
+          {/* Mobile: Dashboard quick-access in top bar */}
+          {user && (
+            <Link
+              to={user.role === 'buyer' ? '/buyer-dashboard' : user.role === 'broker' ? '/broker-dashboard' : '/admin'}
+              className="mobile-dash-btn"
+            >
+              Dashboard
+            </Link>
+          )}
 
           {/* Hamburger */}
           <button
@@ -385,40 +384,46 @@ const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* ── Mobile dropdown menu ── */}
+        {/* ── Mobile compact floating menu ── */}
         {mobileOpen && (
-          <div className="navbar-mobile-menu open">
-            <Link to="/dealers/new" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>New Car Dealers</Link>
-            <Link to="/dealers/used" style={{ padding: '12px 16px', color: 'var(--color-gray-700)', textDecoration: 'none', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>Used Car Dealers</Link>
-            <hr style={{ margin: '8px 0', borderColor: 'rgba(15,23,42,0.08)' }} />
-            {user ? (
-              <>
-                <div style={{
-                  padding: '12px 16px', background: 'rgba(15,23,42,0.03)',
-                  borderRadius: '8px', marginBottom: '12px',
-                  display: 'flex', flexDirection: 'column', gap: '4px',
-                }}>
-                  <div style={{ fontSize: '0.75rem', color: '#888', fontWeight: 600 }}>Logged in as</div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-gray-900)' }}>{user.name || user.businessName}</div>
-                  <span className={`badge ${user.status === 'active' ? 'badge-active' : 'badge-pending'}`} style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{user.status}</span>
-                </div>
-                <Link
-                  to={user.role === 'buyer' ? '/buyer-dashboard' : user.role === 'broker' ? '/broker-dashboard' : '/admin'}
-                  className="btn btn-primary btn-block"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {t('dashboard')}
+          <>
+            <div className="mobile-menu-backdrop" onClick={() => setMobileOpen(false)} />
+            <div className="mobile-menu-card">
+              {/* Location + Language */}
+              <div className="mobile-menu-toprow">
+                <LocationPicker />
+                {langPicker}
+              </div>
+
+              {/* Nav links */}
+              <div className="mobile-menu-links">
+                <Link to="/dealers/new" className="mobile-menu-link" onClick={() => setMobileOpen(false)}>
+                  New Car Dealers
                 </Link>
-                <button onClick={handleLogout} className="btn btn-ghost btn-block" style={{ color: 'var(--color-gray-700)', marginTop: '8px' }}>
-                  <LogOut size={14} /> {t('logout')}
-                </button>
-              </>
-            ) : (
-              <>
-                <Link to="/register" className="btn btn-primary btn-block" onClick={() => setMobileOpen(false)}>{t('getStarted')}</Link>
-              </>
-            )}
-          </div>
+                <Link to="/dealers/used" className="mobile-menu-link" onClick={() => setMobileOpen(false)}>
+                  Used Car Dealers
+                </Link>
+              </div>
+
+              {/* Auth footer */}
+              <div className="mobile-menu-auth">
+                {user ? (
+                  <button onClick={handleLogout} className="mobile-menu-logout">
+                    <LogOut size={13} /> {t('logout')}
+                  </button>
+                ) : (
+                  <>
+                    <Link to="/login" className="mobile-menu-logout" style={{ textDecoration: 'none', justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>
+                      {t('login')}
+                    </Link>
+                    <Link to="/register" className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: '6px' }} onClick={() => setMobileOpen(false)}>
+                      {t('getStarted')}
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </nav>
