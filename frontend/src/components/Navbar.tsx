@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X, ChevronDown } from 'lucide-react';
+import { useNotifications } from '../contexts/NotificationContext';
+import NotificationDropdown from './NotificationDropdown';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
@@ -205,12 +207,15 @@ const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const { requirements, offers } = useData();
   const { lang, setLang, t } = useLanguage();
+  const { unreadCount } = useNotifications();
   const navigate = useNavigate();
   const [showLang, setShowLang] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => { logout(); navigate('/', { replace: true }); setMobileOpen(false); };
 
@@ -231,9 +236,8 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const unreadCount = offers.filter(
-    o => !o.isRead && requirements.find(r => r.id === o.requirementId)?.buyerId === user?.id
-  ).length;
+  // Legacy calculation no longer needed - using NotificationContext
+  void requirements; void offers;
 
   const langPicker = (
     <div ref={langRef} style={{ position: 'relative' }}>
@@ -312,17 +316,31 @@ const Navbar: React.FC = () => {
             {langPicker}
             {user ? (
               <>
-                {user.role === 'buyer' && (
-                  <div style={{ position: 'relative', marginRight: '8px', display: 'flex', alignItems: 'center' }}>
-                    <Bell size={18} color="var(--color-gray-500)" />
-                    {unreadCount > 0 && (
-                      <span style={{
-                        position: 'absolute', top: '-4px', right: '-4px',
-                        background: 'var(--color-primary)', color: '#fff',
-                        fontSize: '0.625rem', fontWeight: 800, width: '16px', height: '16px',
-                        borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{unreadCount}</span>
-                    )}
+                {(user.role === 'buyer' || user.role === 'broker') && (
+                  <div ref={notifRef} style={{ position: 'relative', marginRight: '4px' }}>
+                    <button
+                      onClick={() => setShowNotif(v => !v)}
+                      style={{
+                        background: showNotif ? 'var(--color-primary-light)' : 'transparent',
+                        border: showNotif ? '1px solid rgba(230,57,70,0.2)' : '1px solid transparent',
+                        borderRadius: '10px', padding: '6px 8px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', position: 'relative',
+                        transition: 'all 0.15s',
+                      }}
+                      title="Notifications"
+                    >
+                      <Bell size={18} color={showNotif ? 'var(--color-primary)' : 'var(--color-gray-500)'} />
+                      {unreadCount > 0 && (
+                        <span style={{
+                          position: 'absolute', top: '2px', right: '2px',
+                          background: 'var(--color-primary)', color: '#fff',
+                          fontSize: '0.5625rem', fontWeight: 800, minWidth: '16px', height: '16px',
+                          borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          lineHeight: 1, padding: '0 3px',
+                        }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+                      )}
+                    </button>
+                    {showNotif && <NotificationDropdown onClose={() => setShowNotif(false)} />}
                   </div>
                 )}
                 <div className="navbar-user">

@@ -6,7 +6,7 @@ import {
   Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
-  Bell, MessageSquare, Check, Briefcase
+  Bell, MessageSquare, Check, Briefcase, CalendarRange
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -158,6 +158,22 @@ const BrokerDashboard: React.FC = () => {
   const [offerError, setOfferError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [inventoryPickerReqId, setInventoryPickerReqId] = useState<number | null>(null);
+  
+  // New Proposal Form fields
+  const [variant, setVariant] = useState('');
+  const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [dealerName, setDealerName] = useState('');
+  const [dealerLocation, setDealerLocation] = useState('');
+  const [priceBreakdown, setPriceBreakdown] = useState('');
+  const [deliveryTime, setDeliveryTime] = useState('');
+  const [stockStatus, setStockStatus] = useState('In Stock');
+  const [benefits, setBenefits] = useState('');
+  const [registrationYear, setRegistrationYear] = useState('');
+  const [kmDriven, setKmDriven] = useState('');
+  const [ownership, setOwnership] = useState('1st Owner');
+  const [insuranceValidTill, setInsuranceValidTill] = useState('');
+  const [serviceHistory, setServiceHistory] = useState('Full Service History');
+  const [vehicleCondition, setVehicleCondition] = useState('Excellent');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   
@@ -312,13 +328,79 @@ const BrokerDashboard: React.FC = () => {
       toast.error(msg);
       return;
     }
-    if (user?.id && user?.businessName) {
-      addOffer({ requirementId: reqId, brokerId: user.id, brokerName: user.businessName, brokerPhone: user.phone, price, details });
+    const req = requirements.find(r => r.id === reqId);
+    if (!req) {
+      toast.error('Requirement not found.');
+      return;
+    }
+    if (!variant.trim()) {
+      toast.error('Vehicle variant is required.');
+      return;
+    }
+    if (!year.trim()) {
+      toast.error('Model Year is required.');
+      return;
+    }
+    if (!dealerName.trim()) {
+      toast.error('Dealer Name is required.');
+      return;
+    }
+    if (!dealerLocation.trim()) {
+      toast.error('Dealer Location is required.');
+      return;
+    }
+
+    if (user?.id) {
+      const isUsed = req.vehicleType === 'used';
+      addOffer({
+        requirementId: reqId,
+        brokerId: user.id,
+        brokerName: user.businessName || user.name || 'Dealer',
+        brokerPhone: user.phone,
+        price,
+        details: details || '',
+        
+        // New Mandatory Fields
+        variant,
+        year: Number(year),
+        dealerName,
+        dealerLocation,
+
+        // Optional/Recommended
+        priceBreakdown: priceBreakdown || '',
+        deliveryTime: deliveryTime || '',
+        stockStatus: stockStatus || '',
+        benefits: benefits || '',
+
+        // Used specific
+        registrationYear: (isUsed && registrationYear) ? Number(registrationYear) : undefined,
+        kmDriven: (isUsed && kmDriven) ? Number(kmDriven) : undefined,
+        ownership: isUsed ? ownership : '',
+        insuranceValidTill: isUsed ? insuranceValidTill : '',
+        serviceHistory: isUsed ? serviceHistory : '',
+        vehicleCondition: isUsed ? vehicleCondition : '',
+      });
+
       setOfferError('');
       setActiveReqId(null);
       setInventoryPickerReqId(null);
       setShowTemplates(false);
-      setPrice(''); setDetails('');
+      setPrice(''); 
+      setDetails('');
+      setVariant('');
+      setYear(new Date().getFullYear().toString());
+      setDealerName('');
+      setDealerLocation('');
+      setPriceBreakdown('');
+      setDeliveryTime('');
+      setStockStatus('In Stock');
+      setBenefits('');
+      setRegistrationYear('');
+      setKmDriven('');
+      setOwnership('1st Owner');
+      setInsuranceValidTill('');
+      setServiceHistory('Full Service History');
+      setVehicleCondition('Excellent');
       toast.success('Offer submitted successfully!');
     }
   };
@@ -687,9 +769,9 @@ const BrokerDashboard: React.FC = () => {
               const expires = expiresIn(req.createdAt);
               const responsesCount = offers.filter(o => o.requirementId === req.id).length;
               
-              const fuelGuessed = getFuelType(req.model, req.description);
-              const transGuessed = getTransmission(req.model, req.description);
-              const locGuessed = extractLocation(req.description);
+              const fuelGuessed = getFuelType(req.model, req.description || '');
+              const transGuessed = getTransmission(req.model, req.description || '');
+              const locGuessed = extractLocation(req.description || '');
 
               const matchingInventory = myListings.filter(
                 l => l.status === 'active' &&
@@ -702,13 +784,29 @@ const BrokerDashboard: React.FC = () => {
                   {/* Top row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
                     <div>
-                      <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                        {req.make} {req.model}
-                      </h3>
-                      <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span>Budget: <strong style={{ color: 'var(--color-primary)' }}>{req.budget}</strong></span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                          {req.make} {req.model} {req.variant ? `(${req.variant})` : ''}
+                        </h3>
+                        <span style={{
+                          fontSize: '0.6875rem',
+                          color: req.vehicleType === 'new' ? '#0f766e' : '#b45309',
+                          background: req.vehicleType === 'new' ? '#ccfbf1' : '#fef3c7',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em'
+                        }}>
+                          {req.vehicleType === 'new' ? 'New' : 'Used'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>Budget: <strong style={{ color: 'var(--color-primary)' }}>
+                          {req.budgetMin && req.budgetMax ? `₹${req.budgetMin}L - ₹${req.budgetMax}L` : req.budget}
+                        </strong></span>
                         <span>•</span>
-                        <span>Location: <strong>{locGuessed}</strong></span>
+                        <span>Location: <strong>{req.city && req.state ? `${req.city}, ${req.state}` : locGuessed}</strong></span>
                       </p>
                     </div>
 
@@ -735,16 +833,46 @@ const BrokerDashboard: React.FC = () => {
 
                   {/* Specification Badges */}
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                    <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <Fuel size={12} /> {fuelGuessed}
-                    </span>
-                    <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <Gauge size={12} /> {transGuessed}
-                    </span>
-                    {req.yearRange && (
-                      <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
-                        Year: {req.yearRange}
-                      </span>
+                    {req.vehicleType === 'new' ? (
+                      <>
+                        <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <Fuel size={12} /> {req.fuelType || fuelGuessed}
+                        </span>
+                        <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <Gauge size={12} /> {req.transmission || transGuessed}
+                        </span>
+                        {req.colorPreference && (
+                          <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Color: {req.colorPreference}
+                          </span>
+                        )}
+                        {req.purchaseTimeline && (
+                          <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Timeline: {req.purchaseTimeline}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <CalendarRange size={12} /> Year: {req.yearRange || 'Any'}
+                        </span>
+                        {req.maxKmDriven && (
+                          <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Max KM: {req.maxKmDriven.toLocaleString()}
+                          </span>
+                        )}
+                        {req.ownershipPreference && (
+                          <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Owners: {req.ownershipPreference}
+                          </span>
+                        )}
+                        {req.accidentHistoryPreference && (
+                          <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                            Accidents: {req.accidentHistoryPreference}
+                          </span>
+                        )}
+                      </>
                     )}
                     <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', fontWeight: 600 }}>
                       Posted {timeAgo(req.createdAt)}
@@ -783,6 +911,22 @@ const BrokerDashboard: React.FC = () => {
                             setDetails('');
                             setInventoryPickerReqId(null);
                             setOfferError('');
+                            
+                            // Initialize new fields
+                            setVariant(req.variant || '');
+                            setYear(new Date().getFullYear().toString());
+                            setDealerName(user?.businessName || user?.name || '');
+                            setDealerLocation(user?.city || '');
+                            setPriceBreakdown('');
+                            setDeliveryTime('');
+                            setStockStatus('In Stock');
+                            setBenefits('');
+                            setRegistrationYear('');
+                            setKmDriven('');
+                            setOwnership('1st Owner');
+                            setInsuranceValidTill('');
+                            setServiceHistory('Full Service History');
+                            setVehicleCondition('Excellent');
                           }}
                           style={{
                             padding: '8px 18px', background: 'linear-gradient(135deg, var(--color-primary), #cbd5e1)',
@@ -920,29 +1064,203 @@ const BrokerDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px', marginBottom: '12px' }}>
+                      {/* Dealer & Showroom Info */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                         <div>
-                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Offer Price (Lakhs)</label>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Dealer / Business Name *</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="e.g. Adyar Motors"
+                            value={dealerName}
+                            onChange={e => setDealerName(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Showroom Location *</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="e.g. Adyar, Chennai"
+                            value={dealerLocation}
+                            onChange={e => setDealerLocation(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Variant, Model Year & Price */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Vehicle Variant *</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="e.g. ZXI+ AT"
+                            value={variant}
+                            onChange={e => setVariant(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Model Year *</label>
+                          <input
+                            required
+                            type="number"
+                            min="2000"
+                            max={new Date().getFullYear() + 1}
+                            placeholder="e.g. 2022"
+                            value={year}
+                            onChange={e => setYear(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Offer Price (Lakhs) *</label>
                           <input
                             required
                             type="text"
                             placeholder="e.g. ₹14.5L"
                             value={price}
                             onChange={e => setPrice(e.target.value)}
-                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem' }}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* New vs Used conditional sections */}
+                      {req.vehicleType === 'new' ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px', padding: '12px', background: 'rgba(37,99,235,0.03)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.1)' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Stock Status</label>
+                            <select
+                              value={stockStatus}
+                              onChange={e => setStockStatus(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', background: '#fff', boxSizing: 'border-box' }}
+                            >
+                              <option value="In Stock">In Stock</option>
+                              <option value="Ready to Dispatch">Ready to Dispatch</option>
+                              <option value="Delivery 10-15 Days">Delivery 10-15 Days</option>
+                              <option value="Delivery 30 Days">Delivery 30 Days</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Delivery Timeline</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 3 Days, 2 Weeks"
+                              value={deliveryTime}
+                              onChange={e => setDeliveryTime(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '14px', padding: '12px', background: 'rgba(217,119,6,0.03)', borderRadius: '8px', border: '1px solid rgba(217,119,6,0.1)' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Registration Year</label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 2022"
+                              value={registrationYear}
+                              onChange={e => setRegistrationYear(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Kilometers Driven</label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 45000"
+                              value={kmDriven}
+                              onChange={e => setKmDriven(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Ownership</label>
+                            <select
+                              value={ownership}
+                              onChange={e => setOwnership(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', background: '#fff', boxSizing: 'border-box' }}
+                            >
+                              <option value="1st Owner">1st Owner</option>
+                              <option value="2nd Owner">2nd Owner</option>
+                              <option value="3rd Owner">3rd Owner</option>
+                              <option value="4th+ Owner">4th+ Owner</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Insurance Validity</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Jan 2027, Expired"
+                              value={insuranceValidTill}
+                              onChange={e => setInsuranceValidTill(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Service History</label>
+                            <select
+                              value={serviceHistory}
+                              onChange={e => setServiceHistory(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', background: '#fff', boxSizing: 'border-box' }}
+                            >
+                              <option value="Full Service History">Full Service History</option>
+                              <option value="Partial History">Partial History</option>
+                              <option value="No History Available">No History Available</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Vehicle Condition</label>
+                            <select
+                              value={vehicleCondition}
+                              onChange={e => setVehicleCondition(e.target.value)}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', background: '#fff', boxSizing: 'border-box' }}
+                            >
+                              <option value="Excellent">Excellent</option>
+                              <option value="Good">Good</option>
+                              <option value="Fair">Fair</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Optional Breakdown & Benefits */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Price Breakdown (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Ex-Showroom 13.5L + TCS 15k + Road Tax 85k"
+                            value={priceBreakdown}
+                            onChange={e => setPriceBreakdown(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
                           />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Vehicle Details / Comments</label>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Benefits & Inclusions (Optional)</label>
                           <input
-                            required
                             type="text"
-                            placeholder="e.g. 2021 model, single owner, perfect condition"
-                            value={details}
-                            onChange={e => setDetails(e.target.value)}
-                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem' }}
+                            placeholder="e.g. Free Insurance + 5 Years Extended Warranty"
+                            value={benefits}
+                            onChange={e => setBenefits(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', boxSizing: 'border-box' }}
                           />
                         </div>
+                      </div>
+
+                      {/* Notes / details */}
+                      <div style={{ marginBottom: '14px' }}>
+                        <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Additional Notes (Optional)</label>
+                        <textarea
+                          placeholder="e.g. 2021 model, single owner, perfect condition"
+                          value={details}
+                          onChange={e => setDetails(e.target.value)}
+                          style={{ width: '100%', height: '60px', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem', resize: 'vertical', boxSizing: 'border-box' }}
+                        />
                       </div>
 
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -1066,7 +1384,7 @@ const BrokerDashboard: React.FC = () => {
                     const req = requirements.find(r => r.id === o.requirementId);
                     const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown';
                     const budget = req ? req.budget : '—';
-                    const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+                    const location = req ? extractLocation(req.description || '') : 'Tamil Nadu';
 
                     // Parse potential counter offers
                     const isNegotiated = o.details ? o.details.includes('[Negotiated:') : false;
@@ -1238,9 +1556,9 @@ const BrokerDashboard: React.FC = () => {
             {acceptedOffers.map(o => {
               const req = requirements.find(r => r.id === o.requirementId);
               const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown Car';
-              const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+              const location = req ? extractLocation(req.description || '') : 'Tamil Nadu';
               const currentProgress = dealProgress[o.id] || 'Contacted';
-              const cleanDetails = o.details.split('\n[Negotiated:')[0].trim();
+              const cleanDetails = (o.details || '').split('\n[Negotiated:')[0].trim();
 
               return (
                 <div key={o.id} className="card animate-in" style={{ padding: '24px', border: '1px solid #e2e8f0' }}>
@@ -1413,11 +1731,11 @@ const BrokerDashboard: React.FC = () => {
                   {closedDeals.map(o => {
                     const req = requirements.find(r => r.id === o.requirementId);
                     const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown Car';
-                    const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+                    const location = req ? extractLocation(req.description || '') : 'Tamil Nadu';
                     const budget = req ? req.budget : '—';
                     
                     const ratingVal = (o.id % 2 === 0) ? 5 : 4;
-                    const cleanDetails = o.details ? o.details.split('\n[Negotiated:')[0].trim() : '';
+                    const cleanDetails = (o.details || '').split('\n[Negotiated:')[0].trim();
 
                     return (
                       <tr key={o.id} style={{ borderBottom: '1px solid #e2e8f0' }}>

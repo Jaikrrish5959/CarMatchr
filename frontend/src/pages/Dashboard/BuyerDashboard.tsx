@@ -6,11 +6,12 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles,
   Phone, CalendarRange, Star, Bell, MapPin, List, Settings, HelpCircle,
-  Menu
+  Menu, Lock, Unlock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { LocationSelector, type LocationValue, EMPTY_LOCATION, locationLabel } from '../../components/LocationSelector';
+import tnLocations from '../../data/tn-locations.json';
 
+const districts = (tnLocations as any).districts || [];
 const YEAR_LIST = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
 const parsePriceToNumber = (priceStr: string | number) => {
@@ -66,7 +67,7 @@ const getDealerRating = (brokerId: number) => {
 
 const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead, negotiateOffer } = useData();
+  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead, negotiateOffer, shortlistOffer } = useData();
   const { brands } = useCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'active';
@@ -95,20 +96,35 @@ const BuyerDashboard: React.FC = () => {
   const [feature, setFeature] = useState('');
   const [minYear, setMinYear] = useState('');
   const [maxYear, setMaxYear] = useState('');
-  const [budget, setBudget] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const [submitting, setSubmitting] = useState(false);
   const [expandedReqs, setExpandedReqs] = useState<Record<number, boolean>>({});
   const [sortBy, setSortBy] = useState('latest');
   const [summaryReqId, setSummaryReqId] = useState<number | null>(null);
   
-  // Negotiation state
-  const [negotiateOfferId, setNegotiateOfferId] = useState<number | null>(null);
   const [counterPriceInput, setCounterPriceInput] = useState('');
+  const [negotiateOfferId, setNegotiateOfferId] = useState<number | null>(null);
+
+  // Redesign requirement state fields
+  const [vehicleType, setVehicleType] = useState<'new' | 'used'>('new');
+  const [variant, setVariant] = useState('');
+  const [budgetMin, setBudgetMin] = useState('');
+  const [budgetMax, setBudgetMax] = useState('');
+  const [stateName, setStateName] = useState('Tamil Nadu');
+  const [cityName, setCityName] = useState('');
+  
+  // New Car Specs
+  const [fuelType, setFuelType] = useState('Any');
+  const [transmission, setTransmission] = useState('Any');
+  const [colorPreference, setColorPreference] = useState('');
+  const [purchaseTimeline, setPurchaseTimeline] = useState('Immediate');
+
+  // Used Car Specs
+  const [maxKmDriven, setMaxKmDriven] = useState('');
+  const [ownershipPreference, setOwnershipPreference] = useState('Any');
+  const [accidentHistoryPreference, setAccidentHistoryPreference] = useState('No Accidents');
 
   const selectedBrand = brands.find((b) => b.name === make);
-  const modelFeatures = selectedBrand?.models.find((m) => m.name === model)?.features ?? [];
 
   useEffect(() => {
     const pending = sessionStorage.getItem('pending_requirement');
@@ -122,7 +138,10 @@ const BuyerDashboard: React.FC = () => {
         yearRange: yearRange || '2020-2024',
         budget,
         preferredFeature: '',
-        description: description || 'Looking for a clean vehicle in good condition.'
+        description: description || 'Looking for a clean vehicle in good condition.',
+        vehicleType: 'new',
+        state: 'Tamil Nadu',
+        city: 'Chennai',
       })
         .then(() => toast.success('Your pending requirement has been posted successfully!'))
         .catch(() => toast.error('Failed to post pending requirement.'));
@@ -207,30 +226,58 @@ const BuyerDashboard: React.FC = () => {
     e.preventDefault();
     if (!make) { toast.error('Please select a car brand.'); return; }
     if (!model) { toast.error('Please select a car model.'); return; }
-    if (!budget.trim()) { toast.error('Please enter your budget.'); return; }
+    if (!budgetMin.trim() || !budgetMax.trim()) { toast.error('Please enter budget range.'); return; }
+    if (parseFloat(budgetMin) > parseFloat(budgetMax)) {
+      toast.error('Min budget cannot be greater than Max budget.'); return;
+    }
+    if (!stateName) { toast.error('Please select a state.'); return; }
+    if (!cityName) { toast.error('Please select a city.'); return; }
     if (!user?.id) { toast.error('Please log in first.'); return; }
 
-    const yearRange = minYear && maxYear ? `${minYear}-${maxYear}` : minYear || maxYear;
-    if (!yearRange) { toast.error('Please select at least a minimum year.'); return; }
-    if (minYear && maxYear && parseInt(minYear) > parseInt(maxYear)) {
-      toast.error('Min year cannot be greater than Max year.'); return;
+    let yearRangeValue = '';
+    if (vehicleType === 'used') {
+      yearRangeValue = minYear && maxYear ? `${minYear}-${maxYear}` : minYear || maxYear;
+      if (!yearRangeValue) { toast.error('Please select at least a minimum year.'); return; }
+      if (minYear && maxYear && parseInt(minYear) > parseInt(maxYear)) {
+        toast.error('Min year cannot be greater than Max year.'); return;
+      }
     }
 
     setSubmitting(true);
     try {
-      const locStr = locationLabel(location);
       await addRequirement({
         buyerId: user.id,
         make,
         model,
-        yearRange,
-        budget,
-        preferredFeature: feature,
-        description: description + (locStr ? `\nPreferred Location: ${locStr}` : '')
+        yearRange: vehicleType === 'used' ? yearRangeValue : '',
+        budget: budgetMax, // Backward compatibility
+        preferredFeature: feature || '',
+        description: description || '',
+        
+        // New common fields
+        vehicleType,
+        variant: variant || '',
+        budgetMin,
+        budgetMax,
+        state: stateName,
+        city: cityName,
+
+        // For New Cars
+        fuelType: vehicleType === 'new' ? fuelType : '',
+        transmission: vehicleType === 'new' ? transmission : '',
+        colorPreference: vehicleType === 'new' ? colorPreference : '',
+        purchaseTimeline: vehicleType === 'new' ? purchaseTimeline : '',
+
+        // For Used Cars
+        maxKmDriven: (vehicleType === 'used' && maxKmDriven) ? parseInt(maxKmDriven) : undefined,
+        ownershipPreference: vehicleType === 'used' ? ownershipPreference : '',
+        accidentHistoryPreference: vehicleType === 'used' ? accidentHistoryPreference : '',
       });
-      toast.success('Requirement posted! Brokers will now send you offers.');
+      toast.success('Requirement posted! Dealers will now send you offers.');
       setShowForm(false);
-      setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setBudget(''); setDescription(''); setLocation(EMPTY_LOCATION);
+      setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setDescription('');
+      setVariant(''); setBudgetMin(''); setBudgetMax(''); setCityName(''); setFuelType('Any'); setTransmission('Any'); setColorPreference('');
+      setPurchaseTimeline('Immediate'); setMaxKmDriven(''); setOwnershipPreference('Any'); setAccidentHistoryPreference('No Accidents');
     } catch {
       toast.error('Failed to post requirement. Please try again.');
     } finally {
@@ -282,11 +329,11 @@ const BuyerDashboard: React.FC = () => {
                         <td style={{ padding: '16px 24px', fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>
                           {req.make} {req.model}
                           <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
-                            {getFuelType(req.model, req.description)} • {getTransmission(req.model, req.description)}
+                            {getFuelType(req.model, req.description || '')} • {getTransmission(req.model, req.description || '')}
                           </div>
                         </td>
                         <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155', fontWeight: 600 }}>{req.budget}</td>
-                        <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155' }}>{extractLocation(req.description)}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155' }}>{extractLocation(req.description || '')}</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#64748b' }}>
                           {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
@@ -390,11 +437,11 @@ const BuyerDashboard: React.FC = () => {
                         <td style={{ padding: '16px 24px', fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>
                           {req.make} {req.model}
                           <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
-                            {getFuelType(req.model, req.description)} • {getTransmission(req.model, req.description)}
+                            {getFuelType(req.model, req.description || '')} • {getTransmission(req.model, req.description || '')}
                           </div>
                         </td>
                         <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155', fontWeight: 600 }}>{req.budget}</td>
-                        <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155' }}>{extractLocation(req.description)}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#334155' }}>{extractLocation(req.description || '')}</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.875rem', color: '#64748b' }}>
                           {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
@@ -544,20 +591,73 @@ const BuyerDashboard: React.FC = () => {
                   
                   {/* Specs Details */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                      {req.make} {req.model}
-                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                        {req.make} {req.model} {req.variant ? `(${req.variant})` : ''}
+                      </h3>
+                      <span style={{
+                        fontSize: '0.6875rem',
+                        color: req.vehicleType === 'new' ? '#0f766e' : '#b45309',
+                        background: req.vehicleType === 'new' ? '#ccfbf1' : '#fef3c7',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em'
+                      }}>
+                        {req.vehicleType === 'new' ? 'New Car' : 'Used Car'}
+                      </span>
+                    </div>
                     
                     {/* Spec tags row */}
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#64748b' }}></span>
-                        {getFuelType(req.model, req.description)}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#64748b' }}></span>
-                        {getTransmission(req.model, req.description)}
-                      </span>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {req.vehicleType === 'new' ? (
+                        <>
+                          {req.fuelType && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Fuel: <strong style={{ color: '#334155' }}>{req.fuelType}</strong>
+                            </span>
+                          )}
+                          {req.transmission && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Gear: <strong style={{ color: '#334155' }}>{req.transmission}</strong>
+                            </span>
+                          )}
+                          {req.colorPreference && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Color: <strong style={{ color: '#334155' }}>{req.colorPreference}</strong>
+                            </span>
+                          )}
+                          {req.purchaseTimeline && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Timeline: <strong style={{ color: '#334155' }}>{req.purchaseTimeline}</strong>
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {req.yearRange && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Years: <strong style={{ color: '#334155' }}>{req.yearRange}</strong>
+                            </span>
+                          )}
+                          {req.maxKmDriven && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Max KM: <strong style={{ color: '#334155' }}>{req.maxKmDriven.toLocaleString()}</strong>
+                            </span>
+                          )}
+                          {req.ownershipPreference && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Owners: <strong style={{ color: '#334155' }}>{req.ownershipPreference}</strong>
+                            </span>
+                          )}
+                          {req.accidentHistoryPreference && (
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
+                              Accidents: <strong style={{ color: '#334155' }}>{req.accidentHistoryPreference}</strong>
+                            </span>
+                          )}
+                        </>
+                      )}
                       <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' }}>
                         <CalendarRange size={12} />
                         {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -567,10 +667,14 @@ const BuyerDashboard: React.FC = () => {
                     {/* Budget + Location row */}
                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '4px' }}>
                       <span style={{ fontSize: '0.8125rem', color: '#475569', fontWeight: 600 }}>
-                        Budget: <span style={{ color: '#0f172a', fontWeight: 700 }}>{req.budget}</span>
+                        Budget: <span style={{ color: '#0f172a', fontWeight: 700 }}>
+                          {req.budgetMin && req.budgetMax ? `₹${req.budgetMin}L - ₹${req.budgetMax}L` : req.budget}
+                        </span>
                       </span>
                       <span style={{ fontSize: '0.8125rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        Location: <span style={{ color: '#0f172a', fontWeight: 700 }}>{extractLocation(req.description)}</span>
+                        Location: <span style={{ color: '#0f172a', fontWeight: 700 }}>
+                          {req.city && req.state ? `${req.city}, ${req.state}` : extractLocation(req.description || '')}
+                        </span>
                       </span>
                     </div>
                     
@@ -731,7 +835,7 @@ const BuyerDashboard: React.FC = () => {
                                 </span>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                                <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>{extractLocation(offer.details || req.description)}</span>
+                                <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>{extractLocation(offer.details || req.description || '')}</span>
                                 <span style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--color-primary)' }}>{offer.price}</span>
                               </div>
                             </div>
@@ -789,7 +893,7 @@ const BuyerDashboard: React.FC = () => {
                             padding: '16px 20px',
                             position: 'relative'
                           }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <div style={{
                                   width: '36px',
@@ -803,18 +907,32 @@ const BuyerDashboard: React.FC = () => {
                                   fontSize: '0.9375rem',
                                   color: isAccepted ? '#059669' : '#334155'
                                 }}>
-                                  {offer.brokerName.charAt(0).toUpperCase()}
+                                  {(offer.dealerName || offer.brokerName).charAt(0).toUpperCase()}
                                 </div>
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#0f172a' }}>{offer.brokerName}</span>
+                                    <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#0f172a' }}>
+                                      {offer.dealerName || offer.brokerName}
+                                    </span>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '0.75rem', color: '#d97706', fontWeight: 700 }}>
                                       <Star size={11} fill="#d97706" color="#d97706" />
                                       {getDealerRating(offer.brokerId)}
                                     </span>
+                                    {offer.shortlisted && (
+                                      <span style={{
+                                        fontSize: '0.6875rem',
+                                        background: '#fef3c7',
+                                        color: '#d97706',
+                                        padding: '1px 6px',
+                                        borderRadius: '4px',
+                                        fontWeight: 700
+                                      }}>
+                                        Shortlisted
+                                      </span>
+                                    )}
                                   </div>
                                   <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                                    <MapPin size={11} /> {extractLocation(offer.details || req.description)}
+                                    <MapPin size={11} /> {offer.dealerLocation ? offer.dealerLocation.split(',')[0].trim() : 'Tamil Nadu'}
                                   </div>
                                 </div>
                               </div>
@@ -831,7 +949,7 @@ const BuyerDashboard: React.FC = () => {
                                   {offer.price}
                                 </span>
                                 {(() => {
-                                  const reqBudgetVal = parsePriceToNumber(req.budget);
+                                  const reqBudgetVal = parsePriceToNumber(req.budgetMin && req.budgetMax ? req.budgetMax : req.budget);
                                   const offerPriceVal = parsePriceToNumber(offer.price);
                                   const savingsVal = reqBudgetVal - offerPriceVal;
                                   if (savingsVal > 0) {
@@ -846,28 +964,140 @@ const BuyerDashboard: React.FC = () => {
                               </div>
                             </div>
 
+                            {/* Specifications Grid */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                              gap: '10px',
+                              background: '#f8fafc',
+                              padding: '12px',
+                              borderRadius: '10px',
+                              margin: '10px 0 12px',
+                              border: '1px solid #e2e8f0'
+                            }}>
+                              <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                <strong>Variant:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.variant}</span>
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                <strong>Model Year:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.year}</span>
+                              </div>
+                              
+                              {req.vehicleType === 'new' ? (
+                                <>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Stock:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.stockStatus || 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Delivery:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.deliveryTime || 'Not Specified'}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Reg Year:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.registrationYear || 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>KM Driven:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.kmDriven ? `${offer.kmDriven.toLocaleString()} km` : 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Owners:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.ownership || 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Condition:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.vehicleCondition || 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Insurance:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.insuranceValidTill || 'Not Specified'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                    <strong>Service History:</strong> <span style={{ color: '#0f172a', fontWeight: 600 }}>{offer.serviceHistory || 'Not Specified'}</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Additional optional strings (Price Breakdown & Benefits) */}
+                            {(offer.priceBreakdown || offer.benefits) && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                {offer.priceBreakdown && (
+                                  <div style={{ background: '#fff9db', border: '1px solid #ffe066', padding: '10px 14px', borderRadius: '8px', fontSize: '0.75rem', color: '#66a80f' }}>
+                                    <strong>Price Breakdown:</strong> <span style={{ color: '#3f6b0b' }}>{offer.priceBreakdown}</span>
+                                  </div>
+                                )}
+                                {offer.benefits && (
+                                  <div style={{ background: '#e8f7ff', border: '1px solid #bce5ff', padding: '10px 14px', borderRadius: '8px', fontSize: '0.75rem', color: '#0066cc' }}>
+                                    <strong>Dealer Benefits:</strong> <span style={{ color: '#00478f' }}>{offer.benefits}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             {offer.details && (
                               <p style={{ fontSize: '0.8125rem', color: '#475569', lineHeight: 1.6, margin: '8px 0 12px' }}>
-                                {offer.details.split('\n[Negotiated:')[0].trim()}
+                                <strong>Dealer Notes:</strong> {offer.details.split('\n[Negotiated:')[0].trim()}
                               </p>
                             )}
 
-                            {isAccepted && offer.brokerPhone && (
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                background: 'rgba(16,185,129,0.1)',
-                                borderRadius: '8px',
-                                padding: '8px 12px',
-                                marginBottom: '12px',
-                                width: 'fit-content'
-                              }}>
-                                <Phone size={13} color="#059669" />
-                                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#059669' }}>{offer.brokerPhone}</span>
-                                <span style={{ fontSize: '0.6875rem', color: '#6ee7b7' }}>· Seller Contact Info</span>
-                              </div>
-                            )}
+                            {/* Disclosure Contact Card */}
+                            {(() => {
+                              const contactsUnlocked = offer.shortlisted || offer.status === 'accepted';
+                              return (
+                                <div style={{
+                                  background: contactsUnlocked ? 'rgba(16,185,129,0.05)' : '#f8fafc',
+                                  border: '1.5px solid',
+                                  borderColor: contactsUnlocked ? '#10b981' : '#cbd5e1',
+                                  borderRadius: '12px',
+                                  padding: '12px 16px',
+                                  marginBottom: '14px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '8px'
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: contactsUnlocked ? '#059669' : '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      {contactsUnlocked ? <Unlock size={13} color="#059669" /> : <Lock size={13} color="#64748b" />}
+                                      Seller Contact Information {contactsUnlocked ? '(Unlocked)' : '(Locked)'}
+                                    </span>
+                                    {!contactsUnlocked && (
+                                      <span style={{ fontSize: '0.6875rem', color: '#64748b', fontWeight: 600 }}>
+                                        Shortlist or accept offer to unlock
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '0.8125rem', color: '#334155' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <MapPin size={12} color="#64748b" />
+                                      <strong>Address:</strong> {contactsUnlocked ? offer.dealerLocation : 'Address Hidden'}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <Phone size={12} color="#64748b" />
+                                      <strong>Phone:</strong> {contactsUnlocked ? (
+                                        <a href={`tel:${offer.brokerPhone}`} style={{ color: 'var(--color-primary)', fontWeight: 700, textDecoration: 'none' }}>
+                                          {offer.brokerPhone}
+                                        </a>
+                                      ) : '••••••••••'}
+                                    </div>
+                                    {contactsUnlocked && offer.brokerPhone && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span
+                                          onClick={() => window.open(`https://wa.me/${offer.brokerPhone.replace(/\D/g, '')}`, '_blank')}
+                                          style={{
+                                            color: '#25d366',
+                                            fontWeight: 700,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.403.002 9.803-4.394 9.806-9.799.002-2.618-1.016-5.08-2.87-6.936C16.353 2.016 13.882 1 11.99 1 6.586 1 2.185 5.398 2.182 10.803c-.001 1.493.404 2.955 1.17 4.298l-.994 3.633 3.725-.977-.04.097zm10.37-6.26c-.25-.124-1.474-.727-1.703-.81-.228-.084-.393-.124-.558.125-.165.247-.64.81-.784.975-.143.165-.288.185-.538.062-.25-.124-1.055-.389-2.01-1.243-.743-.662-1.244-1.479-1.39-1.727-.144-.247-.015-.38.11-.503.112-.111.25-.29.375-.436.124-.145.166-.248.25-.415.082-.165.042-.31-.02-.435-.062-.124-.559-1.348-.765-1.848-.2-.486-.403-.42-.557-.428-.145-.008-.31-.01-.475-.01-.165 0-.435.063-.662.312-.228.248-.87.85-.87 2.075s.89 2.41 1.012 2.575c.125.166 1.75 2.673 4.24 3.75 2.49 1.077 2.49.718 2.986.672.496-.046 1.474-.602 1.68-1.185.207-.584.207-1.084.145-1.187-.062-.102-.227-.165-.477-.29z"/></svg>
+                                          WhatsApp Chat
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
                             {offer.details && offer.details.includes('[Negotiated:') && (() => {
                                const match = offer.details.match(/\[Negotiated:\s*(.+?)\]/);
@@ -953,6 +1183,31 @@ const BuyerDashboard: React.FC = () => {
                                           }}
                                         >
                                           <Check size={13} /> Accept Offer
+                                        </button>
+                                        <button
+                                          onClick={async () => {
+                                            markOfferRead(offer.id);
+                                            const nextState = !offer.shortlisted;
+                                            await shortlistOffer(offer.id, nextState);
+                                            toast.success(nextState ? 'Offer shortlisted! Contact info unlocked.' : 'Offer removed from shortlist.');
+                                          }}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '8px 14px',
+                                            borderRadius: '8px',
+                                            border: offer.shortlisted ? '1.5px solid #d97706' : '1.5px solid #cbd5e1',
+                                            background: offer.shortlisted ? '#fffbeb' : '#fff',
+                                            color: offer.shortlisted ? '#b45309' : '#64748b',
+                                            fontFamily: 'var(--font)',
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          <Star size={13} fill={offer.shortlisted ? '#d97706' : 'none'} color={offer.shortlisted ? '#d97706' : '#cbd5e1'} />
+                                          {offer.shortlisted ? 'Shortlisted' : 'Shortlist'}
                                         </button>
                                         <button
                                           onClick={() => {
@@ -1536,10 +1791,48 @@ const BuyerDashboard: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: '28px' }}>
+                  {/* Vehicle Type Toggle */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Vehicle Type *
+                    </label>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setVehicleType('new')}
+                        style={{
+                          flex: 1, padding: '12px', borderRadius: '10px',
+                          border: vehicleType === 'new' ? '2.5px solid var(--color-primary)' : '2px solid #e2e8f0',
+                          background: vehicleType === 'new' ? 'rgba(230,57,70,0.06)' : '#fff',
+                          color: vehicleType === 'new' ? 'var(--color-primary)' : '#475569',
+                          fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                          fontFamily: 'var(--font)'
+                        }}
+                      >
+                        New Car
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVehicleType('used')}
+                        style={{
+                          flex: 1, padding: '12px', borderRadius: '10px',
+                          border: vehicleType === 'used' ? '2px solid var(--color-primary)' : '2px solid #e2e8f0',
+                          background: vehicleType === 'used' ? 'rgba(230,57,70,0.06)' : '#fff',
+                          color: vehicleType === 'used' ? 'var(--color-primary)' : '#475569',
+                          fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                          fontFamily: 'var(--font)'
+                        }}
+                      >
+                        Used Car
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Brand & Model */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Make *
+                        Brand *
                       </label>
                       <div style={{ position: 'relative' }}>
                         <select
@@ -1554,7 +1847,7 @@ const BuyerDashboard: React.FC = () => {
                             appearance: 'none', cursor: 'pointer', outline: 'none',
                           }}
                         >
-                          <option value="">Select make</option>
+                          <option value="">Select Brand</option>
                           {brands.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
                         </select>
                         <ChevronDown size={15} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
@@ -1578,7 +1871,7 @@ const BuyerDashboard: React.FC = () => {
                             appearance: 'none', cursor: make ? 'pointer' : 'not-allowed', outline: 'none',
                           }}
                         >
-                          <option value="">Select model</option>
+                          <option value="">Select Model</option>
                           {selectedBrand?.models.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                         </select>
                         <ChevronDown size={15} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
@@ -1586,127 +1879,214 @@ const BuyerDashboard: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Variant */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Variant (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={variant}
+                      onChange={e => setVariant(e.target.value)}
+                      placeholder="e.g. VXi, Alpha, LXi, Dual Tone"
+                      style={{
+                        width: '100%', padding: '12px 14px',
+                        borderRadius: '10px', border: '2px solid #e2e8f0',
+                        fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                        color: '#0f172a', outline: 'none', boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Budget Min / Max */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        <CalendarRange size={11} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                        Year Range *
+                        Min Budget (₹ Lakhs) *
                       </label>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <div style={{ flex: 1, position: 'relative' }}>
-                          <select
-                            required
-                            value={minYear}
-                            onChange={e => setMinYear(e.target.value)}
-                            style={{
-                              width: '100%', padding: '12px 32px 12px 12px',
-                              borderRadius: '10px', border: '2px solid #e2e8f0',
-                              fontFamily: 'var(--font)', fontSize: '0.875rem',
-                              color: minYear ? '#0f172a' : '#94a3b8', background: '#fff',
-                              appearance: 'none', cursor: 'pointer', outline: 'none',
-                            }}
-                          >
-                            <option value="">From</option>
-                            {YEAR_LIST.map(y => <option key={y} value={y}>{y}</option>)}
-                          </select>
-                          <ChevronDown size={13} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
-                        </div>
-                        <span style={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>—</span>
-                        <div style={{ flex: 1, position: 'relative' }}>
-                          <select
-                            value={maxYear}
-                            onChange={e => setMaxYear(e.target.value)}
-                            style={{
-                              width: '100%', padding: '12px 32px 12px 12px',
-                              borderRadius: '10px', border: '2px solid #e2e8f0',
-                              fontFamily: 'var(--font)', fontSize: '0.875rem',
-                              color: maxYear ? '#0f172a' : '#94a3b8', background: '#fff',
-                              appearance: 'none', cursor: 'pointer', outline: 'none',
-                            }}
-                          >
-                            <option value="">To (opt.)</option>
-                            {YEAR_LIST.map(y => <option key={y} value={y}>{y}</option>)}
-                          </select>
-                          <ChevronDown size={13} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
-                        </div>
-                      </div>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={budgetMin}
+                        onChange={e => setBudgetMin(e.target.value)}
+                        placeholder="e.g. 8.0"
+                        style={{
+                          width: '100%', padding: '12px 14px',
+                          borderRadius: '10px', border: '2px solid #e2e8f0',
+                          fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                          color: '#0f172a', outline: 'none', boxSizing: 'border-box'
+                        }}
+                      />
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Preferred Feature
+                        Max Budget (₹ Lakhs) *
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={budgetMax}
+                        onChange={e => setBudgetMax(e.target.value)}
+                        placeholder="e.g. 12.0"
+                        style={{
+                          width: '100%', padding: '12px 14px',
+                          borderRadius: '10px', border: '2px solid #e2e8f0',
+                          fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                          color: '#0f172a', outline: 'none', boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* State & City/District */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        State *
+                      </label>
+                      <select
+                        required
+                        value={stateName}
+                        onChange={e => setStateName(e.target.value)}
+                        style={{
+                          width: '100%', padding: '12px 14px',
+                          borderRadius: '10px', border: '2px solid #e2e8f0',
+                          fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                          color: '#0f172a', background: '#fff', outline: 'none',
+                        }}
+                      >
+                        <option value="Tamil Nadu">Tamil Nadu</option>
+                        <option value="Karnataka">Karnataka</option>
+                        <option value="Kerala">Kerala</option>
+                        <option value="Andhra Pradesh">Andhra Pradesh</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        City / District *
                       </label>
                       <div style={{ position: 'relative' }}>
                         <select
-                          value={feature}
-                          onChange={e => setFeature(e.target.value)}
-                          disabled={!model}
+                          required
+                          value={cityName}
+                          onChange={e => setCityName(e.target.value)}
                           style={{
                             width: '100%', padding: '12px 36px 12px 14px',
                             borderRadius: '10px', border: '2px solid #e2e8f0',
                             fontFamily: 'var(--font)', fontSize: '0.9375rem',
-                            color: feature ? '#0f172a' : '#94a3b8', background: model ? '#fff' : '#f8fafc',
-                            appearance: 'none', cursor: model ? 'pointer' : 'not-allowed', outline: 'none',
+                            color: cityName ? '#0f172a' : '#94a3b8', background: '#fff',
+                            appearance: 'none', cursor: 'pointer', outline: 'none',
                           }}
                         >
-                          <option value="">Any feature</option>
-                          {modelFeatures.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                          <option value="">Select District</option>
+                          {districts.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
                         </select>
                         <ChevronDown size={15} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Budget (₹ Lakhs) *
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{
-                        position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)',
-                        fontWeight: 800, fontSize: '1rem', color: '#94a3b8', pointerEvents: 'none',
-                      }}>₹</span>
-                      <input
-                        required
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={budget}
-                        onChange={e => setBudget(e.target.value)}
-                        placeholder="e.g. 15.5"
-                        style={{
-                          width: '100%', padding: '12px 14px 12px 30px',
-                          borderRadius: '10px', border: '2px solid #e2e8f0',
-                          fontFamily: 'var(--font)', fontSize: '0.9375rem',
-                          color: '#0f172a', outline: 'none',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                      <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Lakhs</span>
+                  {/* New Cars Specification Fields */}
+                  {vehicleType === 'new' && (
+                    <div style={{ border: '1.5px solid #e2e8f0', padding: '20px', borderRadius: '12px', background: '#f8fafc', marginBottom: '20px' }}>
+                      <h4 style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#475569', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>New Car Specifications</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Fuel Type</label>
+                          <select value={fuelType} onChange={e => setFuelType(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                            <option value="Any">Any Fuel</option>
+                            <option value="Petrol">Petrol</option>
+                            <option value="Diesel">Diesel</option>
+                            <option value="Hybrid">Hybrid</option>
+                            <option value="Electric">Electric</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Transmission</label>
+                          <select value={transmission} onChange={e => setTransmission(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                            <option value="Any">Any Transmission</option>
+                            <option value="Manual">Manual</option>
+                            <option value="Automatic">Automatic</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Color Preference</label>
+                          <input type="text" value={colorPreference} onChange={e => setColorPreference(e.target.value)} placeholder="e.g. White, Black, Red" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', boxSizing: 'border-box' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Purchase Timeline</label>
+                          <select value={purchaseTimeline} onChange={e => setPurchaseTimeline(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                            <option value="Immediate">Immediate</option>
+                            <option value="Within 15 Days">Within 15 Days</option>
+                            <option value="Within 1 Month">Within 1 Month</option>
+                            <option value="Exploring">Exploring</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      <MapPin size={11} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                      Preferred Location (TN)
-                    </label>
-                    <LocationSelector value={location} onChange={setLocation} />
-                    {locationLabel(location) && (
-                      <p style={{ fontSize: '0.75rem', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={11} /> {locationLabel(location)}
-                      </p>
-                    )}
-                  </div>
+                  {/* Used Cars Specification Fields */}
+                  {vehicleType === 'used' && (
+                    <div style={{ border: '1.5px solid #e2e8f0', padding: '20px', borderRadius: '12px', background: '#f8fafc', marginBottom: '20px' }}>
+                      <h4 style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#475569', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Used Car Specifications</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Year Range *</label>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <select required={vehicleType === 'used'} value={minYear} onChange={e => setMinYear(e.target.value)} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                              <option value="">From</option>
+                              {YEAR_LIST.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                            <span style={{ color: '#94a3b8', fontWeight: 700 }}>—</span>
+                            <select value={maxYear} onChange={e => setMaxYear(e.target.value)} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                              <option value="">To (opt.)</option>
+                              {YEAR_LIST.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Max KM Driven</label>
+                          <input type="number" min="0" value={maxKmDriven} onChange={e => setMaxKmDriven(e.target.value)} placeholder="e.g. 50000" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', boxSizing: 'border-box' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Ownership Preference</label>
+                          <select value={ownershipPreference} onChange={e => setOwnershipPreference(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                            <option value="Any">Any Ownership</option>
+                            <option value="1st Owner">1st Owner</option>
+                            <option value="2nd Owner">2nd Owner</option>
+                            <option value="3rd Owner">3rd Owner</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Accident History Preference</label>
+                        <select value={accidentHistoryPreference} onChange={e => setAccidentHistoryPreference(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem', background: '#fff' }}>
+                          <option value="No Accidents">No Accidents / Clean History</option>
+                          <option value="Any">Any History</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
 
+                  {/* Additional Notes */}
                   <div style={{ marginBottom: '24px' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Additional Details
+                      Additional Notes (Optional)
                     </label>
                     <textarea
                       rows={3}
                       value={description}
                       onChange={e => setDescription(e.target.value)}
-                      placeholder="Condition preferences, color, urgency, trim level..."
+                      placeholder="e.g. trim preference, preferred test drive time, color preferences..."
                       style={{
                         width: '100%', padding: '12px 14px',
                         borderRadius: '10px', border: '2px solid #e2e8f0',
@@ -1718,6 +2098,7 @@ const BuyerDashboard: React.FC = () => {
                     />
                   </div>
 
+                  {/* Action Buttons */}
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                       type="submit"
@@ -1972,7 +2353,7 @@ const BuyerDashboard: React.FC = () => {
                   <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Requirement Details</div>
                   <div style={{ fontWeight: 800, fontSize: '1.125rem', color: '#0f172a' }}>{req.make} {req.model}</div>
                   <div style={{ fontSize: '0.8125rem', color: '#475569', marginTop: '4px' }}>
-                    {getFuelType(req.model, req.description)} • {getTransmission(req.model, req.description)} • Budget: {req.budget} • Location: {extractLocation(req.description)}
+                    {getFuelType(req.model, req.description || '')} • {getTransmission(req.model, req.description || '')} • Budget: {req.budget} • Location: {extractLocation(req.description || '')}
                   </div>
                 </div>
                 

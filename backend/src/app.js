@@ -109,26 +109,55 @@ const googleBrokerRegisterSchema = z.object({
 });
 
 const requirementSchema = z.object({
-  make: z.string().optional(),
-  model: z.string().optional(),
-  budget: z.string().min(1),
-  yearRange: z.string().optional(),
-  preferredFeature: z.string().optional().nullable(),
-  description: z.string().optional(),
-  brandId: z.number().int().optional(),
-  modelId: z.number().int().optional(),
-  minYear: z.number().int().optional(),
-  maxYear: z.number().int().optional(),
-}).refine((data) => (data.make && data.model) || (data.brandId && data.modelId), {
-  message: 'Make and model are required.',
+  vehicleType: z.enum(['new', 'used']),
+  make: z.string().min(1, 'Brand is required.'),
+  model: z.string().min(1, 'Model is required.'),
+  variant: z.string().optional().nullable(),
+  budget: z.string().optional().nullable(),
+  budgetMin: z.string().optional().nullable(),
+  budgetMax: z.string().optional().nullable(),
+  state: z.string().min(1, 'State is required.'),
+  city: z.string().min(1, 'City is required.'),
+  description: z.string().optional().nullable(),
+  brandId: z.number().int().optional().nullable(),
+  modelId: z.number().int().optional().nullable(),
+  
+  // New Cars specific
+  fuelType: z.string().optional().nullable(),
+  transmission: z.string().optional().nullable(),
+  colorPreference: z.string().optional().nullable(),
+  purchaseTimeline: z.string().optional().nullable(),
+  
+  // Used Cars specific
+  yearRange: z.string().optional().nullable(),
+  maxKmDriven: z.union([z.string(), z.number()]).optional().nullable(),
+  ownershipPreference: z.string().optional().nullable(),
+  accidentHistoryPreference: z.string().optional().nullable(),
+
+  // Exclusive/Marketplace fields
+  visibility: z.enum(['marketplace', 'exclusive']).optional().default('marketplace'),
+  exclusiveDealerId: z.union([z.string(), z.number()]).optional().nullable(),
+  exclusiveDealerName: z.string().optional().nullable(),
 });
 
 const offerSchema = z.object({
   requirementId: z.number().int(),
-  brokerName: z.string().optional(),
-  brokerPhone: z.string().optional(),
   price: z.string().min(1),
-  details: z.string().optional()
+  variant: z.string().min(1, 'Vehicle Variant is required.'),
+  year: z.union([z.string(), z.number()]),
+  dealerName: z.string().min(1, 'Dealer Name is required.'),
+  dealerLocation: z.string().min(1, 'Dealer Location is required.'),
+  priceBreakdown: z.string().optional().nullable(),
+  deliveryTime: z.string().optional().nullable(),
+  stockStatus: z.string().optional().nullable(),
+  benefits: z.string().optional().nullable(),
+  details: z.string().optional().nullable(),
+  registrationYear: z.union([z.string(), z.number()]).optional().nullable(),
+  kmDriven: z.union([z.string(), z.number()]).optional().nullable(),
+  ownership: z.string().optional().nullable(),
+  insuranceValidTill: z.string().optional().nullable(),
+  serviceHistory: z.string().optional().nullable(),
+  vehicleCondition: z.string().optional().nullable(),
 });
 
 const listingSchema = z.object({
@@ -667,6 +696,19 @@ app.get('/api/data', authenticate, async (_req, res) => {
     description: r.description,
     status: r.status,
     createdAt: r.created_at,
+    vehicleType: r.vehicle_type ?? 'new',
+    variant: r.variant ?? '',
+    budgetMin: r.budget_min ? formatBudget(r.budget_min) : '',
+    budgetMax: r.budget_max ? formatBudget(r.budget_max) : '',
+    state: r.state ?? 'Tamil Nadu',
+    city: r.city ?? '',
+    fuelType: r.fuel_type ?? '',
+    transmission: r.transmission ?? '',
+    colorPreference: r.color_preference ?? '',
+    purchaseTimeline: r.purchase_timeline ?? '',
+    maxKmDriven: r.max_km_driven ?? null,
+    ownershipPreference: r.ownership_preference ?? '',
+    accidentHistoryPreference: r.accident_history_preference ?? '',
   }));
 
   const offerRows = await db.all(`
@@ -686,6 +728,21 @@ app.get('/api/data', authenticate, async (_req, res) => {
     status: o.status,
     isRead: !!o.is_read,
     createdAt: o.created_at,
+    variant: o.variant ?? '',
+    year: o.year ?? null,
+    dealerName: o.dealer_name ?? '',
+    dealerLocation: o.dealer_location ?? '',
+    priceBreakdown: o.price_breakdown ?? '',
+    deliveryTime: o.delivery_time ?? '',
+    stockStatus: o.stock_status ?? '',
+    benefits: o.benefits ?? '',
+    registrationYear: o.registration_year ?? null,
+    kmDriven: o.km_driven ?? null,
+    ownership: o.ownership ?? '',
+    insuranceValidTill: o.insurance_valid_till ?? '',
+    serviceHistory: o.service_history ?? '',
+    vehicleCondition: o.vehicle_condition ?? '',
+    shortlisted: !!o.shortlisted,
   }));
 
   const listingRows = await db.all(`
@@ -737,21 +794,25 @@ app.get('/api/data', authenticate, async (_req, res) => {
 app.post('/api/requirements', authenticate, async (req, res) => {
   const result = requirementSchema.safeParse(req.body);
   if (!result.success) {
-    return res.status(400).json({ error: 'Please fill in all required fields (make, model, budget).' });
+    return res.status(400).json({ error: 'Please fill in all required fields.' });
   }
   const payload = result.data;
   // Use authenticated user's ID, not client-supplied
   const buyerId = Number(req.user.sub);
   const { minYear, maxYear } = parseYearRange(payload.yearRange);
-  const budgetValue = parseBudgetNumber(payload.budget);
+  const budgetValue = parseBudgetNumber(payload.budgetMax || payload.budget || '0');
   const resolved = payload.make ? await resolveBrandModelIds(payload.make, payload.model) : { brandId: null, modelId: null };
   const brandId = payload.brandId ?? resolved.brandId;
   const modelId = payload.modelId ?? resolved.modelId;
 
   const created = await db.get(
     `
-      INSERT INTO requirements (buyer_id, brand_id, model_id, min_year, max_year, budget, preferred_feature, description, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open')
+      INSERT INTO requirements (
+        buyer_id, brand_id, model_id, min_year, max_year, budget, preferred_feature, description, status,
+        vehicle_type, variant, budget_min, budget_max, state, city, fuel_type, transmission,
+        color_preference, purchase_timeline, max_km_driven, ownership_preference, accident_history_preference
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING id
     `,
     [
@@ -763,6 +824,19 @@ app.post('/api/requirements', authenticate, async (req, res) => {
       budgetValue,
       payload.preferredFeature ?? null,
       payload.description || '',
+      payload.vehicleType,
+      payload.variant ?? null,
+      parseBudgetNumber(payload.budgetMin || '0'),
+      parseBudgetNumber(payload.budgetMax || '0'),
+      payload.state,
+      payload.city,
+      payload.fuelType ?? null,
+      payload.transmission ?? null,
+      payload.colorPreference ?? null,
+      payload.purchaseTimeline ?? null,
+      payload.maxKmDriven ? Number(payload.maxKmDriven) : null,
+      payload.ownershipPreference ?? null,
+      payload.accidentHistoryPreference ?? null
     ]
   );
   res.json({ ok: true, id: created.id });
@@ -792,8 +866,13 @@ app.post('/api/offers', authenticate, requireRole('broker'), async (req, res) =>
   const priceValue = parseBudgetNumber(o.price);
   const created = await db.get(
     `
-      INSERT INTO offers (requirement_id, broker_id, price, details, status)
-      VALUES ($1, $2, $3, $4, 'pending')
+      INSERT INTO offers (
+        requirement_id, broker_id, price, details, status,
+        variant, year, dealer_name, dealer_location, price_breakdown,
+        delivery_time, stock_status, benefits, registration_year, km_driven,
+        ownership, insurance_valid_till, service_history, vehicle_condition
+      )
+      VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING id
     `,
     [
@@ -801,6 +880,20 @@ app.post('/api/offers', authenticate, requireRole('broker'), async (req, res) =>
       brokerId,
       priceValue,
       o.details || null,
+      o.variant,
+      o.year ? Number(o.year) : null,
+      o.dealerName,
+      o.dealerLocation,
+      o.priceBreakdown || null,
+      o.deliveryTime || null,
+      o.stockStatus || null,
+      o.benefits || null,
+      o.registrationYear ? Number(o.registrationYear) : null,
+      o.kmDriven ? Number(o.kmDriven) : null,
+      o.ownership || null,
+      o.insuranceValidTill || null,
+      o.serviceHistory || null,
+      o.vehicleCondition || null
     ]
   );
   res.json({ ok: true, id: created.id });
@@ -808,6 +901,19 @@ app.post('/api/offers', authenticate, requireRole('broker'), async (req, res) =>
 
 app.patch('/api/offers/:id/read', authenticate, async (req, res) => {
   await db.run('UPDATE offers SET is_read = TRUE WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+app.patch('/api/offers/:id/shortlist', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { shortlisted } = req.body;
+  const offer = await db.get('SELECT requirement_id FROM offers WHERE id = $1', [id]);
+  if (!offer) return res.status(404).json({ error: 'Offer not found.' });
+  const requirement = await db.get('SELECT buyer_id FROM requirements WHERE id = $1', [offer.requirement_id]);
+  if (requirement && Number(requirement.buyer_id) !== Number(req.user.sub) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only shortlist offers on your own requirements.' });
+  }
+  await db.run('UPDATE offers SET shortlisted = $1 WHERE id = $2', [!!shortlisted, id]);
   res.json({ ok: true });
 });
 

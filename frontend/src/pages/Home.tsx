@@ -81,6 +81,13 @@ const Home: React.FC = () => {
           budget: heroBudget,
           preferredFeature: '',
           description: fullDesc,
+          vehicleType: yearRange ? 'used' : 'new',
+          state: 'Tamil Nadu',
+          city: 'Chennai',
+          budgetMin: '0',
+          budgetMax: heroBudget.replace(/[^\d.]/g, ''),
+          fuelType: heroFuel || 'Any',
+          transmission: heroTransmission || 'Any',
         });
         toast.success('Requirement posted successfully!');
         navigate('/buyer-dashboard');

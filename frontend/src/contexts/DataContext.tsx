@@ -9,12 +9,36 @@ export interface Requirement {
   buyerId: number;
   make: string;
   model: string;
-  yearRange: string;
+  yearRange?: string; // Optional for new cars
   budget: string;
-  preferredFeature: string;
-  description: string;
+  preferredFeature?: string;
+  description?: string; // Additional notes
   status: 'open' | 'closed';
   createdAt: string;
+
+  // New common fields
+  vehicleType: 'new' | 'used';
+  variant?: string;
+  budgetMin?: string;
+  budgetMax?: string;
+  state: string;
+  city: string;
+
+  // For New Cars
+  fuelType?: string;
+  transmission?: string;
+  colorPreference?: string;
+  purchaseTimeline?: string;
+
+  // For Used Cars
+  maxKmDriven?: number;
+  ownershipPreference?: string;
+  accidentHistoryPreference?: string;
+
+  // Exclusive/Marketplace fields
+  visibility?: 'marketplace' | 'exclusive';
+  exclusiveDealerId?: number | string | null;
+  exclusiveDealerName?: string | null;
 }
 
 export interface Offer {
@@ -24,10 +48,33 @@ export interface Offer {
   brokerName: string;
   brokerPhone: string;
   price: string;
-  details: string;
+  details?: string; // Notes
   status: 'pending' | 'accepted' | 'rejected';
   isRead: boolean;
   createdAt: string;
+
+  // New Mandatory Fields
+  variant: string;
+  year: number;
+  dealerName: string;
+  dealerLocation: string;
+
+  // Optional/Recommended
+  priceBreakdown?: string;
+  deliveryTime?: string;
+  stockStatus?: string;
+  benefits?: string;
+
+  // For Used Cars
+  registrationYear?: number;
+  kmDriven?: number;
+  ownership?: string;
+  insuranceValidTill?: string;
+  serviceHistory?: string;
+  vehicleCondition?: string;
+
+  // Workflow state
+  shortlisted?: boolean;
 }
 
 export interface BrokerListing {
@@ -65,6 +112,7 @@ interface DataContextType {
   rejectOffer: (offerId: number) => void;
   markOfferRead: (offerId: number) => void;
   negotiateOffer: (offerId: number, counterPrice: string) => Promise<void>;
+  shortlistOffer: (offerId: number, shortlisted: boolean) => Promise<void>;
   addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<number | null>;
   removeBrokerListing: (id: number) => void;
   refreshData: () => Promise<void>;
@@ -217,7 +265,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOffers((prev) =>
       prev.map((o) =>
         o.id === offerId
-          ? { ...o, details: `${o.details.split('\n[Negotiated:')[0].trim()}\n[Negotiated: ${counterPrice}]`, status: 'pending' }
+          ? { ...o, details: `${(o.details || '').split('\n[Negotiated:')[0].trim()}\n[Negotiated: ${counterPrice}]`, status: 'pending' }
           : o
       )
     );
@@ -226,6 +274,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ counterPrice }),
+      }).catch(console.error);
+    }
+  };
+  const shortlistOffer = async (offerId: number, shortlisted: boolean) => {
+    setOffers((prev) =>
+      prev.map((o) =>
+        o.id === offerId
+          ? { ...o, shortlisted }
+          : o
+      )
+    );
+    if (isLoaded) {
+      await fetch(`${API_BASE}/api/offers/${offerId}/shortlist`, {
+        method: 'PATCH',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ shortlisted }),
       }).catch(console.error);
     }
   };
@@ -310,6 +374,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rejectOffer,
         markOfferRead,
         negotiateOffer,
+        shortlistOffer,
         addBrokerListing,
         removeBrokerListing,
         refreshData,

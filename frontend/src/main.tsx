@@ -7,6 +7,7 @@ import { DataProvider } from './contexts/DataContext.tsx'
 import { LanguageProvider } from './contexts/LanguageContext.tsx'
 import { CatalogProvider } from './contexts/CatalogContext.tsx'
 import { LocationProvider } from './contexts/LocationContext.tsx'
+import { NotificationProvider } from './contexts/NotificationContext.tsx'
 import { Toaster } from 'react-hot-toast'
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -28,22 +29,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <CatalogProvider>
         <AuthProvider>
           <DataProvider>
-            <LocationProvider>
-              <App />
-              <Toaster
-                position="top-center"
-                toastOptions={{
-                  duration: 3000,
-                  style: {
-                    borderRadius: '14px',
-                    border: '1px solid #fca5a5',
-                    background: '#fff1f2',
-                    color: '#9f1239',
-                    fontWeight: '600',
-                  },
-                }}
-              />
-            </LocationProvider>
+            <NotificationProvider>
+              <LocationProvider>
+                <App />
+                <Toaster
+                  position="top-center"
+                  toastOptions={{
+                    duration: 3000,
+                    style: {
+                      borderRadius: '14px',
+                      border: '1px solid #fca5a5',
+                      background: '#fff1f2',
+                      color: '#9f1239',
+                      fontWeight: '600',
+                    },
+                  }}
+                />
+              </LocationProvider>
+            </NotificationProvider>
           </DataProvider>
         </AuthProvider>
       </CatalogProvider>

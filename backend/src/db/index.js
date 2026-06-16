@@ -198,6 +198,65 @@ export async function initDb() {
     }
   }
 
+  // Requirements migrations
+  const reqCols = [
+    { name: 'vehicle_type', type: "VARCHAR(30) DEFAULT 'new'" },
+    { name: 'variant', type: 'VARCHAR(150)' },
+    { name: 'budget_min', type: 'NUMERIC(12,2)' },
+    { name: 'budget_max', type: 'NUMERIC(12,2)' },
+    { name: 'state', type: 'VARCHAR(100)' },
+    { name: 'city', type: 'VARCHAR(100)' },
+    { name: 'fuel_type', type: 'VARCHAR(50)' },
+    { name: 'transmission', type: 'VARCHAR(50)' },
+    { name: 'color_preference', type: 'VARCHAR(100)' },
+    { name: 'purchase_timeline', type: 'VARCHAR(50)' },
+    { name: 'max_km_driven', type: 'INTEGER' },
+    { name: 'ownership_preference', type: 'VARCHAR(50)' },
+    { name: 'accident_history_preference', type: 'VARCHAR(50)' },
+    { name: 'visibility', type: "VARCHAR(50) DEFAULT 'marketplace'" },
+    { name: 'exclusive_dealer_id', type: 'INTEGER' },
+    { name: 'exclusive_dealer_name', type: 'VARCHAR(200)' }
+  ];
+
+  for (const col of reqCols) {
+    try {
+      await db.run(`ALTER TABLE requirements ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (requirements ${col.name}):`, err);
+      }
+    }
+  }
+
+  // Offers migrations
+  const offerCols = [
+    { name: 'variant', type: 'VARCHAR(150)' },
+    { name: 'year', type: 'INTEGER' },
+    { name: 'dealer_name', type: 'VARCHAR(200)' },
+    { name: 'dealer_location', type: 'VARCHAR(150)' },
+    { name: 'price_breakdown', type: 'TEXT' },
+    { name: 'delivery_time', type: 'VARCHAR(100)' },
+    { name: 'stock_status', type: 'VARCHAR(50)' },
+    { name: 'benefits', type: 'TEXT' },
+    { name: 'registration_year', type: 'INTEGER' },
+    { name: 'km_driven', type: 'INTEGER' },
+    { name: 'ownership', type: 'VARCHAR(50)' },
+    { name: 'insurance_valid_till', type: 'VARCHAR(100)' },
+    { name: 'service_history', type: 'VARCHAR(100)' },
+    { name: 'vehicle_condition', type: 'VARCHAR(100)' },
+    { name: 'shortlisted', type: 'BOOLEAN DEFAULT FALSE' }
+  ];
+
+  for (const col of offerCols) {
+    try {
+      await db.run(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (offers ${col.name}):`, err);
+      }
+    }
+  }
+
   try {
     await db.run("ALTER TABLE users ADD COLUMN otp_code VARCHAR(10);");
   } catch (err) {
