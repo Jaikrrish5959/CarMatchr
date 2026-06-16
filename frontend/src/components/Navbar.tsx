@@ -60,7 +60,7 @@ const Navbar: React.FC = () => {
   const locPicker = (
     <div ref={locRef} style={{ position: 'relative' }}>
       <button
-        onClick={() => setShowLoc(!showLoc)}
+        onMouseDown={e => { e.preventDefault(); setShowLoc(o => !o); if (showLoc) setLocSearch(''); }}
         className="btn btn-ghost btn-sm"
         style={{
           gap: '5px', fontSize: '0.8125rem',
@@ -81,16 +81,19 @@ const Navbar: React.FC = () => {
       </button>
 
       {showLoc && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0,
-          background: 'rgba(255,255,255,0.97)',
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          borderRadius: '12px',
-          boxShadow: '0 12px 40px rgba(15,23,42,0.13)',
-          border: '1px solid rgba(15,23,42,0.08)',
-          width: '220px', zIndex: 300, overflow: 'hidden',
-        }}>
+        <div 
+          style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+            background: 'rgba(255,255,255,0.97)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            borderRadius: '12px',
+            boxShadow: '0 12px 40px rgba(15,23,42,0.13)',
+            border: '1px solid rgba(15,23,42,0.08)',
+            width: '220px', zIndex: 300, overflow: 'hidden',
+          }}
+          onMouseDown={e => e.stopPropagation()}
+        >
           {/* Search box */}
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
             <input
@@ -98,7 +101,6 @@ const Navbar: React.FC = () => {
               placeholder="Search district…"
               value={locSearch}
               onChange={e => setLocSearch(e.target.value)}
-              autoFocus
               style={{
                 width: '100%', padding: '6px 10px', fontSize: '0.8125rem',
                 border: '1px solid #e2e8f0', borderRadius: '7px',
@@ -115,7 +117,7 @@ const Navbar: React.FC = () => {
             {/* Tamil Nadu (All) — pinned */}
             {(!locSearch || 'Tamil Nadu'.toLowerCase().includes(locSearch.toLowerCase())) && (
               <button
-                onClick={() => handleSelectLoc('Tamil Nadu')}
+                onMouseDown={e => { e.preventDefault(); handleSelectLoc('Tamil Nadu'); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   width: '100%', padding: '10px 14px', border: 'none',
@@ -149,7 +151,7 @@ const Navbar: React.FC = () => {
             {filteredDistricts.map(name => (
               <button
                 key={name}
-                onClick={() => handleSelectLoc(name)}
+                onMouseDown={e => { e.preventDefault(); handleSelectLoc(name); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   width: '100%', padding: '8px 14px', border: 'none',
