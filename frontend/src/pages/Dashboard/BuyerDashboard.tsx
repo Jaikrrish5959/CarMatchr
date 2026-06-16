@@ -5,7 +5,8 @@ import { useCatalog } from '../../hooks/useCatalog';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles,
-  Phone, CalendarRange, Star, Bell, MapPin, List, Settings, HelpCircle
+  Phone, CalendarRange, Star, Bell, MapPin, List, Settings, HelpCircle,
+  Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { LocationSelector, type LocationValue, EMPTY_LOCATION, locationLabel } from '../../components/LocationSelector';
@@ -69,6 +70,24 @@ const BuyerDashboard: React.FC = () => {
   const { brands } = useCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'active';
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const [showForm, setShowForm] = useState(false);
   const [make, setMake] = useState('');
@@ -932,385 +951,445 @@ const BuyerDashboard: React.FC = () => {
   };
 
   return (
-    <section style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', paddingTop: '40px', paddingBottom: '80px' }}>
-      <div className="container" style={{ maxWidth: '1300px' }}>
-        
-        {/* ===== TWO COLUMN LAYOUT ===== */}
-        <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-          
-          {/* ----- LEFT SIDEBAR ----- */}
-          <div style={{
-            width: '280px',
-            flexShrink: 0,
-            background: '#fff',
-            borderRadius: '24px',
-            border: '1px solid #e2e8f0',
-            padding: '24px 16px',
+    <section style={{ display: 'flex', minHeight: 'calc(100vh - 60px)', position: 'relative', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+      
+      {/* Mobile Backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: '60px',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 89,
+            transition: 'opacity 0.3s ease'
+          }}
+        />
+      )}
+
+      {/* ----- LEFT SIDEBAR ----- */}
+      <div style={{
+        position: 'fixed',
+        top: '60px',
+        bottom: 0,
+        left: 0,
+        width: sidebarOpen ? '280px' : '0px',
+        background: '#fff',
+        borderRight: '1px solid #e2e8f0',
+        padding: sidebarOpen ? '24px 16px' : '24px 0px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        zIndex: 90,
+        overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        opacity: sidebarOpen ? 1 : 0
+      }}>
+        {/* My Requirements Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px 16px',
+          color: '#475569',
+          fontWeight: 700,
+          fontSize: '0.9375rem',
+          whiteSpace: 'nowrap'
+        }}>
+          <Car size={18} style={{ color: '#475569' }} />
+          <span>My Requirements</span>
+        </div>
+
+        {/* Sub-item: Active Requirements */}
+        <button
+          onClick={() => { setTab('active'); if (isMobile) setSidebarOpen(false); }}
+          style={{
             display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            height: 'fit-content',
-            boxShadow: '0 4px 20px rgba(15,23,42,0.03)'
-          }}>
-            {/* My Requirements Header */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              color: '#475569',
-              fontWeight: 700,
-              fontSize: '0.9375rem',
-            }}>
-              <Car size={18} style={{ color: '#475569' }} />
-              <span>My Requirements</span>
-            </div>
-
-            {/* Sub-item: Active Requirements */}
-            <button
-              onClick={() => setTab('active')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                padding: '10px 16px 10px 36px',
-                borderRadius: '12px',
-                border: 'none',
-                background: currentTab === 'active' ? '#fff0f1' : 'transparent',
-                color: currentTab === 'active' ? '#e63946' : '#526071',
-                fontFamily: 'var(--font)',
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: currentTab === 'active' ? '#e63946' : '#94a3b8',
-                  display: 'inline-block'
-                }}></span>
-                <span>Active Requirements</span>
-              </div>
-              {activeReqs > 0 && (
-                <span style={{
-                  background: '#e63946',
-                  color: '#fff',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {activeReqs}
-                </span>
-              )}
-            </button>
-
-            {/* Sub-item: Completed */}
-            <button
-              onClick={() => setTab('completed')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                padding: '10px 16px 10px 36px',
-                borderRadius: '12px',
-                border: 'none',
-                background: currentTab === 'completed' ? '#fff0f1' : 'transparent',
-                color: currentTab === 'completed' ? '#e63946' : '#526071',
-                fontFamily: 'var(--font)',
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: currentTab === 'completed' ? '#e63946' : '#94a3b8',
-                  display: 'inline-block'
-                }}></span>
-                <span>Completed</span>
-              </div>
-              {completedReqs > 0 && (
-                <span style={{
-                  background: '#059669',
-                  color: '#fff',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {completedReqs}
-                </span>
-              )}
-            </button>
-
-            {/* Sub-item: Deal History */}
-            <button
-              onClick={() => setTab('history')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                padding: '10px 16px 10px 36px',
-                borderRadius: '12px',
-                border: 'none',
-                background: currentTab === 'history' ? '#fff0f1' : 'transparent',
-                color: currentTab === 'history' ? '#e63946' : '#526071',
-                fontFamily: 'var(--font)',
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: currentTab === 'history' ? '#e63946' : '#94a3b8',
-                  display: 'inline-block'
-                }}></span>
-                <span>Deal History</span>
-              </div>
-            </button>
-
-            {/* Sub-item: All Posted */}
-            <button
-              onClick={() => setTab('all')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                padding: '10px 16px 10px 36px',
-                borderRadius: '12px',
-                border: 'none',
-                background: currentTab === 'all' ? '#fff0f1' : 'transparent',
-                color: currentTab === 'all' ? '#e63946' : '#526071',
-                fontFamily: 'var(--font)',
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: currentTab === 'all' ? '#e63946' : '#94a3b8',
-                  display: 'inline-block'
-                }}></span>
-                <span>All Posted</span>
-              </div>
-              {totalPosted > 0 && (
-                <span style={{
-                  background: '#2563eb',
-                  color: '#fff',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {totalPosted}
-                </span>
-              )}
-            </button>
-            
-            <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0' }} />
-            
-            {/* Messages */}
-            <button style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: 'none',
-              background: 'transparent',
-              color: '#526071',
-              fontFamily: 'var(--font)',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'all 0.2s',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <MessageSquare size={18} style={{ color: '#526071' }} />
-                <span>Messages</span>
-              </div>
-              <span style={{
-                background: '#e63946',
-                color: '#fff',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                3
-              </span>
-            </button>
-
-            {/* Notifications */}
-            <button style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: 'none',
-              background: 'transparent',
-              color: '#526071',
-              fontFamily: 'var(--font)',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'all 0.2s',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Bell size={18} style={{ color: '#526071' }} />
-                <span>Notifications</span>
-              </div>
-              <span style={{
-                background: '#e63946',
-                color: '#fff',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                5
-              </span>
-            </button>
-            
-            <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0' }} />
-            
-            {/* Profile Settings */}
-            <button style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: 'none',
-              background: 'transparent',
-              color: '#526071',
-              fontFamily: 'var(--font)',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'all 0.2s',
-            }}>
-              <Settings size={18} style={{ color: '#526071' }} />
-              <span>Profile Settings</span>
-            </button>
-
-            {/* Help & Support */}
-            <button style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: 'none',
-              background: 'transparent',
-              color: '#526071',
-              fontFamily: 'var(--font)',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'all 0.2s',
-            }}>
-              <HelpCircle size={18} style={{ color: '#526071' }} />
-              <span>Help & Support</span>
-            </button>
-            
-            {/* Support Expert Card */}
-            <div style={{
-              background: '#f4f7fa',
-              borderRadius: '20px',
-              padding: '20px 16px',
-              marginTop: '24px',
-              border: '1px solid #e2e8f0',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: '#0f172a', marginBottom: '4px' }}>Need Help?</div>
-              <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: '16px' }}>Talk to our experts</div>
-              <a href="tel:+919150091500" style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                background: '#fff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '12px',
-                padding: '10px 12px',
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                color: '#e63946',
-                textDecoration: 'none'
-              }}>
-                <Phone size={14} fill="#e63946" color="#e63946" />
-                +91 91500 91500
-              </a>
-            </div>
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '10px 16px 10px 36px',
+            borderRadius: '12px',
+            border: 'none',
+            background: currentTab === 'active' ? '#fff0f1' : 'transparent',
+            color: currentTab === 'active' ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: currentTab === 'active' ? '#e63946' : '#94a3b8',
+              display: 'inline-block'
+            }}></span>
+            <span>Active Requirements</span>
           </div>
-          
-          {/* ----- MAIN CONTENT AREA ----- */}
-          <div style={{ flex: '1 1 800px', minWidth: 0 }}>
+          {activeReqs > 0 && (
+            <span style={{
+              background: '#e63946',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {activeReqs}
+            </span>
+          )}
+        </button>
+
+        {/* Sub-item: Completed */}
+        <button
+          onClick={() => { setTab('completed'); if (isMobile) setSidebarOpen(false); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '10px 16px 10px 36px',
+            borderRadius: '12px',
+            border: 'none',
+            background: currentTab === 'completed' ? '#fff0f1' : 'transparent',
+            color: currentTab === 'completed' ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: currentTab === 'completed' ? '#e63946' : '#94a3b8',
+              display: 'inline-block'
+            }}></span>
+            <span>Completed</span>
+          </div>
+          {completedReqs > 0 && (
+            <span style={{
+              background: '#059669',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {completedReqs}
+            </span>
+          )}
+        </button>
+
+        {/* Sub-item: Deal History */}
+        <button
+          onClick={() => { setTab('history'); if (isMobile) setSidebarOpen(false); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '10px 16px 10px 36px',
+            borderRadius: '12px',
+            border: 'none',
+            background: currentTab === 'history' ? '#fff0f1' : 'transparent',
+            color: currentTab === 'history' ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: currentTab === 'history' ? '#e63946' : '#94a3b8',
+              display: 'inline-block'
+            }}></span>
+            <span>Deal History</span>
+          </div>
+        </button>
+
+        {/* Sub-item: All Posted */}
+        <button
+          onClick={() => { setTab('all'); if (isMobile) setSidebarOpen(false); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '10px 16px 10px 36px',
+            borderRadius: '12px',
+            border: 'none',
+            background: currentTab === 'all' ? '#fff0f1' : 'transparent',
+            color: currentTab === 'all' ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: currentTab === 'all' ? '#e63946' : '#94a3b8',
+              display: 'inline-block'
+            }}></span>
+            <span>All Posted</span>
+          </div>
+          {totalPosted > 0 && (
+            <span style={{
+              background: '#2563eb',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {totalPosted}
+            </span>
+          )}
+        </button>
+        
+        <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />
+        
+        {/* Messages */}
+        <button style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          border: 'none',
+          background: 'transparent',
+          color: '#526071',
+          fontFamily: 'var(--font)',
+          fontWeight: 700,
+          fontSize: '0.875rem',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s',
+          whiteSpace: 'nowrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <MessageSquare size={18} style={{ color: '#526071' }} />
+            <span>Messages</span>
+          </div>
+          <span style={{
+            background: '#e63946',
+            color: '#fff',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            3
+          </span>
+        </button>
+
+        {/* Notifications */}
+        <button style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          border: 'none',
+          background: 'transparent',
+          color: '#526071',
+          fontFamily: 'var(--font)',
+          fontWeight: 700,
+          fontSize: '0.875rem',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s',
+          whiteSpace: 'nowrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Bell size={18} style={{ color: '#526071' }} />
+            <span>Notifications</span>
+          </div>
+          <span style={{
+            background: '#e63946',
+            color: '#fff',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            5
+          </span>
+        </button>
+        
+        <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />
+        
+        {/* Profile Settings */}
+        <button style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          width: '100%',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          border: 'none',
+          background: 'transparent',
+          color: '#526071',
+          fontFamily: 'var(--font)',
+          fontWeight: 700,
+          fontSize: '0.875rem',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s',
+          whiteSpace: 'nowrap'
+        }}>
+          <Settings size={18} style={{ color: '#526071' }} />
+          <span>Profile Settings</span>
+        </button>
+
+        {/* Help & Support */}
+        <button style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          width: '100%',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          border: 'none',
+          background: 'transparent',
+          color: '#526071',
+          fontFamily: 'var(--font)',
+          fontWeight: 700,
+          fontSize: '0.875rem',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'all 0.2s',
+          whiteSpace: 'nowrap'
+        }}>
+          <HelpCircle size={18} style={{ color: '#526071' }} />
+          <span>Help & Support</span>
+        </button>
+        
+        {/* Support Expert Card */}
+        <div style={{
+          background: '#f4f7fa',
+          borderRadius: '20px',
+          padding: '20px 16px',
+          marginTop: 'auto',
+          border: '1px solid #e2e8f0',
+          textAlign: 'center',
+          display: sidebarOpen ? 'block' : 'none'
+        }}>
+          <div style={{ fontWeight: 800, fontSize: '0.9375rem', color: '#0f172a', marginBottom: '4px' }}>Need Help?</div>
+          <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: '16px' }}>Talk to our experts</div>
+          <a href="tel:+919150091500" style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: '#fff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '12px',
+            padding: '10px 12px',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            color: '#e63946',
+            textDecoration: 'none'
+          }}>
+            <Phone size={14} fill="#e63946" color="#e63946" />
+            +91 91500 91500
+          </a>
+        </div>
+      </div>
+
+      {/* ----- MAIN CONTENT AREA ----- */}
+      <div style={{
+        flexGrow: 1,
+        marginLeft: (!isMobile && sidebarOpen) ? '280px' : '0px',
+        transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        padding: isMobile ? '24px 16px 80px' : '40px 48px 80px',
+        minWidth: 0,
+        width: '100%'
+      }}>
 
             {/* ===== PAGE HEADER ===== */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '4px' }}>
-                  My Requirements
-                </h1>
-                <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>Post what you need. Verified dealers compete to get you the best deal.</p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                {/* Sidebar Toggle Button */}
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    background: '#fff',
+                    color: '#475569',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    flexShrink: 0
+                  }}
+                  onMouseOver={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+                  onMouseOut={e => { e.currentTarget.style.background = '#fff'; }}
+                  title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '4px' }}>
+                    My Requirements
+                  </h1>
+                  <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>Post what you need. Verified dealers compete to get you the best deal.</p>
+                </div>
               </div>
               <button
                 onClick={() => setShowForm(!showForm)}
@@ -1739,9 +1818,6 @@ const BuyerDashboard: React.FC = () => {
             {renderActiveTabContent()}
 
           </div>
-        </div>
-
-      </div>
 
       {/* ===== DEAL SUMMARY MODAL ===== */}
       {summaryReqId !== null && (() => {
