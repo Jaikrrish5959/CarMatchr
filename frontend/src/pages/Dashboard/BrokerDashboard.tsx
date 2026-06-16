@@ -7,12 +7,13 @@ import {
   MessageCircle, FileText, HelpCircle, Target, ChevronLeft, ChevronRight,
   Zap, ArrowRight, Phone,
 } from 'lucide-react';
-import { cities, bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
+import { bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
 import { useCatalog } from '../../hooks/useCatalog';
 import { getToken } from '../../services/authService';
 import { API_BASE } from '../../services/api';
 import toast from 'react-hot-toast';
 import type { BrokerListing, Requirement } from '../../contexts/DataContext';
+import { LocationSelector, MultiDistrictPicker, type LocationValue, EMPTY_LOCATION, locationLabel } from '../../components/LocationSelector';
 
 // ============================================================
 //  HELPER FUNCTIONS
@@ -124,6 +125,8 @@ const BrokerDashboard: React.FC = () => {
     fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV',
     color: '', city: '', kmDriven: 0, owners: 1, description: '',
   });
+  const [listLocation, setListLocation] = useState<LocationValue>(EMPTY_LOCATION);
+  const [serviceDistricts, setServiceDistricts] = useState<string[]>([]);
 
   /* ---- PENDING STATE ---- */
   if (user?.status === 'pending') {
@@ -196,7 +199,10 @@ const BrokerDashboard: React.FC = () => {
   const handleListCar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id || !user?.businessName) return;
-    const listingId = await addBrokerListing({ brokerId: user.id, brokerName: user.businessName, ...listForm });
+    // Merge location into city field for backward compatibility
+    const cityValue = locationLabel(listLocation) || listForm.city;
+    const submittableForm = { ...listForm, city: cityValue };
+    const listingId = await addBrokerListing({ brokerId: user.id, brokerName: user.businessName, ...submittableForm });
     if (listingId && imageFiles.length > 0) {
       const formData = new FormData();
       imageFiles.forEach(f => formData.append('images', f));
@@ -210,6 +216,7 @@ const BrokerDashboard: React.FC = () => {
     }
     setShowListForm(false);
     setImageFiles([]);
+    setListLocation(EMPTY_LOCATION);
     setListForm({ make: '', model: '', variant: '', year: 2024, price: 0, fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV', color: '', city: '', kmDriven: 0, owners: 1, description: '' });
   };
 
@@ -973,13 +980,23 @@ const BrokerDashboard: React.FC = () => {
                         {bodyTypes.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
                     </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">City *</label>
-                      <select className="form-control" required value={listForm.city}
-                        onChange={e => setListForm({ ...listForm, city: e.target.value })}>
-                        <option value="">Select City</option>
-                        {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                      </select>
+                    <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={13} /> Car Location (District → Taluk → Area) *
+                      </label>
+                      <LocationSelector
+                        value={listLocation}
+                        onChange={loc => {
+                          setListLocation(loc);
+                          setListForm({ ...listForm, city: locationLabel(loc) });
+                        }}
+                        required
+                      />
+                      {locationLabel(listLocation) && (
+                        <p style={{ fontSize: '0.75rem', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <MapPin size={11} /> {locationLabel(listLocation)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1011,10 +1028,23 @@ const BrokerDashboard: React.FC = () => {
                     )}
                   </div>
 
+
+                  {/* Service Area */}
+                  <div className="form-group" style={{ margin: 0, marginTop: '14px' }}>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <MapPin size={14} /> My Service Districts (multi-select)
+                    </label>
+                    <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '10px' }}>
+                      Select all Tamil Nadu districts where you operate. Buyers in these districts will see your listings first.
+                    </p>
+                    <MultiDistrictPicker selectedDistricts={serviceDistricts} onChange={setServiceDistricts} />
+                  </div>
+
                   <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                     <button type="submit" className="btn btn-primary"><Plus size={15} /> Add to Marketplace</button>
                     <button type="button" onClick={() => setShowListForm(false)} className="btn btn-secondary">Cancel</button>
                   </div>
+
                 </form>
               </div>
             )}

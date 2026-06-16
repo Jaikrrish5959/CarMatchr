@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { budgetRanges, bodyTypes, fuelTypes, transmissions, type Filters } from '../data/carDatabase';
 import { useLanguage } from '../hooks/useLanguage';
 import { useCatalog } from '../hooks/useCatalog';
+import tnLocations from '../data/tn-locations.json';
 
 interface FilterPanelProps {
   filters: Filters;
@@ -59,6 +60,18 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onChange, onClose, r
               }}>
               <option value="">All Budgets</option>
               {budgetRanges.map(b => <option key={b.label} value={`${b.min}-${b.max}`}>{b.label}</option>)}
+            </select>
+          </div>
+
+          {/* Location — District */}
+          <div className="form-group">
+            <label className="form-label">Location (District)</label>
+            <select className="form-control" value={filters.city}
+              onChange={e => set('city', e.target.value)}>
+              <option value="">All Districts</option>
+              {((tnLocations as { districts: { id: string; name: string }[] }).districts).map(d => (
+                <option key={d.id} value={d.name}>{d.name}</option>
+              ))}
             </select>
           </div>
 

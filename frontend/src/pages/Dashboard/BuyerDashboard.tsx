@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
-import { Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles, Phone, Tag, CalendarRange, Star, Bell } from 'lucide-react';
+import { Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles, Phone, Tag, CalendarRange, Star, Bell, MapPin } from 'lucide-react';
 import { useCatalog } from '../../hooks/useCatalog';
 import toast from 'react-hot-toast';
+import { LocationSelector, type LocationValue, EMPTY_LOCATION, locationLabel } from '../../components/LocationSelector';
 
 const YEAR_LIST = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
@@ -19,6 +20,7 @@ const BuyerDashboard: React.FC = () => {
   const [maxYear, setMaxYear] = useState('');
   const [budget, setBudget] = useState('');
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const [submitting, setSubmitting] = useState(false);
   const selectedBrand = brands.find((b) => b.name === make);
   const modelFeatures = selectedBrand?.models.find((m) => m.name === model)?.features ?? [];
@@ -59,10 +61,11 @@ const BuyerDashboard: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await addRequirement({ buyerId: user.id, make, model, yearRange, budget, preferredFeature: feature, description });
+      const locStr = locationLabel(location);
+      await addRequirement({ buyerId: user.id, make, model, yearRange, budget, preferredFeature: feature, description: description + (locStr ? `\nPreferred Location: ${locStr}` : '') });
       toast.success('Requirement posted! Brokers will now send you offers.');
       setShowForm(false);
-      setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setBudget(''); setDescription('');
+      setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setBudget(''); setDescription(''); setLocation(EMPTY_LOCATION);
     } catch {
       toast.error('Failed to post requirement. Please try again.');
     } finally {
@@ -308,7 +311,21 @@ const BuyerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 4: Description */}
+              {/* Row 4: Preferred Location (District → Taluk → Area) */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <MapPin size={11} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                  Preferred Location (TN)
+                </label>
+                <LocationSelector value={location} onChange={setLocation} />
+                {locationLabel(location) && (
+                  <p style={{ fontSize: '0.75rem', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={11} /> {locationLabel(location)}
+                  </p>
+                )}
+              </div>
+
+              {/* Row 5: Description */}
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Additional Details

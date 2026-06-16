@@ -1,0 +1,1757 @@
+{
+  "state": "Tamil Nadu",
+  "stateCode": "TN",
+  "districts": [
+    {
+      "id": "TN-CHE",
+      "name": "Chennai",
+      "taluks": [
+        {
+          "id": "TN-CHE-T1",
+          "name": "Ambattur",
+          "areas": [
+            "Anna Nagar West",
+            "Anna Nagar East",
+            "Mogappair",
+            "Thirumangalam",
+            "Padi",
+            "Koyambedu",
+            "Arumbakkam",
+            "Villivakkam"
+          ]
+        },
+        {
+          "id": "TN-CHE-T2",
+          "name": "Egmore-Nungambakkam",
+          "areas": [
+            "Nungambakkam",
+            "Kilpauk",
+            "Chetpet",
+            "Purasawalkam",
+            "Egmore",
+            "Vepery",
+            "Kellys"
+          ]
+        },
+        {
+          "id": "TN-CHE-T3",
+          "name": "Madhavaram",
+          "areas": [
+            "Madhavaram",
+            "Perambur",
+            "Kolathur",
+            "Villivakkam",
+            "Tondiarpet",
+            "Tiruvottiyur"
+          ]
+        },
+        {
+          "id": "TN-CHE-T4",
+          "name": "Mylapore-Triplicane",
+          "areas": [
+            "Mylapore",
+            "Triplicane",
+            "Royapettah",
+            "T. Nagar",
+            "Adyar",
+            "Alwarpet",
+            "Mandaveli"
+          ]
+        },
+        {
+          "id": "TN-CHE-T5",
+          "name": "Sholinganallur",
+          "areas": [
+            "Sholinganallur",
+            "Perungudi",
+            "Thoraipakkam",
+            "Pallikaranai",
+            "Velachery",
+            "Medavakkam",
+            "Navalur",
+            "Siruseri"
+          ]
+        },
+        {
+          "id": "TN-CHE-T6",
+          "name": "Alandur",
+          "areas": [
+            "Alandur",
+            "Guindy",
+            "Ramapuram",
+            "Porur",
+            "Vadapalani",
+            "Ashok Nagar",
+            "Virugambakkam"
+          ]
+        },
+        {
+          "id": "TN-CHE-T7",
+          "name": "Tambaram",
+          "areas": [
+            "Tambaram",
+            "Chrompet",
+            "Pallavaram",
+            "Mudichur",
+            "Vandalur",
+            "Selaiyur",
+            "Perungalathur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-CBE",
+      "name": "Coimbatore",
+      "taluks": [
+        {
+          "id": "TN-CBE-T1",
+          "name": "Coimbatore North",
+          "areas": [
+            "Gandhipuram",
+            "RS Puram",
+            "Peelamedu",
+            "Singanallur",
+            "Ganapathy",
+            "Saravanampatti"
+          ]
+        },
+        {
+          "id": "TN-CBE-T2",
+          "name": "Coimbatore South",
+          "areas": [
+            "Saibaba Colony",
+            "Race Course",
+            "Avinashi Road",
+            "Hopes College",
+            "Telungupalayam",
+            "Ondipudur"
+          ]
+        },
+        {
+          "id": "TN-CBE-T3",
+          "name": "Mettupalayam",
+          "areas": [
+            "Mettupalayam",
+            "Sirumugai",
+            "Karamadai",
+            "Periyanaickenpalayam"
+          ]
+        },
+        {
+          "id": "TN-CBE-T4",
+          "name": "Pollachi",
+          "areas": [
+            "Pollachi",
+            "Anaimalai",
+            "Valparai",
+            "Udumalaipettai",
+            "Kinathukadavu"
+          ]
+        },
+        {
+          "id": "TN-CBE-T5",
+          "name": "Sulur",
+          "areas": [
+            "Sulur",
+            "Irugur",
+            "Kurichi",
+            "Podanur",
+            "Coimbatore Airport Area"
+          ]
+        },
+        {
+          "id": "TN-CBE-T6",
+          "name": "Annur",
+          "areas": [
+            "Annur",
+            "Avinashi",
+            "Tirupur (West)",
+            "Palladam"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-MDU",
+      "name": "Madurai",
+      "taluks": [
+        {
+          "id": "TN-MDU-T1",
+          "name": "Madurai North",
+          "areas": [
+            "Anna Nagar",
+            "KK Nagar",
+            "Tallakulam",
+            "SS Colony",
+            "Alagar Kovil Road"
+          ]
+        },
+        {
+          "id": "TN-MDU-T2",
+          "name": "Madurai South",
+          "areas": [
+            "Palanganatham",
+            "Goripalayam",
+            "Tirunagar",
+            "Mattuthavani",
+            "Vilangudi"
+          ]
+        },
+        {
+          "id": "TN-MDU-T3",
+          "name": "Madurai East",
+          "areas": [
+            "Sellur",
+            "Avaniyapuram",
+            "Koodal Nagar",
+            "Teppakulam"
+          ]
+        },
+        {
+          "id": "TN-MDU-T4",
+          "name": "Madurai West",
+          "areas": [
+            "Anaiyur",
+            "Simmakkal",
+            "Narimedu",
+            "Bibikulam"
+          ]
+        },
+        {
+          "id": "TN-MDU-T5",
+          "name": "Melur",
+          "areas": [
+            "Melur",
+            "Usilampatti",
+            "Thirumangalam",
+            "Kallikudi"
+          ]
+        },
+        {
+          "id": "TN-MDU-T6",
+          "name": "Peraiyur",
+          "areas": [
+            "Peraiyur",
+            "Kottampatti",
+            "Vadipatti",
+            "Sholavandan"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TRY",
+      "name": "Tiruchirappalli",
+      "taluks": [
+        {
+          "id": "TN-TRY-T1",
+          "name": "Tiruchirappalli",
+          "areas": [
+            "Srirangam",
+            "Woraiyur",
+            "Ariyamangalam",
+            "KK Nagar",
+            "Puthur",
+            "Thillai Nagar"
+          ]
+        },
+        {
+          "id": "TN-TRY-T2",
+          "name": "Lalgudi",
+          "areas": [
+            "Lalgudi",
+            "Manachanallur",
+            "Musiri",
+            "Pullambadi"
+          ]
+        },
+        {
+          "id": "TN-TRY-T3",
+          "name": "Manapparai",
+          "areas": [
+            "Manapparai",
+            "Thuraiyur",
+            "Marungapuri",
+            "Uppiliyapuram"
+          ]
+        },
+        {
+          "id": "TN-TRY-T4",
+          "name": "Srirangam",
+          "areas": [
+            "Srirangam",
+            "Thiruverumbur",
+            "Kattur",
+            "Golden Rock"
+          ]
+        },
+        {
+          "id": "TN-TRY-T5",
+          "name": "Tiruchirappalli West",
+          "areas": [
+            "Tennur",
+            "Karumandapam",
+            "Cantonment",
+            "Palakkarai"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-SLM",
+      "name": "Salem",
+      "taluks": [
+        {
+          "id": "TN-SLM-T1",
+          "name": "Salem",
+          "areas": [
+            "Fairlands",
+            "Suramangalam",
+            "Five Roads",
+            "Hasthampatti",
+            "Ammapet",
+            "Kondalampatti"
+          ]
+        },
+        {
+          "id": "TN-SLM-T2",
+          "name": "Attur",
+          "areas": [
+            "Attur",
+            "Gangavalli",
+            "Yercaud",
+            "Kolathur"
+          ]
+        },
+        {
+          "id": "TN-SLM-T3",
+          "name": "Omalur",
+          "areas": [
+            "Omalur",
+            "Mettur",
+            "Edappadi",
+            "Mecheri"
+          ]
+        },
+        {
+          "id": "TN-SLM-T4",
+          "name": "Rasipuram",
+          "areas": [
+            "Rasipuram",
+            "Sankari",
+            "Thalaivasal",
+            "Erumapalayam"
+          ]
+        },
+        {
+          "id": "TN-SLM-T5",
+          "name": "Namakkal",
+          "areas": [
+            "Namakkal",
+            "Tiruchengode",
+            "Komarapalayam",
+            "Paramathi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TNJ",
+      "name": "Thanjavur",
+      "taluks": [
+        {
+          "id": "TN-TNJ-T1",
+          "name": "Thanjavur",
+          "areas": [
+            "Medical College Road",
+            "West Main Street",
+            "Punnainallur",
+            "South Rampart",
+            "Nanjikottai"
+          ]
+        },
+        {
+          "id": "TN-TNJ-T2",
+          "name": "Kumbakonam",
+          "areas": [
+            "Kumbakonam",
+            "Thiruvidaimarudur",
+            "Papanasam",
+            "Swamimalai"
+          ]
+        },
+        {
+          "id": "TN-TNJ-T3",
+          "name": "Pattukkottai",
+          "areas": [
+            "Pattukkottai",
+            "Peravurani",
+            "Sethubavachatram",
+            "Aranthangi"
+          ]
+        },
+        {
+          "id": "TN-TNJ-T4",
+          "name": "Orathanadu",
+          "areas": [
+            "Orathanadu",
+            "Thiruvonam",
+            "Budalur",
+            "Papanasam"
+          ]
+        },
+        {
+          "id": "TN-TNJ-T5",
+          "name": "Thiruvaiyaru",
+          "areas": [
+            "Thiruvaiyaru",
+            "Ammapettai",
+            "Vallam",
+            "Patteeswaram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-VEL",
+      "name": "Vellore",
+      "taluks": [
+        {
+          "id": "TN-VEL-T1",
+          "name": "Vellore",
+          "areas": [
+            "Katpadi",
+            "Sathuvachari",
+            "Gandhi Nagar",
+            "Bagayam",
+            "CMC Area"
+          ]
+        },
+        {
+          "id": "TN-VEL-T2",
+          "name": "Gudiyatham",
+          "areas": [
+            "Gudiyatham",
+            "Pernambut",
+            "Vaniyambadi",
+            "Jolarpet"
+          ]
+        },
+        {
+          "id": "TN-VEL-T3",
+          "name": "Arakkonam",
+          "areas": [
+            "Arakkonam",
+            "Sholinghur",
+            "Arcot",
+            "Melvisharam"
+          ]
+        },
+        {
+          "id": "TN-VEL-T4",
+          "name": "Walajah",
+          "areas": [
+            "Walajah",
+            "Ranipet",
+            "Timiri",
+            "Anaicut"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TUV",
+      "name": "Tirunelveli",
+      "taluks": [
+        {
+          "id": "TN-TUV-T1",
+          "name": "Tirunelveli",
+          "areas": [
+            "Palayamkottai",
+            "Melapalayam",
+            "Vannarpettai",
+            "Pettai",
+            "Rahmath Nagar"
+          ]
+        },
+        {
+          "id": "TN-TUV-T2",
+          "name": "Ambasamudram",
+          "areas": [
+            "Ambasamudram",
+            "Papanasam",
+            "Cheranmahadevi",
+            "Kallidaikurichi"
+          ]
+        },
+        {
+          "id": "TN-TUV-T3",
+          "name": "Nanguneri",
+          "areas": [
+            "Nanguneri",
+            "Radhapuram",
+            "Thisayanvilai",
+            "Valliyoor"
+          ]
+        },
+        {
+          "id": "TN-TUV-T4",
+          "name": "Palayamkottai",
+          "areas": [
+            "Palayamkottai",
+            "Perumalpuram",
+            "Krishnapuram",
+            "Mukkudal"
+          ]
+        },
+        {
+          "id": "TN-TUV-T5",
+          "name": "Tenkasi",
+          "areas": [
+            "Tenkasi",
+            "Sankarankovil",
+            "Kadayanallur",
+            "Sivagiri"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-ERM",
+      "name": "Erode",
+      "taluks": [
+        {
+          "id": "TN-ERM-T1",
+          "name": "Erode",
+          "areas": [
+            "Erode East",
+            "Erode West",
+            "Kavindapadi",
+            "Perundurai",
+            "Chithode"
+          ]
+        },
+        {
+          "id": "TN-ERM-T2",
+          "name": "Bhavani",
+          "areas": [
+            "Bhavani",
+            "Gobichettipalayam",
+            "Anthiyur",
+            "Chennimalai"
+          ]
+        },
+        {
+          "id": "TN-ERM-T3",
+          "name": "Sathyamangalam",
+          "areas": [
+            "Sathyamangalam",
+            "Bargur",
+            "Nambiyur",
+            "Bhavanisagar"
+          ]
+        },
+        {
+          "id": "TN-ERM-T4",
+          "name": "Perundurai",
+          "areas": [
+            "Perundurai",
+            "Thindal",
+            "Modakurichi",
+            "Uthiyur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-DIN",
+      "name": "Dindigul",
+      "taluks": [
+        {
+          "id": "TN-DIN-T1",
+          "name": "Dindigul",
+          "areas": [
+            "Dindigul Town",
+            "Thadicombu",
+            "Begampur",
+            "Gandhigram"
+          ]
+        },
+        {
+          "id": "TN-DIN-T2",
+          "name": "Palani",
+          "areas": [
+            "Palani",
+            "Oddanchatram",
+            "Kodaikanal",
+            "Vadamadurai"
+          ]
+        },
+        {
+          "id": "TN-DIN-T3",
+          "name": "Natham",
+          "areas": [
+            "Natham",
+            "Batlagundu",
+            "Nilakottai",
+            "Shanarpatti"
+          ]
+        },
+        {
+          "id": "TN-DIN-T4",
+          "name": "Vedasandur",
+          "areas": [
+            "Vedasandur",
+            "Reddiyarchatram",
+            "Athoor",
+            "Chinnalapatti"
+          ]
+        },
+        {
+          "id": "TN-DIN-T5",
+          "name": "Nilakottai",
+          "areas": [
+            "Nilakottai",
+            "Gujiliamparai",
+            "Ayyalur",
+            "Adiyanuthu"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-KAN",
+      "name": "Kanchipuram",
+      "taluks": [
+        {
+          "id": "TN-KAN-T1",
+          "name": "Kanchipuram",
+          "areas": [
+            "Kanchipuram Town",
+            "Varadharajapuram",
+            "Pillaipakkam",
+            "Keezhapakkam"
+          ]
+        },
+        {
+          "id": "TN-KAN-T2",
+          "name": "Sriperumbudur",
+          "areas": [
+            "Sriperumbudur",
+            "Oragadam",
+            "Irungattukottai",
+            "Vallam"
+          ]
+        },
+        {
+          "id": "TN-KAN-T3",
+          "name": "Uthiramerur",
+          "areas": [
+            "Uthiramerur",
+            "Madurantagam",
+            "Kundrathur",
+            "Walajabad"
+          ]
+        },
+        {
+          "id": "TN-KAN-T4",
+          "name": "Chengalpattu",
+          "areas": [
+            "Chengalpattu",
+            "Maraimalai Nagar",
+            "Thiruporur",
+            "Vandalur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TRP",
+      "name": "Tiruppur",
+      "taluks": [
+        {
+          "id": "TN-TRP-T1",
+          "name": "Tiruppur North",
+          "areas": [
+            "Tiruppur Town",
+            "Angeripalayam",
+            "Rayapuram",
+            "Veerapandi"
+          ]
+        },
+        {
+          "id": "TN-TRP-T2",
+          "name": "Tiruppur South",
+          "areas": [
+            "Avinashi",
+            "Uthukuli",
+            "Palladam",
+            "Dharapuram"
+          ]
+        },
+        {
+          "id": "TN-TRP-T3",
+          "name": "Udumalaipettai",
+          "areas": [
+            "Udumalaipettai",
+            "Mulanur",
+            "Kangayam",
+            "Dharapuram"
+          ]
+        },
+        {
+          "id": "TN-TRP-T4",
+          "name": "Dharapuram",
+          "areas": [
+            "Dharapuram",
+            "Kangayam",
+            "Erode-Tiruppur Border",
+            "Kolundampattu"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-KRI",
+      "name": "Krishnagiri",
+      "taluks": [
+        {
+          "id": "TN-KRI-T1",
+          "name": "Krishnagiri",
+          "areas": [
+            "Krishnagiri Town",
+            "Mathur",
+            "Veppanapalli",
+            "Kelamangalam"
+          ]
+        },
+        {
+          "id": "TN-KRI-T2",
+          "name": "Hosur",
+          "areas": [
+            "Hosur",
+            "Mathigiri",
+            "Sipcot",
+            "Shoolagiri",
+            "Thalli"
+          ]
+        },
+        {
+          "id": "TN-KRI-T3",
+          "name": "Denkanikottai",
+          "areas": [
+            "Denkanikottai",
+            "Bargur",
+            "Pochampalli",
+            "Kaveripattinam"
+          ]
+        },
+        {
+          "id": "TN-KRI-T4",
+          "name": "Uthangarai",
+          "areas": [
+            "Uthangarai",
+            "Pennagaram",
+            "Morappur",
+            "Anchetty"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-DHM",
+      "name": "Dharmapuri",
+      "taluks": [
+        {
+          "id": "TN-DHM-T1",
+          "name": "Dharmapuri",
+          "areas": [
+            "Dharmapuri Town",
+            "Karimangalam",
+            "Nallampalli",
+            "Palacode"
+          ]
+        },
+        {
+          "id": "TN-DHM-T2",
+          "name": "Harur",
+          "areas": [
+            "Harur",
+            "Pennagaram",
+            "Papireddipatti",
+            "Morappur"
+          ]
+        },
+        {
+          "id": "TN-DHM-T3",
+          "name": "Pappireddipatti",
+          "areas": [
+            "Pappireddipatti",
+            "Marandahalli",
+            "Kambainallur",
+            "Kadathur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-VIL",
+      "name": "Villupuram",
+      "taluks": [
+        {
+          "id": "TN-VIL-T1",
+          "name": "Villupuram",
+          "areas": [
+            "Villupuram Town",
+            "Vikravandi",
+            "Mailam",
+            "Markanam"
+          ]
+        },
+        {
+          "id": "TN-VIL-T2",
+          "name": "Tindivanam",
+          "areas": [
+            "Tindivanam",
+            "Olakkur",
+            "Vanur",
+            "Marakkanam"
+          ]
+        },
+        {
+          "id": "TN-VIL-T3",
+          "name": "Kallakurichi",
+          "areas": [
+            "Kallakurichi",
+            "Sankarapuram",
+            "Ulundurpet",
+            "Chinnasalem"
+          ]
+        },
+        {
+          "id": "TN-VIL-T4",
+          "name": "Gingee",
+          "areas": [
+            "Gingee",
+            "Mailam",
+            "Pernampattu",
+            "Vandavasi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-CDL",
+      "name": "Cuddalore",
+      "taluks": [
+        {
+          "id": "TN-CDL-T1",
+          "name": "Cuddalore",
+          "areas": [
+            "Cuddalore Town",
+            "Cuddalore Port",
+            "Kudikadu",
+            "Thiruvannamalai Road"
+          ]
+        },
+        {
+          "id": "TN-CDL-T2",
+          "name": "Chidambaram",
+          "areas": [
+            "Chidambaram",
+            "Kattumannarkoil",
+            "Sirkali",
+            "Kollidam"
+          ]
+        },
+        {
+          "id": "TN-CDL-T3",
+          "name": "Panruti",
+          "areas": [
+            "Panruti",
+            "Kurinjipadi",
+            "Virudhachalam",
+            "Neyveli"
+          ]
+        },
+        {
+          "id": "TN-CDL-T4",
+          "name": "Bhuvanagiri",
+          "areas": [
+            "Bhuvanagiri",
+            "Parangipettai",
+            "Sirkazhi",
+            "Pichavaram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-NAG",
+      "name": "Nagapattinam",
+      "taluks": [
+        {
+          "id": "TN-NAG-T1",
+          "name": "Nagapattinam",
+          "areas": [
+            "Nagapattinam Town",
+            "Velankanni",
+            "Nagore",
+            "Keelakarai"
+          ]
+        },
+        {
+          "id": "TN-NAG-T2",
+          "name": "Mayiladuthurai",
+          "areas": [
+            "Mayiladuthurai",
+            "Sirkazhi",
+            "Kollidam",
+            "Kuthalam"
+          ]
+        },
+        {
+          "id": "TN-NAG-T3",
+          "name": "Kilvelur",
+          "areas": [
+            "Kilvelur",
+            "Vedaranyam",
+            "Thalainayar",
+            "Kollidam"
+          ]
+        },
+        {
+          "id": "TN-NAG-T4",
+          "name": "Tirukuvalai",
+          "areas": [
+            "Tirukuvalai",
+            "Sembanarkoil",
+            "Papanasam",
+            "Kollidam"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TVR",
+      "name": "Tiruvarur",
+      "taluks": [
+        {
+          "id": "TN-TVR-T1",
+          "name": "Tiruvarur",
+          "areas": [
+            "Tiruvarur Town",
+            "Needamangalam",
+            "Papanasam",
+            "Thiruthuraipoondi"
+          ]
+        },
+        {
+          "id": "TN-TVR-T2",
+          "name": "Mannargudi",
+          "areas": [
+            "Mannargudi",
+            "Koradacherry",
+            "Thiruthuraipoondi",
+            "Muthupettai"
+          ]
+        },
+        {
+          "id": "TN-TVR-T3",
+          "name": "Papanasam",
+          "areas": [
+            "Papanasam",
+            "Thirukkuvalai",
+            "Nannilam",
+            "Valangaiman"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-PUD",
+      "name": "Pudukkottai",
+      "taluks": [
+        {
+          "id": "TN-PUD-T1",
+          "name": "Pudukkottai",
+          "areas": [
+            "Pudukkottai Town",
+            "Viralimalai",
+            "Tirumayam",
+            "Annavasal"
+          ]
+        },
+        {
+          "id": "TN-PUD-T2",
+          "name": "Alangudi",
+          "areas": [
+            "Alangudi",
+            "Aranthangi",
+            "Manamelkudi",
+            "Karambakkudi"
+          ]
+        },
+        {
+          "id": "TN-PUD-T3",
+          "name": "Gandarvakottai",
+          "areas": [
+            "Gandarvakottai",
+            "Ponnamaravathi",
+            "Avudaiyarkoil",
+            "Illuppur"
+          ]
+        },
+        {
+          "id": "TN-PUD-T4",
+          "name": "Kulathur",
+          "areas": [
+            "Kulathur",
+            "Mathur",
+            "Vadalur",
+            "Keeranur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-SIV",
+      "name": "Sivaganga",
+      "taluks": [
+        {
+          "id": "TN-SIV-T1",
+          "name": "Sivaganga",
+          "areas": [
+            "Sivaganga Town",
+            "Kalaiyarkoil",
+            "Tirupattur",
+            "Manamadurai"
+          ]
+        },
+        {
+          "id": "TN-SIV-T2",
+          "name": "Karaikudi",
+          "areas": [
+            "Karaikudi",
+            "Devakottai",
+            "Tirupuvanam",
+            "Ilayangudi"
+          ]
+        },
+        {
+          "id": "TN-SIV-T3",
+          "name": "Manamadurai",
+          "areas": [
+            "Manamadurai",
+            "Singampunari",
+            "Paramakudi",
+            "Mudukulathur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-RAM",
+      "name": "Ramanathapuram",
+      "taluks": [
+        {
+          "id": "TN-RAM-T1",
+          "name": "Ramanathapuram",
+          "areas": [
+            "Ramanathapuram Town",
+            "Rameswaram",
+            "Mandapam",
+            "Pamban"
+          ]
+        },
+        {
+          "id": "TN-RAM-T2",
+          "name": "Paramakudi",
+          "areas": [
+            "Paramakudi",
+            "Mudukulathur",
+            "Tiruvadanai",
+            "Kamuthi"
+          ]
+        },
+        {
+          "id": "TN-RAM-T3",
+          "name": "Tiruvadanai",
+          "areas": [
+            "Tiruvadanai",
+            "Keelakarai",
+            "Erwadi",
+            "Uchipuli"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-THN",
+      "name": "Theni",
+      "taluks": [
+        {
+          "id": "TN-THN-T1",
+          "name": "Theni",
+          "areas": [
+            "Theni Town",
+            "Cumbum",
+            "Uthamapalayam",
+            "Bodinayakanur"
+          ]
+        },
+        {
+          "id": "TN-THN-T2",
+          "name": "Periyakulam",
+          "areas": [
+            "Periyakulam",
+            "Andipatti",
+            "Chinnamanur",
+            "Gudalur"
+          ]
+        },
+        {
+          "id": "TN-THN-T3",
+          "name": "Uthamapalayam",
+          "areas": [
+            "Uthamapalayam",
+            "Kumily",
+            "Thekkady",
+            "Chinnamanur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-VIR",
+      "name": "Virudhunagar",
+      "taluks": [
+        {
+          "id": "TN-VIR-T1",
+          "name": "Virudhunagar",
+          "areas": [
+            "Virudhunagar Town",
+            "Srivilliputhur",
+            "Aruppukkottai",
+            "Rajapalayam"
+          ]
+        },
+        {
+          "id": "TN-VIR-T2",
+          "name": "Sivakasi",
+          "areas": [
+            "Sivakasi",
+            "Sattur",
+            "Vembakottai",
+            "Watrap"
+          ]
+        },
+        {
+          "id": "TN-VIR-T3",
+          "name": "Rajapalayam",
+          "areas": [
+            "Rajapalayam",
+            "Srivilliputhur",
+            "Krishnankoil",
+            "Kariapatti"
+          ]
+        },
+        {
+          "id": "TN-VIR-T4",
+          "name": "Aruppukkottai",
+          "areas": [
+            "Aruppukkottai",
+            "Tiruchuli",
+            "Mamsapuram",
+            "Narikudi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-KOV",
+      "name": "Kanniyakumari",
+      "taluks": [
+        {
+          "id": "TN-KOV-T1",
+          "name": "Agastheeswaram",
+          "areas": [
+            "Nagercoil",
+            "Marthandam",
+            "Colachel",
+            "Eraniel"
+          ]
+        },
+        {
+          "id": "TN-KOV-T2",
+          "name": "Kalkulam",
+          "areas": [
+            "Thuckalay",
+            "Kuzhithurai",
+            "Marthanda",
+            "Kulasekharam"
+          ]
+        },
+        {
+          "id": "TN-KOV-T3",
+          "name": "Vilavancode",
+          "areas": [
+            "Padmanabhapuram",
+            "Thiruvattar",
+            "Aralvaimozhi",
+            "Boothapandy"
+          ]
+        },
+        {
+          "id": "TN-KOV-T4",
+          "name": "Thovalai",
+          "areas": [
+            "Thovalai",
+            "Parassala",
+            "Karungal",
+            "Kanyakumari Town"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TRV",
+      "name": "Tiruvannamalai",
+      "taluks": [
+        {
+          "id": "TN-TRV-T1",
+          "name": "Tiruvannamalai",
+          "areas": [
+            "Tiruvannamalai Town",
+            "Kilpennathur",
+            "Thandrampet",
+            "Polur"
+          ]
+        },
+        {
+          "id": "TN-TRV-T2",
+          "name": "Vembakkam",
+          "areas": [
+            "Vembakkam",
+            "Vandavasi",
+            "Arani",
+            "Cheyyar"
+          ]
+        },
+        {
+          "id": "TN-TRV-T3",
+          "name": "Chengam",
+          "areas": [
+            "Chengam",
+            "Chetpet",
+            "Thandrampet",
+            "Jamunamarathur"
+          ]
+        },
+        {
+          "id": "TN-TRV-T4",
+          "name": "Polur",
+          "areas": [
+            "Polur",
+            "Thellar",
+            "Peranamallur",
+            "Kalasapakkam"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-PER",
+      "name": "Perambalur",
+      "taluks": [
+        {
+          "id": "TN-PER-T1",
+          "name": "Perambalur",
+          "areas": [
+            "Perambalur Town",
+            "Veppanthattai",
+            "Kunnam",
+            "Alathur"
+          ]
+        },
+        {
+          "id": "TN-PER-T2",
+          "name": "Ariyalur",
+          "areas": [
+            "Ariyalur",
+            "Udayarpalayam",
+            "Sendurai",
+            "Andimadam"
+          ]
+        },
+        {
+          "id": "TN-PER-T3",
+          "name": "Jayankondam",
+          "areas": [
+            "Jayankondam",
+            "Andimadam",
+            "Varanavasi",
+            "Thirumanur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-ARY",
+      "name": "Ariyalur",
+      "taluks": [
+        {
+          "id": "TN-ARY-T1",
+          "name": "Ariyalur",
+          "areas": [
+            "Ariyalur Town",
+            "Andimadam",
+            "Sendurai",
+            "T. Palur"
+          ]
+        },
+        {
+          "id": "TN-ARY-T2",
+          "name": "Udayarpalayam",
+          "areas": [
+            "Udayarpalayam",
+            "Gangaikondacholapuram",
+            "Jayamkondam",
+            "Thirumanur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TRU",
+      "name": "Tirupathur",
+      "taluks": [
+        {
+          "id": "TN-TRU-T1",
+          "name": "Tirupattur",
+          "areas": [
+            "Tirupattur Town",
+            "Vaniyambadi",
+            "Natrampalli",
+            "Jolarpet"
+          ]
+        },
+        {
+          "id": "TN-TRU-T2",
+          "name": "Ambur",
+          "areas": [
+            "Ambur",
+            "Pernambut",
+            "Natrampalli",
+            "Alangayam"
+          ]
+        },
+        {
+          "id": "TN-TRU-T3",
+          "name": "Vaniyambadi",
+          "areas": [
+            "Vaniyambadi",
+            "Jolarpet",
+            "Gudiyatham",
+            "Tirupattur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-RAN",
+      "name": "Ranipet",
+      "taluks": [
+        {
+          "id": "TN-RAN-T1",
+          "name": "Ranipet",
+          "areas": [
+            "Ranipet Town",
+            "Walajah",
+            "Arcot",
+            "Sholinghur"
+          ]
+        },
+        {
+          "id": "TN-RAN-T2",
+          "name": "Arakkonam",
+          "areas": [
+            "Arakkonam",
+            "Timiri",
+            "Nemili",
+            "Kaveripakkam"
+          ]
+        },
+        {
+          "id": "TN-RAN-T3",
+          "name": "Vellore",
+          "areas": [
+            "Melvisharam",
+            "Anaicut",
+            "Thimiri",
+            "Kalavai"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TEN",
+      "name": "Tenkasi",
+      "taluks": [
+        {
+          "id": "TN-TEN-T1",
+          "name": "Tenkasi",
+          "areas": [
+            "Tenkasi Town",
+            "Courtallam",
+            "Kadayanallur",
+            "Sankarankovil"
+          ]
+        },
+        {
+          "id": "TN-TEN-T2",
+          "name": "Shencottah",
+          "areas": [
+            "Shencottah",
+            "Aralvaimozhi",
+            "Thiruvenkatam",
+            "Vasudevanallur"
+          ]
+        },
+        {
+          "id": "TN-TEN-T3",
+          "name": "Sankarankovil",
+          "areas": [
+            "Sankarankovil",
+            "Sivagiri",
+            "Sengottai",
+            "Vickramasingapuram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-CHG",
+      "name": "Chengalpattu",
+      "taluks": [
+        {
+          "id": "TN-CHG-T1",
+          "name": "Chengalpattu",
+          "areas": [
+            "Chengalpattu Town",
+            "Madurantakam",
+            "Thiruporur",
+            "Singaperumal Koil"
+          ]
+        },
+        {
+          "id": "TN-CHG-T2",
+          "name": "Tambaram",
+          "areas": [
+            "Tambaram",
+            "Pallavaram",
+            "Chromepet",
+            "Mudichur",
+            "Perungalathur"
+          ]
+        },
+        {
+          "id": "TN-CHG-T3",
+          "name": "Madurantakam",
+          "areas": [
+            "Madurantakam",
+            "Uthiramerur",
+            "Melmaruvathur",
+            "Lathur"
+          ]
+        },
+        {
+          "id": "TN-CHG-T4",
+          "name": "Thiruporur",
+          "areas": [
+            "Thiruporur",
+            "Kelambakkam",
+            "Navalur",
+            "Navallur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-KAL",
+      "name": "Kallakurichi",
+      "taluks": [
+        {
+          "id": "TN-KAL-T1",
+          "name": "Kallakurichi",
+          "areas": [
+            "Kallakurichi Town",
+            "Chinnasalem",
+            "Ulundurpet",
+            "Sankarapuram"
+          ]
+        },
+        {
+          "id": "TN-KAL-T2",
+          "name": "Tirukkoilur",
+          "areas": [
+            "Tirukkoilur",
+            "Vriddhachalam",
+            "Rishivandiyam",
+            "Pennadam"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-MAY",
+      "name": "Mayiladuthurai",
+      "taluks": [
+        {
+          "id": "TN-MAY-T1",
+          "name": "Mayiladuthurai",
+          "areas": [
+            "Mayiladuthurai Town",
+            "Sirkazhi",
+            "Kuthalam",
+            "Sembanarkoil"
+          ]
+        },
+        {
+          "id": "TN-MAY-T2",
+          "name": "Kuthalam",
+          "areas": [
+            "Kuthalam",
+            "Papanasam",
+            "Kollidam",
+            "Thalainayar"
+          ]
+        },
+        {
+          "id": "TN-MAY-T3",
+          "name": "Sirkazhi",
+          "areas": [
+            "Sirkazhi",
+            "Chidambaram",
+            "Kollidam",
+            "Pichavaram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-NMK",
+      "name": "Namakkal",
+      "taluks": [
+        {
+          "id": "TN-NMK-T1",
+          "name": "Namakkal",
+          "areas": [
+            "Namakkal Town",
+            "Sendamangalam",
+            "Komarapalayam",
+            "Tiruchengode"
+          ]
+        },
+        {
+          "id": "TN-NMK-T2",
+          "name": "Rasipuram",
+          "areas": [
+            "Rasipuram",
+            "Paramathi",
+            "Vennandur",
+            "Mallasamudram"
+          ]
+        },
+        {
+          "id": "TN-NMK-T3",
+          "name": "Tiruchengode",
+          "areas": [
+            "Tiruchengode",
+            "Sankagiri",
+            "Kumarapalayam",
+            "Velur"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-NLG",
+      "name": "Nilgiris",
+      "taluks": [
+        {
+          "id": "TN-NLG-T1",
+          "name": "Ooty",
+          "areas": [
+            "Ooty Town",
+            "Lovedale",
+            "Ettines",
+            "Fingerpost",
+            "Ithalar"
+          ]
+        },
+        {
+          "id": "TN-NLG-T2",
+          "name": "Coonoor",
+          "areas": [
+            "Coonoor",
+            "Wellington",
+            "Aravankadu",
+            "Burliyar"
+          ]
+        },
+        {
+          "id": "TN-NLG-T3",
+          "name": "Gudalur",
+          "areas": [
+            "Gudalur",
+            "Pandalur",
+            "Devala",
+            "Masinagudi"
+          ]
+        },
+        {
+          "id": "TN-NLG-T4",
+          "name": "Kotagiri",
+          "areas": [
+            "Kotagiri",
+            "Kothagiri Hill",
+            "Aracode",
+            "Mettupalayam Road"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TUT",
+      "name": "Thoothukudi",
+      "taluks": [
+        {
+          "id": "TN-TUT-T1",
+          "name": "Thoothukudi",
+          "areas": [
+            "Thoothukudi Town",
+            "Harbour Area",
+            "VOC Port",
+            "Thermal Nagar",
+            "Millerpuram"
+          ]
+        },
+        {
+          "id": "TN-TUT-T2",
+          "name": "Tiruchendur",
+          "areas": [
+            "Tiruchendur",
+            "Kayalpatnam",
+            "Manapad",
+            "Tuticorin Rural"
+          ]
+        },
+        {
+          "id": "TN-TUT-T3",
+          "name": "Srivaikundam",
+          "areas": [
+            "Srivaikundam",
+            "Ottapidaram",
+            "Kovilpatti",
+            "Vilathikulam"
+          ]
+        },
+        {
+          "id": "TN-TUT-T4",
+          "name": "Kovilpatti",
+          "areas": [
+            "Kovilpatti",
+            "Sankarankovil",
+            "Ettayapuram",
+            "Kayathar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-KAR",
+      "name": "Karur",
+      "taluks": [
+        {
+          "id": "TN-KAR-T1",
+          "name": "Karur",
+          "areas": [
+            "Karur Town",
+            "Krishnarayapuram",
+            "Kulithalai",
+            "Thanthoni",
+            "Aravakurichi"
+          ]
+        },
+        {
+          "id": "TN-KAR-T2",
+          "name": "Kulithalai",
+          "areas": [
+            "Kulithalai",
+            "Manapparai",
+            "Thogaimalai",
+            "Kadavur"
+          ]
+        },
+        {
+          "id": "TN-KAR-T3",
+          "name": "Krishnarayapuram",
+          "areas": [
+            "Krishnarayapuram",
+            "Pugalur",
+            "Manmangalam",
+            "Nangavaram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TN-TVL",
+      "name": "Tiruvallur",
+      "taluks": [
+        {
+          "id": "TN-TVL-T1",
+          "name": "Tiruvallur",
+          "areas": [
+            "Tiruvallur Town",
+            "Avadi",
+            "Thiruninravur",
+            "Ponneri"
+          ]
+        },
+        {
+          "id": "TN-TVL-T2",
+          "name": "Ponneri",
+          "areas": [
+            "Ponneri",
+            "Gummidipoondi",
+            "Ennore",
+            "Minjur"
+          ]
+        },
+        {
+          "id": "TN-TVL-T3",
+          "name": "Gummidipoondi",
+          "areas": [
+            "Gummidipoondi",
+            "Redhills",
+            "Tiruttani",
+            "Uthukottai"
+          ]
+        },
+        {
+          "id": "TN-TVL-T4",
+          "name": "Pallipattu",
+          "areas": [
+            "Pallipattu",
+            "Tiruttani",
+            "Kadambathur",
+            "Periyapalayam"
+          ]
+        }
+      ]
+    }
+  ]
+}
