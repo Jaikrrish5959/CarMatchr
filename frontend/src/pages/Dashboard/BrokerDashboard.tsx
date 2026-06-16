@@ -3,13 +3,12 @@ import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Clock, Send, CheckCircle2, AlertCircle, Car, MapPin, Fuel,
+  Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
   Bell, MessageSquare, Check, Briefcase
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { MultiDistrictPicker } from '../../components/LocationSelector';
 
 // ============================================================
 //  HELPER FUNCTIONS & SPECIFICATION GUESSERS
@@ -129,13 +128,6 @@ const BrokerDashboard: React.FC = () => {
   const [profileBusinessName, setProfileBusinessName] = useState(user?.businessName || '');
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
   const [profileCity, setProfileCity] = useState(user?.city || '');
-  const [serviceDistricts, setServiceDistricts] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`broker_service_districts_${user?.id}`) || '[]');
-    } catch {
-      return [];
-    }
-  });
 
   // Local state persistence for workflow
   const [savedReqIds, setSavedReqIds] = useState<number[]>(() => {
@@ -228,11 +220,7 @@ const BrokerDashboard: React.FC = () => {
     }
   }, [editedOffers, user?.id]);
 
-  useEffect(() => {
-    if (user?.id) {
-      localStorage.setItem(`broker_service_districts_${user.id}`, JSON.stringify(serviceDistricts));
-    }
-  }, [serviceDistricts, user?.id]);
+
 
   // Sync profile editing fields with user auth context
   useEffect(() => {
@@ -1551,16 +1539,7 @@ const BrokerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Multi-district operate selector using our tn-locations dataset */}
-        <div className="form-group" style={{ marginBottom: '28px' }}>
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <MapPin size={14} /> My Service Districts (Multi-District Selector)
-          </label>
-          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '12px' }}>
-            Select all Tamil Nadu districts where you are able to deliver and procure vehicles. This picker runs directly from our local database.
-          </p>
-          <MultiDistrictPicker selectedDistricts={serviceDistricts} onChange={setServiceDistricts} />
-        </div>
+
 
         <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Settings size={15} /> Save Settings
