@@ -5,13 +5,14 @@ import {
   MapPin, Fuel,
   Shield, Clock, BadgeDollarSign, Lock, Send,
   Car, Wrench, Cpu, Settings, Users, ClipboardList, Leaf,
-  Building2, BadgeCheck, Phone,
+  Building2, BadgeCheck, Phone, X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
 import { useCatalog } from '../hooks/useCatalog';
 import { tamilNaduDealers } from '../data/tamilNaduDealers';
+import { useLocation } from '../contexts/LocationContext';
 import toast from 'react-hot-toast';
 
 
@@ -31,6 +32,7 @@ const Home: React.FC = () => {
   const { t } = useLanguage();
   const { brands } = useCatalog();
   const { user } = useAuth();
+  const { location: selectedLocation, setLocation } = useLocation();
   const [heroMake, setHeroMake] = useState('');
   const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
@@ -42,6 +44,17 @@ const Home: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const selectedBrand = brands.find((b) => b.name === heroMake);
+
+  // Derived filtered dealer lists
+  const isFiltered = selectedLocation !== 'Tamil Nadu';
+  const allNewDealers = tamilNaduDealers.filter(d => d.type === 'new');
+  const allUsedDealers = tamilNaduDealers.filter(d => d.type === 'used');
+  const newDealers = isFiltered
+    ? allNewDealers.filter(d => d.city === selectedLocation)
+    : allNewDealers;
+  const usedDealers = isFiltered
+    ? allUsedDealers.filter(d => d.city === selectedLocation)
+    : allUsedDealers;
 
   const handlePostRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,8 +101,8 @@ const Home: React.FC = () => {
 
 
 
-  const newDealers = tamilNaduDealers.filter(d => d.type === 'new');
-  const usedDealers = tamilNaduDealers.filter(d => d.type === 'used');
+
+
 
   const getDealerLogoInfo = (name: string) => {
     const n = name.toLowerCase();
@@ -468,51 +481,142 @@ const Home: React.FC = () => {
         {/* ── Trusted Dealers strip — normal flow ── */}
         <div style={{ width: '100%', marginBottom: '40px' }}>
           {/* Label row */}
-          <div className="container" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="container" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <Building2 size={14} color="#ff6b7a" />
               <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#ff6b7a', letterSpacing: '0.10em', textTransform: 'uppercase' }}>Tamil Nadu</span>
               <span style={{ width: '1px', height: '12px', background: 'var(--color-gray-300)', margin: '0 4px' }} />
-              <span style={{ fontSize: '0.9375rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>Trusted Dealers Across Tamil Nadu</span>
+              <span style={{ fontSize: '0.9375rem', fontWeight: 800, color: 'var(--color-gray-900)' }}>
+                {isFiltered ? `Dealers in ${selectedLocation}` : 'Trusted Dealers Across Tamil Nadu'}
+              </span>
+              {/* Active location badge */}
+              {isFiltered && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                  background: 'rgba(229,57,53,0.1)', color: '#E53935',
+                  padding: '3px 10px 3px 8px', borderRadius: '20px',
+                  fontSize: '0.75rem', fontWeight: 700,
+                }}>
+                  <MapPin size={11} />
+                  {selectedLocation}
+                  <button
+                    onClick={() => setLocation('Tamil Nadu')}
+                    title="Clear location filter"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#E53935', padding: 0, display: 'flex', alignItems: 'center', marginLeft: '2px' }}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              {[{ value: '500+', label: 'Dealers' }, { value: '32', label: 'Cities' }, { value: '15', label: 'Brands' }].map(stat => (
-                <div key={stat.label} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{stat.value}</div>
-                  <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>{stat.label}</div>
+            {isFiltered ? (
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{newDealers.length}</div>
+                  <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>New Car</div>
                 </div>
-              ))}
-            </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#34d399', lineHeight: 1 }}>{usedDealers.length}</div>
+                  <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>Pre-Owned</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{newDealers.length + usedDealers.length}</div>
+                  <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>Total</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '16px' }}>
+                {[{ value: '500+', label: 'Dealers' }, { value: '36', label: 'Districts' }, { value: '15', label: 'Brands' }].map(stat => (
+                  <div key={stat.label} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{stat.value}</div>
+                    <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* New Car Dealers row */}
           <div style={{ marginBottom: '16px' }}>
-            <div className="container" style={{ marginBottom: '8px' }}>
+            <div className="container" style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 800, color: '#ff6b7a', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff6b7a' }} />
                 New Car Showrooms
               </div>
+              {isFiltered && <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{newDealers.length} found</span>}
             </div>
-            <div className="dealer-scroll-wrapper">
-              <div className="dealer-track">
-                {[...newDealers, ...newDealers].map((dealer, idx) => renderDealerCard(dealer, idx))}
+
+            {/* Auto-scroll (all TN) vs. static horizontal scroll (filtered) */}
+            {!isFiltered ? (
+              <div className="dealer-scroll-wrapper">
+                <div className="dealer-track">
+                  {[...allNewDealers, ...allNewDealers].map((dealer, idx) => renderDealerCard(dealer, idx))}
+                </div>
               </div>
-            </div>
+            ) : newDealers.length > 0 ? (
+              <div style={{ overflowX: 'auto', paddingLeft: '24px', paddingRight: '24px' }}>
+                <div style={{ display: 'flex', gap: '12px', paddingBottom: '12px' }}>
+                  {newDealers.map((dealer, idx) => renderDealerCard(dealer, idx))}
+                </div>
+              </div>
+            ) : (
+              <div className="container">
+                <div style={{
+                  padding: '32px', background: '#fff', borderRadius: '12px',
+                  border: '1px dashed #e2e8f0', textAlign: 'center', color: '#94a3b8',
+                }}>
+                  <Building2 size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                  <p style={{ fontWeight: 600, fontSize: '0.875rem' }}>No new car showrooms in {selectedLocation}</p>
+                  <button
+                    onClick={() => setLocation('Tamil Nadu')}
+                    style={{ marginTop: '10px', background: 'none', border: 'none', color: '#E53935', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '0.8125rem' }}
+                  >
+                    View all Tamil Nadu →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Pre-Owned Dealers row */}
           <div>
-            <div className="container" style={{ marginBottom: '8px' }}>
+            <div className="container" style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 800, color: '#34d399', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399' }} />
                 Pre-Owned Car Dealers
               </div>
+              {isFiltered && <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{usedDealers.length} found</span>}
             </div>
-            <div className="dealer-scroll-wrapper">
-              <div className="dealer-track-reverse">
-                {[...usedDealers, ...usedDealers].map((dealer, idx) => renderDealerCard(dealer, idx))}
+
+            {!isFiltered ? (
+              <div className="dealer-scroll-wrapper">
+                <div className="dealer-track-reverse">
+                  {[...allUsedDealers, ...allUsedDealers].map((dealer, idx) => renderDealerCard(dealer, idx))}
+                </div>
               </div>
-            </div>
+            ) : usedDealers.length > 0 ? (
+              <div style={{ overflowX: 'auto', paddingLeft: '24px', paddingRight: '24px' }}>
+                <div style={{ display: 'flex', gap: '12px', paddingBottom: '12px' }}>
+                  {usedDealers.map((dealer, idx) => renderDealerCard(dealer, idx))}
+                </div>
+              </div>
+            ) : (
+              <div className="container">
+                <div style={{
+                  padding: '32px', background: '#fff', borderRadius: '12px',
+                  border: '1px dashed #e2e8f0', textAlign: 'center', color: '#94a3b8',
+                }}>
+                  <Car size={28} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                  <p style={{ fontWeight: 600, fontSize: '0.875rem' }}>No pre-owned dealers in {selectedLocation}</p>
+                  <button
+                    onClick={() => setLocation('Tamil Nadu')}
+                    style={{ marginTop: '10px', background: 'none', border: 'none', color: '#E53935', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '0.8125rem' }}
+                  >
+                    View all Tamil Nadu →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
