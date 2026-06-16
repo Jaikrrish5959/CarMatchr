@@ -1,29 +1,58 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Clock, Send, CheckCircle2, AlertCircle, Plus, Car, X, MapPin, Fuel,
-  Gauge, ImagePlus, Users, Star, ChevronDown, TrendingDown, TrendingUp,
-  MessageCircle, FileText, HelpCircle, Target, ChevronLeft, ChevronRight,
-  Zap, ArrowRight, Phone,
+  Clock, Send, CheckCircle2, AlertCircle, Car, MapPin, Fuel,
+  Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
+  FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
+  Bell, MessageSquare, Check, Briefcase
 } from 'lucide-react';
-import { bodyTypes, fuelTypes, transmissions, type CarListing } from '../../data/carDatabase';
-import { useCatalog } from '../../hooks/useCatalog';
-import { getToken } from '../../services/authService';
-import { API_BASE } from '../../services/api';
 import toast from 'react-hot-toast';
-import type { BrokerListing, Requirement } from '../../contexts/DataContext';
-import { LocationSelector, MultiDistrictPicker, type LocationValue, EMPTY_LOCATION, locationLabel } from '../../components/LocationSelector';
+import { MultiDistrictPicker } from '../../components/LocationSelector';
 
 // ============================================================
-//  HELPER FUNCTIONS
+//  HELPER FUNCTIONS & SPECIFICATION GUESSERS
 // ============================================================
 
-function parseBudgetLakh(budget: string): number | null {
-  const clean = (budget || '').replace(/[₹,\s]/g, '');
+const parsePriceToNumber = (priceStr: string | number): number => {
+  if (!priceStr) return 0;
+  if (typeof priceStr === 'number') return priceStr;
+  
+  if (String(priceStr).includes('-')) {
+    const parts = String(priceStr).split('-');
+    const upperLimit = parts[1];
+    const clean = upperLimit.replace(/[₹,\sLakhs|L]/gi, '');
+    const match = clean.match(/(\d+\.?\d*)/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+  
+  const clean = String(priceStr).replace(/[₹,\sLakhs|L]/gi, '');
   const match = clean.match(/(\d+\.?\d*)/);
-  return match ? parseFloat(match[1]) : null;
-}
+  return match ? parseFloat(match[1]) : 0;
+};
+
+const getTransmission = (modelName: string, desc: string): string => {
+  const combined = (modelName + ' ' + desc).toLowerCase();
+  if (combined.includes('automatic') || combined.includes('cvt') || combined.includes('dct') || combined.includes('amt') || combined.includes('auto')) {
+    return 'Automatic';
+  }
+  return 'Manual';
+};
+
+const getFuelType = (modelName: string, desc: string): string => {
+  const combined = (modelName + ' ' + desc).toLowerCase();
+  if (combined.includes('diesel')) return 'Diesel';
+  if (combined.includes('ev') || combined.includes('electric')) return 'EV';
+  if (combined.includes('cng')) return 'CNG';
+  if (combined.includes('hybrid')) return 'Hybrid';
+  return 'Petrol';
+};
+
+const extractLocation = (desc: string): string => {
+  const match = desc.match(/Preferred Location:\s*(.+)$/m);
+  return match ? match[1].trim() : 'Tamil Nadu';
+};
 
 function timeAgo(dateStr: string): string {
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -43,8 +72,6 @@ function expiresIn(dateStr: string): { text: string; urgent: boolean } | null {
   return { text: `${h}h ${m}m`, urgent: h < 6 };
 }
 
-
-
 interface PriceSuggestion {
   avg: number | null;
   low: number | null;
@@ -52,16 +79,16 @@ interface PriceSuggestion {
   trend: 'low' | 'fair' | 'high' | null;
 }
 
-function getSuggestedPrice(req: Requirement, myListings: BrokerListing[]): PriceSuggestion {
+function getSuggestedPrice(reqMake: string, reqModel: string, reqBudget: string, myListings: any[]): PriceSuggestion {
   const matching = myListings.filter(
     l => l.status === 'active' &&
-      (l.make.toLowerCase() === req.make.toLowerCase() || l.model.toLowerCase() === req.model.toLowerCase())
+      (l.make.toLowerCase() === reqMake.toLowerCase() || l.model.toLowerCase() === reqModel.toLowerCase())
   );
   if (matching.length === 0) return { avg: null, low: null, high: null, trend: null };
   const avg = matching.reduce((s, l) => s + l.price, 0) / matching.length;
   const low = Math.round(avg * 0.97 * 10) / 10;
   const high = Math.round(avg * 1.03 * 10) / 10;
-  const budget = parseBudgetLakh(req.budget);
+  const budget = parsePriceToNumber(reqBudget);
   let trend: PriceSuggestion['trend'] = null;
   if (budget) {
     const ratio = avg / budget;
@@ -69,8 +96,6 @@ function getSuggestedPrice(req: Requirement, myListings: BrokerListing[]): Price
   }
   return { avg: Math.round(avg * 10) / 10, low, high, trend };
 }
-
-
 
 // ============================================================
 //  Constants
@@ -90,50 +115,141 @@ const SORT_LABELS: Record<SortOrder, string> = {
 //  MAIN COMPONENT
 // ============================================================
 const BrokerDashboard: React.FC = () => {
-  const { user } = useAuth();
-  const { requirements, offers, addOffer, brokerListings, addBrokerListing, removeBrokerListing } = useData();
-  const { brands } = useCatalog();
+  const { user, updateUser } = useAuth();
+  const { requirements, offers, addOffer, brokerListings, refreshData } = useData();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'dashboard';
 
-  const carouselRef = useRef<HTMLDivElement>(null);
+  // Layout states
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // — Offer form state —
+  // Profile Form States
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileBusinessName, setProfileBusinessName] = useState(user?.businessName || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileCity, setProfileCity] = useState(user?.city || '');
+  const [serviceDistricts, setServiceDistricts] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`broker_service_districts_${user?.id}`) || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  // Local state persistence for workflow
+  const [savedReqIds, setSavedReqIds] = useState<number[]>(() => {
+    return JSON.parse(localStorage.getItem(`broker_saved_requirements_${user?.id}`) || '[]');
+  });
+
+  const [closedOfferIds, setClosedOfferIds] = useState<number[]>(() => {
+    return JSON.parse(localStorage.getItem(`broker_closed_offer_ids_${user?.id}`) || '[]');
+  });
+
+  const [dealProgress, setDealProgress] = useState<Record<number, string>>(() => {
+    return JSON.parse(localStorage.getItem(`broker_deal_progress_${user?.id}`) || '{}');
+  });
+
+  // Local offer overrides to support edit/delete locally
+  const [deletedOfferIds, setDeletedOfferIds] = useState<number[]>(() => {
+    return JSON.parse(localStorage.getItem(`broker_deleted_offer_ids_${user?.id}`) || '[]');
+  });
+
+  const [editedOffers, setEditedOffers] = useState<Record<number, { price: string; details: string }>>(() => {
+    return JSON.parse(localStorage.getItem(`broker_edited_offers_${user?.id}`) || '{}');
+  });
+
+  // UI state variables
   const [activeReqId, setActiveReqId] = useState<number | null>(null);
   const [price, setPrice] = useState('');
   const [details, setDetails] = useState('');
   const [offerError, setOfferError] = useState('');
-
-  // — Tab / list car state —
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'inventory' | 'offers'>('marketplace');
-  const [showListForm, setShowListForm] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-
-  // — NEW feature state —
-  const [savedReqIds, setSavedReqIds] = useState<number[]>([]);
-  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
-  const [showSortMenu, setShowSortMenu] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [inventoryPickerReqId, setInventoryPickerReqId] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  
+  // Modals / dialogs
+  const [confirmCloseOfferId, setConfirmCloseOfferId] = useState<number | null>(null);
+  const [detailsDrawerReqId, setDetailsDrawerReqId] = useState<number | null>(null);
+  const [editOfferId, setEditOfferId] = useState<number | null>(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [editDetails, setEditDetails] = useState('');
 
-  // — List Car form state —
-  const [listForm, setListForm] = useState<{
-    make: string; model: string; variant: string; year: number; price: number;
-    fuelType: CarListing['fuelType']; transmission: CarListing['transmission'];
-    bodyType: CarListing['bodyType']; color: string; city: string;
-    kmDriven: number; owners: number; description: string;
-  }>({
-    make: '', model: '', variant: '', year: 2024, price: 0,
-    fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV',
-    color: '', city: '', kmDriven: 0, owners: 1, description: '',
-  });
-  const [listLocation, setListLocation] = useState<LocationValue>(EMPTY_LOCATION);
-  const [serviceDistricts, setServiceDistricts] = useState<string[]>([]);
+  // Handle mobile screen responsiveness
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setSidebarOpen(false);
+      else setSidebarOpen(true);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  /* ---- PENDING STATE ---- */
+  // Poll database every 4 seconds for real-time notification updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      refreshData();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [refreshData]);
+
+  // Save persistent state changes
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_saved_requirements_${user.id}`, JSON.stringify(savedReqIds));
+    }
+  }, [savedReqIds, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_closed_offer_ids_${user.id}`, JSON.stringify(closedOfferIds));
+    }
+  }, [closedOfferIds, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_deal_progress_${user.id}`, JSON.stringify(dealProgress));
+    }
+  }, [dealProgress, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_deleted_offer_ids_${user.id}`, JSON.stringify(deletedOfferIds));
+    }
+  }, [deletedOfferIds, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_edited_offers_${user.id}`, JSON.stringify(editedOffers));
+    }
+  }, [editedOffers, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`broker_service_districts_${user.id}`, JSON.stringify(serviceDistricts));
+    }
+  }, [serviceDistricts, user?.id]);
+
+  // Sync profile editing fields with user auth context
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name || '');
+      setProfileBusinessName(user.businessName || '');
+      setProfilePhone(user.phone || '');
+      setProfileCity(user.city || '');
+    }
+  }, [user]);
+
+  /* ---- PENDING VERIFICATION STATE ---- */
   if (user?.status === 'pending') {
     return (
       <section className="section">
         <div className="container" style={{ maxWidth: '520px' }}>
-          <div className="card" style={{ textAlign: 'center', padding: '48px 36px' }}>
+          <div className="card" style={{ textAlign: 'center', padding: '48px 36px', marginTop: '60px' }}>
             <div style={{
               width: '64px', height: '64px', borderRadius: 'var(--radius-full)',
               background: 'var(--color-warning-bg)', color: 'var(--color-warning)',
@@ -152,30 +268,52 @@ const BrokerDashboard: React.FC = () => {
     );
   }
 
-  /* ---- COMPUTED DATA ---- */
-  const openReqs = requirements.filter(r => r.status === 'open');
-  const myOffers = offers.filter(o => o.brokerId === user?.id);
-  const myListings = brokerListings.filter(l => l.brokerId === user?.id);
-  const activeListings = myListings.filter(l => l.status === 'active');
-  const acceptedOffers = myOffers.filter(o => o.status === 'accepted');
-  const revenue = acceptedOffers.reduce((sum, o) => sum + (parseBudgetLakh(o.price) ?? 0), 0);
+  // Set URL query param
+  const setTab = (tab: string) => {
+    setSearchParams({ tab });
+  };
 
+  /* ============================================================
+     DATA PARSING AND STATISTICS CALCULATIONS
+     ============================================================ */
+  const openReqs = requirements.filter(r => r.status === 'open');
+  const myListings = brokerListings.filter(l => l.brokerId === user?.id);
+
+  // Compute Offers
+  const allRawOffers = offers.filter(o => o.brokerId === user?.id && !deletedOfferIds.includes(o.id));
+  const myOffers = allRawOffers.map(o => {
+    const override = editedOffers[o.id];
+    if (override) {
+      return { ...o, price: override.price, details: override.details };
+    }
+    return o;
+  });
+
+  // Stat 1: Active Buyer Requirements
+  const activeBuyerRequirementsCount = openReqs.length;
+
+  // Stat 2: Offers Submitted
+  const offersSubmittedCount = myOffers.length;
+
+  // Stat 3: Accepted Offers (Accepted but not Closed)
+  const acceptedOffers = myOffers.filter(o => o.status === 'accepted' && !closedOfferIds.includes(o.id));
+  const acceptedOffersCount = acceptedOffers.length;
+
+  // Stat 4: Closed Deals
+  const closedDeals = myOffers.filter(o => o.status === 'accepted' && closedOfferIds.includes(o.id));
+  const closedDealsCount = closedDeals.length;
+
+  // Stat 5: Total Deal Value (Sum of confirmed closed deals)
+  const totalDealValue = closedDeals.reduce((sum, o) => sum + parsePriceToNumber(o.price), 0);
+
+  // Sort requirements
   const sortedReqs = [...openReqs].sort((a, b) => {
     switch (sortOrder) {
       case 'oldest':  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      case 'budget':  return (parseBudgetLakh(b.budget) ?? 0) - (parseBudgetLakh(a.budget) ?? 0);
+      case 'budget':  return parsePriceToNumber(b.budget) - parsePriceToNumber(a.budget);
       default:        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
   });
-
-  // Sidebar target requirement: the one the broker has the offer form open for, or first in the sorted list
-  const sidebarReq = (activeReqId ? requirements.find(r => r.id === activeReqId) : null) ?? sortedReqs[0] ?? null;
-
-  const latestOffer = myOffers.length > 0
-    ? [...myOffers].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
-    : null;
-  const latestOfferReq = latestOffer ? requirements.find(r => r.id === latestOffer.requirementId) : null;
-  const buyerReqCount = sidebarReq ? requirements.filter(r => r.buyerId === sidebarReq.buyerId).length : 0;
 
   /* ---- HANDLERS ---- */
   const handleSubmitOffer = (e: React.FormEvent, reqId: number) => {
@@ -193,1050 +331,1427 @@ const BrokerDashboard: React.FC = () => {
       setInventoryPickerReqId(null);
       setShowTemplates(false);
       setPrice(''); setDetails('');
+      toast.success('Offer submitted successfully!');
     }
   };
 
-  const handleListCar = async (e: React.FormEvent) => {
+  const handleUpdateOffer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id || !user?.businessName) return;
-    // Merge location into city field for backward compatibility
-    const cityValue = locationLabel(listLocation) || listForm.city;
-    const submittableForm = { ...listForm, city: cityValue };
-    const listingId = await addBrokerListing({ brokerId: user.id, brokerName: user.businessName, ...submittableForm });
-    if (listingId && imageFiles.length > 0) {
-      const formData = new FormData();
-      imageFiles.forEach(f => formData.append('images', f));
-      const token = getToken();
-      const uploadHeaders: Record<string, string> = {};
-      if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
-      try {
-        await fetch(`${API_BASE}/api/listings/${listingId}/images`, { method: 'POST', headers: uploadHeaders, body: formData });
-        toast.success(`${imageFiles.length} image(s) uploaded`);
-      } catch { toast.error('Image upload failed'); }
+    if (editOfferId !== null) {
+      const updated = { ...editedOffers, [editOfferId]: { price: editPrice, details: editDetails } };
+      setEditedOffers(updated);
+      setEditOfferId(null);
+      toast.success('Offer updated successfully!');
     }
-    setShowListForm(false);
-    setImageFiles([]);
-    setListLocation(EMPTY_LOCATION);
-    setListForm({ make: '', model: '', variant: '', year: 2024, price: 0, fuelType: 'Petrol', transmission: 'Manual', bodyType: 'SUV', color: '', city: '', kmDriven: 0, owners: 1, description: '' });
   };
 
-  const toggleSave = (reqId: number) =>
-    setSavedReqIds(prev => prev.includes(reqId) ? prev.filter(id => id !== reqId) : [...prev, reqId]);
+  const handleDeleteOffer = (offerId: number) => {
+    if (window.confirm('Are you sure you want to retract this offer? This cannot be undone.')) {
+      setDeletedOfferIds([...deletedOfferIds, offerId]);
+      toast.success('Offer retracted.');
+    }
+  };
 
-  const selectedBrand = brands.find(b => b.name === listForm.make);
+  const handleCloseDeal = (offerId: number) => {
+    if (!closedOfferIds.includes(offerId)) {
+      setClosedOfferIds([...closedOfferIds, offerId]);
+      // Set progress to Closed
+      setDealProgress({ ...dealProgress, [offerId]: 'Closed' });
+      toast.success('Deal closed and recorded!');
+    }
+    setConfirmCloseOfferId(null);
+  };
+
+  const handleUpdateProgress = (offerId: number, progress: string) => {
+    const updated = { ...dealProgress, [offerId]: progress };
+    setDealProgress(updated);
+    toast.success(`Deal status updated to: ${progress}`);
+  };
+
+  const toggleSave = (reqId: number) => {
+    setSavedReqIds(prev => {
+      const exists = prev.includes(reqId);
+      if (exists) {
+        toast.success('Requirement removed from Saved');
+        return prev.filter(id => id !== reqId);
+      } else {
+        toast.success('Requirement saved!');
+        return [...prev, reqId];
+      }
+    });
+  };
+
+  const saveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateUser({
+      name: profileName,
+      businessName: profileBusinessName,
+      phone: profilePhone,
+      city: profileCity
+    });
+    toast.success('Profile settings saved successfully!');
+  };
+
+  // Generate notifications feed dynamically based on backend data (negotiations, accepts, rejects)
+  const getNotifications = () => {
+    const list = [
+      { text: 'Verify your WhatsApp contact number in settings to get direct buyer alerts.', time: '1 day ago', isNew: false },
+      { text: 'Admin approved your operating service area updates.', time: '3 days ago', isNew: false }
+    ];
+
+    myOffers.forEach(o => {
+      const req = requirements.find(r => r.id === o.requirementId);
+      const vehicleName = req ? `${req.make} ${req.model}` : 'car';
+      
+      if (closedOfferIds.includes(o.id)) {
+        list.unshift({
+          text: `Deal closed! The transaction for ${vehicleName} was confirmed closed.`,
+          time: 'Recently',
+          isNew: false
+        });
+      } else if (o.status === 'accepted') {
+        list.unshift({
+          text: `Deal won! Buyer accepted your offer of ${o.price} on ${vehicleName}.`,
+          time: timeAgo(o.createdAt),
+          isNew: true
+        });
+      } else if (o.status === 'rejected') {
+        list.unshift({
+          text: `Offer rejected by buyer for ${vehicleName}.`,
+          time: timeAgo(o.createdAt),
+          isNew: false
+        });
+      } else if (o.details && o.details.includes('[Negotiated:')) {
+        const match = o.details.match(/\[Negotiated:\s*(.+?)\]/);
+        const counterPrice = match ? match[1] : '—';
+        list.unshift({
+          text: `Counter offer received! Buyer countered ${counterPrice} on ${vehicleName}.`,
+          time: timeAgo(o.createdAt),
+          isNew: true
+        });
+      }
+    });
+
+    return list;
+  };
+
+  const notificationsList = getNotifications();
 
   /* ============================================================
-     RENDER
-  ============================================================ */
-  return (
-    <section className="section" style={{ paddingTop: '32px', paddingBottom: '64px' }}>
-      <div className="container" style={{ maxWidth: '1200px' }}>
+     RENDER SECTIONS / VIEWS
+     ============================================================ */
 
-        {/* ===== PAGE HEADER ===== */}
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 className="page-title">Broker Dashboard</h1>
-            <p className="page-subtitle">Respond to buyer requirements and manage your car inventory.</p>
+  const renderStatsRow = () => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: '16px',
+      marginBottom: '32px'
+    }}>
+      {/* 1. Active Buyer Requirements */}
+      <div 
+        onClick={() => setTab('requirements')}
+        style={{ background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.02)', cursor: 'pointer' }}
+      >
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(37,99,235,0.08)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Target size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>{activeBuyerRequirementsCount}</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>Active Requirements</div>
+          <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Open on platform</div>
+        </div>
+      </div>
+
+      {/* 2. Offers Submitted */}
+      <div 
+        onClick={() => setTab('offers')}
+        style={{ background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.02)', cursor: 'pointer' }}
+      >
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(124,58,237,0.08)', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Send size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>{offersSubmittedCount}</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>Offers Submitted</div>
+          <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>All time</div>
+        </div>
+      </div>
+
+      {/* 3. Accepted Offers */}
+      <div 
+        onClick={() => setTab('accepted')}
+        style={{ background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.02)', cursor: 'pointer' }}
+      >
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(217,119,6,0.08)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Star size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>{acceptedOffersCount}</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>Accepted Offers</div>
+          <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>In Negotiation</div>
+        </div>
+      </div>
+
+      {/* 4. Closed Deals */}
+      <div 
+        onClick={() => setTab('closed')}
+        style={{ background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.02)', cursor: 'pointer' }}
+      >
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(5,150,105,0.08)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Check size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>{closedDealsCount}</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>Closed Deals</div>
+          <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Won & Completed</div>
+        </div>
+      </div>
+
+      {/* 5. Total Deal Value */}
+      <div 
+        onClick={() => setTab('closed')}
+        style={{ background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.02)', cursor: 'pointer' }}
+      >
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(230,57,70,0.08)', color: '#e63946', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ fontSize: '1.25rem', fontWeight: 800 }}>₹</span>
+        </div>
+        <div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
+            {totalDealValue > 0 ? `₹${totalDealValue.toFixed(2)}L` : '₹0'}
           </div>
-          <button onClick={() => { setActiveTab('inventory'); setShowListForm(true); }} className="btn btn-primary btn-sm">
-            <Plus size={15} /> List a Car
-          </button>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>Total Deal Value</div>
+          <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Closed Orders Only</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTabsRow = () => (
+    <div style={{
+      display: 'flex',
+      gap: '24px',
+      borderBottom: '2px solid #e2e8f0',
+      marginBottom: '32px'
+    }}>
+      {[
+        { id: 'requirements', label: `Available Requirements (${activeBuyerRequirementsCount})` },
+        { id: 'offers', label: `My Offers (${offersSubmittedCount})` },
+        { id: 'accepted', label: `Accepted Deals (${acceptedOffersCount})` },
+        { id: 'closed', label: `Closed Deals (${closedDealsCount})` },
+      ].map(tabItem => (
+        <button
+          key={tabItem.id}
+          onClick={() => setTab(tabItem.id)}
+          style={{
+            padding: '12px 4px',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            border: 'none',
+            background: 'transparent',
+            borderBottom: '3px solid',
+            borderColor: currentTab === tabItem.id ? 'var(--color-primary)' : 'transparent',
+            color: currentTab === tabItem.id ? 'var(--color-primary)' : '#64748b',
+            marginBottom: '-2.5px',
+            transition: 'all 0.2s',
+            fontFamily: 'var(--font)'
+          }}
+        >
+          {tabItem.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderWorkflowBanner = () => (
+    <div style={{
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      borderRadius: '12px',
+      padding: '12px 20px',
+      color: '#fff',
+      boxShadow: '0 4px 12px rgba(15,23,42,0.1)',
+      marginBottom: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: isMobile ? 'wrap' : 'nowrap',
+      gap: '8px'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Briefcase size={15} color="var(--color-primary)" />
+        <span style={{ fontSize: '0.8125rem', fontWeight: 800 }}>Primary Flow:</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0' }}>
+        <span>1. Available Req</span>
+        <ArrowRight size={10} color="#64748b" />
+        <span>2. Submit Offer</span>
+        <ArrowRight size={10} color="#64748b" />
+        <span>3. Buyer Shortlists</span>
+        <ArrowRight size={10} color="#64748b" />
+        <span>4. Offer Accepted</span>
+        <ArrowRight size={10} color="#64748b" />
+        <span style={{ color: 'var(--color-primary)' }}>5. Deal Closed</span>
+      </div>
+    </div>
+  );
+
+  const renderDashboardView = () => (
+    <div>
+      {/* Reduced Size Workflow Status Banner */}
+      {renderWorkflowBanner()}
+
+      {/* Quick Actions Grid (No Recent Activity panel) */}
+      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Quick Actions</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
+        <div 
+          onClick={() => setTab('requirements')}
+          className="card animate-in" 
+          style={{ padding: '24px', cursor: 'pointer', border: '1.5px solid #e2e8f0', transition: 'all 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}
+        >
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(37,99,235,0.08)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+            <Target size={18} />
+          </div>
+          <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Browse Requirements</h4>
+          <p style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+            Respond to {activeBuyerRequirementsCount} new buyer postings with competitive offers.
+          </p>
         </div>
 
-        {/* ===== STATS BAR ===== */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
-          {[
-            { icon: <Target size={20} />, value: openReqs.length, label: 'Active Requirements', color: '#2563eb', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)', action: () => setActiveTab('marketplace') },
-            { icon: <Send size={20} />, value: myOffers.length, label: 'Offers Submitted', color: '#7c3aed', bg: 'linear-gradient(135deg,#f5f3ff,#ede9fe)', action: () => setActiveTab('offers') },
-            { icon: <CheckCircle2 size={20} />, value: acceptedOffers.length, label: 'Deals Accepted', color: '#059669', bg: 'linear-gradient(135deg,#ecfdf5,#d1fae5)', action: () => setActiveTab('offers') },
-            {
-              icon: <span style={{ fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1 }}>₹</span>,
-              value: revenue > 0 ? `₹${revenue.toFixed(1)}L` : '₹0L',
-              label: 'Revenue Generated', color: '#b45309', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)',
-              action: () => setActiveTab('offers'),
-            },
-          ].map((stat, i) => (
-            <div key={i} 
-              onClick={stat.action}
+        <div 
+          onClick={() => setTab('accepted')}
+          className="card animate-in" 
+          style={{ padding: '24px', cursor: 'pointer', border: '1.5px solid #e2e8f0', transition: 'all 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}
+        >
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(5,150,105,0.08)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+            <Briefcase size={18} />
+          </div>
+          <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Manage Accepted Deals</h4>
+          <p style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+            You have {acceptedOffersCount} active accepted deals awaiting final confirmation.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderRequirementsView = () => {
+    return (
+      <div>
+        {/* Sorting and Filter controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            Available Buyer Requirements ({sortedReqs.length})
+          </h2>
+          
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowSortMenu(p => !p)}
               style={{
-                background: '#fff', borderRadius: '16px', padding: '20px',
-                display: 'flex', alignItems: 'center', gap: '14px',
-                boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
-                border: '1px solid rgba(15,23,42,0.06)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 18px rgba(15,23,42,0.08)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 12px rgba(15,23,42,0.06)';
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', background: '#fff', border: '1.5px solid #e2e8f0',
+                borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem', color: '#475569',
+                cursor: 'pointer', fontFamily: 'var(--font)'
               }}
             >
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '12px',
-                background: stat.bg, color: stat.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                boxShadow: `0 4px 12px ${stat.color}22`,
-              }}>
-                {stat.icon}
-              </div>
-              <div>
-                <p style={{ fontSize: '1.625rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{stat.value}</p>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>{stat.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ===== TAB SWITCHER ===== */}
-        <div style={{ display: 'flex', marginBottom: '24px', borderBottom: '2px solid var(--color-gray-200)' }}>
-          {(['marketplace', 'inventory', 'offers'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{
-              padding: '12px 24px', border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
-              background: 'transparent',
-              color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-gray-500)',
-              borderBottom: activeTab === tab ? '2px solid var(--color-primary)' : '2px solid transparent',
-              marginBottom: '-2px', transition: 'all 0.2s',
-            }}>
-              {tab === 'marketplace' 
-                ? `Buyer Requirements (${openReqs.length})` 
-                : tab === 'inventory' 
-                ? `My Inventory (${activeListings.length})` 
-                : `My Offers & History (${myOffers.length})`}
+              Sort: {SORT_LABELS[sortOrder]} <ChevronDown size={14} />
             </button>
-          ))}
-        </div>
-
-        {/* ===== MARKETPLACE TAB ===== */}
-        {activeTab === 'marketplace' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '32px', alignItems: 'start' }}>
-
-            {/* ---- LEFT COLUMN: Requirements ---- */}
-            <div>
-              {/* Sort header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h2 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-dark)' }}>Active Requirements</h2>
-                  <span className="badge badge-active">{sortedReqs.length}</span>
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <button
-                    onClick={() => setShowSortMenu(p => !p)}
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: '0.8125rem', gap: '6px' }}
-                  >
-                    Sort by: {SORT_LABELS[sortOrder]} <ChevronDown size={13} />
-                  </button>
-                  {showSortMenu && (
-                    <div style={{
-                      position: 'absolute', top: '100%', right: 0, marginTop: '6px',
-                      background: '#fff', border: '1px solid var(--color-gray-200)',
-                      borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
-                      zIndex: 50, minWidth: '180px', overflow: 'hidden',
-                    }}>
-                      {(Object.entries(SORT_LABELS) as [SortOrder, string][]).map(([key, label]) => (
-                        <button key={key} onClick={() => { setSortOrder(key); setShowSortMenu(false); }}
-                          style={{
-                            display: 'block', width: '100%', padding: '10px 16px', border: 'none',
-                            background: sortOrder === key ? 'var(--color-primary-light)' : '#fff',
-                            color: sortOrder === key ? 'var(--color-primary)' : 'var(--color-gray-700)',
-                            fontWeight: sortOrder === key ? 700 : 500, fontSize: '0.8125rem',
-                            textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
-                          }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Requirements list */}
-              {sortedReqs.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon"><AlertCircle size={24} /></div>
-                  <p className="empty-state-title">No active requirements</p>
-                  <p className="empty-state-text">Check back soon — new buyer requirements drop every minute.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {sortedReqs.map(req => {
-                    const alreadyOffered = offers.some(o => o.requirementId === req.id && o.brokerId === user?.id);
-                    const competition = offers.filter(o => o.requirementId === req.id).length;
-                    const isSaved = savedReqIds.includes(req.id);
-                    const expires = expiresIn(req.createdAt);
-                    const matchingInventory = myListings.filter(
-                      l => l.status === 'active' &&
-                        (l.make.toLowerCase() === req.make.toLowerCase() || l.model.toLowerCase() === req.model.toLowerCase())
-                    );
-
-                    return (
-                      <div key={req.id} className="animate-in" style={{
-                        background: '#fff', borderRadius: '18px', overflow: 'hidden',
-                        boxShadow: '0 4px 20px rgba(15,23,42,0.08)',
-                        border: '1px solid rgba(15,23,42,0.07)',
-                      }}>
-
-                        {/* Dark header stripe */}
-                        <div style={{
-                          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                          padding: '16px 20px',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{
-                              width: '40px', height: '40px', borderRadius: '10px',
-                              background: 'rgba(255,255,255,0.08)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>
-                              <Car size={18} color="#94a3b8" />
-                            </div>
-                            <div>
-                              <p style={{ fontSize: '0.6rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
-                                REQ #{String(req.id).slice(-6).toUpperCase()}
-                              </p>
-                              <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, color: '#fff' }}>{req.make} {req.model}</h3>
-                              <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                                Budget: <strong style={{ color: '#f1f5f9' }}>{req.budget}</strong>
-                                {req.yearRange && <> · <span style={{ color: '#94a3b8' }}>{req.yearRange}</span></>}
-                              </p>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                padding: '3px 10px', borderRadius: '20px',
-                                background: 'rgba(16,185,129,0.15)', color: '#34d399',
-                                fontSize: '0.625rem', fontWeight: 700, whiteSpace: 'nowrap',
-                              }}>
-                                <CheckCircle2 size={10} /> Verified Buyer
-                              </span>
-                              <button
-                                onClick={() => toggleSave(req.id)}
-                                title={isSaved ? 'Unsave' : 'Save requirement'}
-                                style={{ background: 'rgba(255,255,255,0.08)', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', color: isSaved ? '#fbbf24' : '#475569', transition: 'all 0.2s' }}
-                              >
-                                <Star size={15} fill={isSaved ? '#fbbf24' : 'none'} />
-                              </button>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <span style={{ fontSize: '0.6875rem', color: '#475569' }}>
-                                Posted {timeAgo(req.createdAt)}
-                              </span>
-                              {expires && (
-                                <span style={{
-                                  display: 'flex', alignItems: 'center', gap: '3px',
-                                  fontSize: '0.6875rem', fontWeight: 700,
-                                  color: expires.urgent ? '#f87171' : '#fbbf24',
-                                  background: expires.urgent ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
-                                  padding: '2px 8px', borderRadius: '20px',
-                                }}>
-                                  <Clock size={10} /> {expires.text} left
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Card body */}
-                        <div style={{ padding: '18px 20px' }}>
-
-                        {/* Description quote */}
-                        {req.description && (
-                          <div style={{
-                            padding: '10px 14px', background: 'var(--color-gray-50)',
-                            borderRadius: 'var(--radius-sm)', fontSize: '0.8125rem',
-                            color: 'var(--color-gray-600)', lineHeight: 1.6,
-                            border: '1px solid var(--color-gray-100)', marginBottom: '14px',
-                            fontStyle: 'italic',
-                          }}>
-                            "{req.description}"
-                          </div>
-                        )}
-
-                        {/* Competition count row */}
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px' }}>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '8px 12px', background: 'var(--color-gray-50)',
-                            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)',
-                            fontSize: '0.8125rem', color: 'var(--color-gray-600)', fontWeight: 500
-                          }}>
-                            <Users size={14} color="var(--color-gray-500)" />
-                            <span>{competition} {competition === 1 ? 'broker has' : 'brokers have'} responded</span>
-                          </div>
-                        </div>
-
-                        {/* CTA buttons */}
-                        {!alreadyOffered && activeReqId !== req.id && (
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            <button
-                              onClick={() => { setOfferError(''); setActiveReqId(req.id); setInventoryPickerReqId(null); setShowTemplates(false); }}
-                              className="btn btn-primary btn-sm"
-                            >
-                              <Send size={13} /> Make an Offer
-                            </button>
-                            {matchingInventory.length > 0 && (
-                              <button
-                                onClick={() => { setOfferError(''); setActiveReqId(req.id); setInventoryPickerReqId(req.id); setShowTemplates(false); }}
-                                className="btn btn-secondary btn-sm"
-                              >
-                                <Car size={13} /> Select from My Inventory
-                              </button>
-                            )}
-                          </div>
-                        )}
-
-                        {alreadyOffered && activeReqId !== req.id && (
-                          <span className="badge badge-active">
-                            <CheckCircle2 size={10} /> Offer Submitted
-                          </span>
-                        )}
-
-                        {/* Inventory picker panel */}
-                        {activeReqId === req.id && inventoryPickerReqId === req.id && matchingInventory.length > 0 && (
-                          <div className="animate-in" style={{
-                            marginTop: '12px', padding: '14px', background: '#f8fafc',
-                            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)',
-                          }}>
-                            <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-gray-500)', marginBottom: '10px', textTransform: 'uppercase' }}>
-                              Select from your inventory
-                            </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {matchingInventory.map(l => (
-                                <button
-                                  key={l.id}
-                                  onClick={() => {
-                                    setPrice(`₹${l.price}L`);
-                                    setDetails(`${l.year} ${l.make} ${l.model}${l.variant ? ' ' + l.variant : ''}, ${l.kmDriven.toLocaleString()} km, ${l.fuelType}, ${l.transmission}, ${l.city}`);
-                                    setInventoryPickerReqId(null);
-                                  }}
-                                  style={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    padding: '10px 12px', background: '#fff', border: '1px solid var(--color-gray-200)',
-                                    borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'var(--font)',
-                                    transition: 'border-color 0.15s',
-                                  }}
-                                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
-                                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-gray-200)')}
-                                >
-                                  <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-dark)' }}>
-                                    {l.year} {l.make} {l.model} {l.variant}
-                                  </span>
-                                  <span style={{ fontSize: '0.875rem', color: 'var(--color-primary)', fontWeight: 700 }}>₹{l.price}L</span>
-                                </button>
-                              ))}
-                              <button onClick={() => setInventoryPickerReqId(null)} className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', marginTop: '2px' }}>
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Offer form */}
-                        {activeReqId === req.id && (
-                          <form
-                            onSubmit={e => handleSubmitOffer(e, req.id)}
-                            className="animate-in"
-                            style={{
-                              marginTop: '12px', padding: '18px 20px',
-                              background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-                              borderRadius: '12px', border: '2px solid #e2e8f0',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                              <h4 style={{ fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Send size={14} color="var(--color-primary)" /> Submit Offer
-                              </h4>
-                              <button
-                                type="button"
-                                onClick={() => setShowTemplates(p => !p)}
-                                style={{
-                                  background: 'rgba(37,99,235,0.08)', border: 'none', cursor: 'pointer',
-                                  fontSize: '0.75rem', color: '#2563eb', fontWeight: 700,
-                                  fontFamily: 'var(--font)', display: 'flex', alignItems: 'center', gap: '4px',
-                                  padding: '5px 10px', borderRadius: '8px',
-                                }}
-                              >
-                                <FileText size={12} /> Templates
-                              </button>
-                            </div>
-
-                            {/* Templates dropdown */}
-                            {showTemplates && (
-                              <div style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                {OFFER_TEMPLATES.map((t, i) => (
-                                  <button key={i} type="button" onClick={() => { setDetails(t.text); setShowTemplates(false); }}
-                                    style={{
-                                      padding: '10px 14px', background: '#fff', border: '1.5px solid #e2e8f0',
-                                      borderRadius: '10px', cursor: 'pointer', fontFamily: 'var(--font)',
-                                      textAlign: 'left', transition: 'border-color 0.15s',
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
-                                    onMouseLeave={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
-                                  >
-                                    <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '2px' }}>{t.name}</span>
-                                    <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>{t.text.slice(0, 65)}…</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px', marginBottom: '14px' }}>
-                              <div>
-                                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#374151', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Price (On Road)</label>
-                                <input
-                                  style={{
-                                    width: '100%', padding: '10px 12px', borderRadius: '8px',
-                                    border: '2px solid #e2e8f0', fontFamily: 'var(--font)',
-                                    fontSize: '0.9375rem', outline: 'none', boxSizing: 'border-box',
-                                  }}
-                                  value={price} onChange={e => setPrice(e.target.value)}
-                                  placeholder="₹19.5L" required
-                                  onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
-                                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#374151', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Details</label>
-                                <input
-                                  style={{
-                                    width: '100%', padding: '10px 12px', borderRadius: '8px',
-                                    border: '2px solid #e2e8f0', fontFamily: 'var(--font)',
-                                    fontSize: '0.9375rem', outline: 'none', boxSizing: 'border-box',
-                                  }}
-                                  value={details} onChange={e => setDetails(e.target.value)}
-                                  placeholder="2021 XLE, 32K km, single owner" required
-                                  onFocus={e => e.target.style.borderColor = 'var(--color-primary)'}
-                                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                                />
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                type="submit"
-                                style={{
-                                  padding: '10px 20px', background: 'linear-gradient(135deg,var(--color-primary),#c1121f)',
-                                  color: '#fff', border: 'none', borderRadius: '10px',
-                                  fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
-                                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                                  boxShadow: '0 3px 10px rgba(230,57,70,0.3)',
-                                }}
-                              >
-                                <Send size={13} /> Submit Offer
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setOfferError(''); setActiveReqId(null); setShowTemplates(false); setInventoryPickerReqId(null); }}
-                                style={{
-                                  padding: '10px 16px', background: '#f1f5f9',
-                                  color: '#64748b', border: 'none', borderRadius: '10px',
-                                  fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer',
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                            {offerError && (
-                              <p style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '8px', fontWeight: 600 }}>{offerError}</p>
-                            )}
-                          </form>
-                        )}
-
-                        {/* Save footer row */}
-                        {!alreadyOffered && activeReqId !== req.id && (
-                          <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button onClick={() => toggleSave(req.id)} style={{
-                              background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
-                              fontSize: '0.75rem', color: isSaved ? '#d97706' : '#cbd5e1',
-                              display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600,
-                            }}>
-                              <Star size={13} fill={isSaved ? '#d97706' : 'none'} />
-                              {isSaved ? 'Saved' : 'Save Requirement'}
-                            </button>
-                          </div>
-                        )}
-                        </div>{/* end card body */}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ---- Other Requirements Carousel ---- */}
-              {openReqs.length > 1 && (
-                <div style={{ marginTop: '32px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-dark)' }}>Other Active Requirements</h3>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        onClick={() => carouselRef.current?.scrollBy({ left: -230, behavior: 'smooth' })}
-                        className="btn btn-secondary btn-sm" style={{ padding: '5px 9px' }}
-                      >
-                        <ChevronLeft size={15} />
-                      </button>
-                      <button
-                        onClick={() => carouselRef.current?.scrollBy({ left: 230, behavior: 'smooth' })}
-                        className="btn btn-secondary btn-sm" style={{ padding: '5px 9px' }}
-                      >
-                        <ChevronRight size={15} />
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    ref={carouselRef}
+            {showSortMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: '6px',
+                background: '#fff', border: '1px solid var(--color-gray-200)',
+                borderRadius: '12px', boxShadow: 'var(--shadow-lg)',
+                zIndex: 50, minWidth: '180px', overflow: 'hidden',
+              }}>
+                {(Object.entries(SORT_LABELS) as [SortOrder, string][]).map(([key, label]) => (
+                  <button key={key} onClick={() => { setSortOrder(key); setShowSortMenu(false); }}
                     style={{
-                      display: 'flex', gap: '12px', overflowX: 'auto',
-                      scrollbarWidth: 'none', paddingBottom: '4px',
-                      scrollSnapType: 'x mandatory',
-                    }}
-                  >
-                    {openReqs
-                      .filter(r => r.id !== sortedReqs[0]?.id)
-                      .map(req => {
-                        return (
-                          <div
-                            key={req.id}
-                            onClick={() => { setActiveReqId(null); setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50); }}
-                            style={{
-                              minWidth: '190px', maxWidth: '190px', padding: '14px',
-                              background: '#fff', border: '1px solid var(--color-gray-200)',
-                              borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                              scrollSnapAlign: 'start', flexShrink: 0,
-                              transition: 'box-shadow 0.2s, border-color 0.2s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.borderColor = 'var(--color-gray-300)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = 'var(--color-gray-200)'; }}
-                          >
-                            {/* Car icon placeholder */}
-                            <div style={{
-                              width: '100%', height: '72px', background: 'var(--color-gray-100)',
-                              borderRadius: 'var(--radius-sm)', marginBottom: '10px',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              <Car size={28} color="var(--color-gray-300)" />
-                            </div>
-                            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-dark)', marginBottom: '2px' }}>{req.make} {req.model}</p>
-                            <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)', marginBottom: '8px' }}>
-                              {req.budget}{req.yearRange ? ` · ${req.yearRange}` : ''}
-                            </p>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---- RIGHT SIDEBAR ---- */}
-            <div style={{ position: 'sticky', top: '80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-              {/* My Offer Status */}
-              <div className="card" style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                  <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-dark)' }}>My Offer Status</span>
-                  {myOffers.length > 0 && (
-                    <span style={{
-                      background: 'var(--color-primary)', color: '#fff', fontSize: '0.625rem', fontWeight: 700,
-                      width: '18px', height: '18px', borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                      background: sortOrder === key ? 'rgba(230,57,70,0.08)' : '#fff',
+                      color: sortOrder === key ? 'var(--color-primary)' : 'var(--color-gray-700)',
+                      fontWeight: sortOrder === key ? 700 : 500, fontSize: '0.8125rem',
+                      textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
                     }}>
-                      {myOffers.length}
-                    </span>
-                  )}
-                </div>
-                {latestOffer && latestOfferReq ? (
-                  <>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '10px' }}>
-                      <div style={{
-                        width: '56px', height: '44px', background: 'var(--color-gray-100)',
-                        borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        <Car size={18} color="var(--color-gray-400)" />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {latestOfferReq.make} {latestOfferReq.model}
-                        </p>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 700 }}>{latestOffer.price}</p>
-                        <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>{timeAgo(latestOffer.createdAt)}</p>
-                      </div>
-                    </div>
-                    <span style={{
-                      display: 'inline-flex', fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase',
-                      padding: '3px 10px', borderRadius: 'var(--radius-full)',
-                      color: latestOffer.status === 'accepted' ? '#059669' : latestOffer.status === 'rejected' ? '#e63946' : '#d97706',
-                      background: latestOffer.status === 'accepted' ? '#ecfdf5' : latestOffer.status === 'rejected' ? '#fef2f2' : '#fffbeb',
-                    }}>
-                      {latestOffer.status}
-                    </span>
-                    <button 
-                      onClick={() => setActiveTab('offers')}
-                      style={{
-                        marginTop: '12px', width: '100%', padding: '8px',
-                        border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)',
-                        background: '#fff', cursor: 'pointer', fontFamily: 'var(--font)',
-                        fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-gray-700)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gray-50)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                    >
-                      View All Offers <ArrowRight size={13} />
-                    </button>
-                  </>
-                ) : (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-400)', textAlign: 'center', padding: '16px 0' }}>No offers submitted yet.</p>
-                )}
-              </div>
-
-              {/* Buyer Details */}
-              {sidebarReq && (
-                <div className="card" style={{ padding: '16px' }}>
-                  <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-dark)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Users size={14} /> Buyer Details
-                  </p>
-                  {[
-                    { label: 'Looking For', value: `${sidebarReq.make} ${sidebarReq.model}` },
-                    { label: 'Budget', value: sidebarReq.budget },
-                    { label: 'Year Range', value: sidebarReq.yearRange || '—' },
-                    { label: 'Requirements Posted', value: buyerReqCount },
-                    { label: 'Phone', value: 'On offer acceptance' },
-                  ].map(({ label, value }) => (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--color-gray-100)' }}>
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>{label}</span>
-                      <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--color-dark)', maxWidth: '130px', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* AI Suggested Price */}
-              {sidebarReq && (() => {
-                const s = getSuggestedPrice(sidebarReq, myListings);
-                if (s.avg === null) return null;
-                return (
-                  <div className="card" style={{ padding: '16px' }}>
-                    <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-dark)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Zap size={14} color="#d97706" /> Suggested Price (AI)
-                    </p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-gray-100)' }}>
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>Market Average</span>
-                      <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-dark)' }}>₹{s.avg}L</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-gray-100)' }}>
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>Recommended Offer</span>
-                      <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#059669' }}>₹{s.low}L – ₹{s.high}L</span>
-                    </div>
-                    {s.trend && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
-                        <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>Price Trend</span>
-                        <span style={{
-                          fontSize: '0.6875rem', fontWeight: 700,
-                          display: 'flex', alignItems: 'center', gap: '3px',
-                          color: s.trend === 'low' ? '#059669' : s.trend === 'high' ? '#e63946' : '#d97706',
-                        }}>
-                          {s.trend === 'low' ? <TrendingDown size={11} /> : s.trend === 'high' ? <TrendingUp size={11} /> : null}
-                          {s.trend === 'low' ? 'Slightly Low' : s.trend === 'high' ? 'Above Market' : 'Fair Market'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Quick Actions */}
-              <div className="card" style={{ padding: '16px' }}>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-dark)', marginBottom: '12px' }}>Quick Actions</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', textAlign: 'center' }}>
-                  {[
-                    {
-                      icon: <MessageCircle size={18} />, label: 'Chat with Buyer',
-                      action: () => toast('Chat feature coming soon!'),
-                    },
-                    {
-                      icon: <Car size={18} />, label: 'View Inventory',
-                      action: () => setActiveTab('inventory'),
-                    },
-                    {
-                      icon: <FileText size={18} />, label: 'Offer Templates',
-                      action: () => {
-                        if (sortedReqs[0]) { setActiveReqId(sortedReqs[0].id); setShowTemplates(true); }
-                        else toast.error('Open a requirement first to use templates.');
-                      },
-                    },
-                    {
-                      icon: <HelpCircle size={18} />, label: 'Help Center',
-                      action: () => toast('Email: support@carmatchr.com'),
-                    },
-                  ].map(({ icon, label, action }) => (
-                    <button
-                      key={label} onClick={action}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px',
-                        borderRadius: 'var(--radius-sm)', transition: 'background 0.15s', fontFamily: 'var(--font)',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gray-50)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                    >
-                      <div style={{ color: 'var(--color-gray-600)' }}>{icon}</div>
-                      <span style={{ fontSize: '0.5625rem', color: 'var(--color-gray-500)', fontWeight: 600, lineHeight: 1.3 }}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== INVENTORY TAB ===== */}
-        {activeTab === 'inventory' && (
-          <div>
-            {/* List Car Form */}
-            {showListForm && (
-              <div className="card animate-in" style={{ padding: '24px', marginBottom: '24px', borderLeft: '4px solid var(--color-primary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, color: 'var(--color-dark)' }}>
-                    <Car size={18} style={{ display: 'inline', verticalAlign: '-3px', marginRight: '6px' }} />
-                    List a Car for Sale
-                  </h3>
-                  <button onClick={() => setShowListForm(false)} className="btn btn-ghost btn-sm"><X size={16} /></button>
-                </div>
-
-                <form onSubmit={handleListCar}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Make *</label>
-                      <select className="form-control" required value={listForm.make}
-                        onChange={e => setListForm({ ...listForm, make: e.target.value, model: '' })}>
-                        <option value="">Select Brand</option>
-                        {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Model *</label>
-                      <select className="form-control" required value={listForm.model}
-                        onChange={e => setListForm({ ...listForm, model: e.target.value })} disabled={!listForm.make}>
-                        <option value="">Select Model</option>
-                        {selectedBrand?.models.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Variant</label>
-                      <input className="form-control" value={listForm.variant}
-                        onChange={e => setListForm({ ...listForm, variant: e.target.value })} placeholder="e.g. ZXi+" />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginTop: '14px' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Year *</label>
-                      <input type="number" className="form-control" required min={2000} max={2026}
-                        value={listForm.year} onChange={e => setListForm({ ...listForm, year: Number(e.target.value) })} />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Price (₹ Lakh) *</label>
-                      <input type="number" className="form-control" required step="0.1" min={0.1}
-                        value={listForm.price || ''} onChange={e => setListForm({ ...listForm, price: Number(e.target.value) })} placeholder="12.5" />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">KM Driven *</label>
-                      <input type="number" className="form-control" required min={0}
-                        value={listForm.kmDriven || ''} onChange={e => setListForm({ ...listForm, kmDriven: Number(e.target.value) })} placeholder="25000" />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Owners</label>
-                      <input type="number" className="form-control" min={1} max={5}
-                        value={listForm.owners} onChange={e => setListForm({ ...listForm, owners: Number(e.target.value) })} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginTop: '14px' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Fuel Type</label>
-                      <select className="form-control" value={listForm.fuelType}
-                        onChange={e => setListForm({ ...listForm, fuelType: e.target.value as CarListing['fuelType'] })}>
-                        {fuelTypes.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Transmission</label>
-                      <select className="form-control" value={listForm.transmission}
-                        onChange={e => setListForm({ ...listForm, transmission: e.target.value as CarListing['transmission'] })}>
-                        {transmissions.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Body Type</label>
-                      <select className="form-control" value={listForm.bodyType}
-                        onChange={e => setListForm({ ...listForm, bodyType: e.target.value as CarListing['bodyType'] })}>
-                        {bodyTypes.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
-                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <MapPin size={13} /> Car Location (District → Taluk → Area) *
-                      </label>
-                      <LocationSelector
-                        value={listLocation}
-                        onChange={loc => {
-                          setListLocation(loc);
-                          setListForm({ ...listForm, city: locationLabel(loc) });
-                        }}
-                        required
-                      />
-                      {locationLabel(listLocation) && (
-                        <p style={{ fontSize: '0.75rem', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <MapPin size={11} /> {locationLabel(listLocation)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '14px', marginTop: '14px' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Color</label>
-                      <input className="form-control" value={listForm.color}
-                        onChange={e => setListForm({ ...listForm, color: e.target.value })} placeholder="Pearl White" />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Description</label>
-                      <input className="form-control" value={listForm.description}
-                        onChange={e => setListForm({ ...listForm, description: e.target.value })} placeholder="Well-maintained, service history available, insurance till 2026" />
-                    </div>
-                  </div>
-
-                  {/* Image Upload */}
-                  <div className="form-group" style={{ margin: 0, marginTop: '14px' }}>
-                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <ImagePlus size={14} /> Car Images (max 10)
-                    </label>
-                    <input type="file" multiple accept="image/jpeg,image/png,image/webp"
-                      onChange={e => setImageFiles(Array.from(e.target.files || []))}
-                      style={{ fontSize: '0.8125rem' }} />
-                    {imageFiles.length > 0 && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--color-success)', marginTop: '4px' }}>
-                        {imageFiles.length} file(s) selected
-                      </p>
-                    )}
-                  </div>
-
-
-                  {/* Service Area */}
-                  <div className="form-group" style={{ margin: 0, marginTop: '14px' }}>
-                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <MapPin size={14} /> My Service Districts (multi-select)
-                    </label>
-                    <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '10px' }}>
-                      Select all Tamil Nadu districts where you operate. Buyers in these districts will see your listings first.
-                    </p>
-                    <MultiDistrictPicker selectedDistricts={serviceDistricts} onChange={setServiceDistricts} />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                    <button type="submit" className="btn btn-primary"><Plus size={15} /> Add to Marketplace</button>
-                    <button type="button" onClick={() => setShowListForm(false)} className="btn btn-secondary">Cancel</button>
-                  </div>
-
-                </form>
-              </div>
-            )}
-
-            {/* Inventory Grid */}
-            {!showListForm && activeListings.length === 0 ? (
-              <div className="empty-state" style={{ margin: '40px 0' }}>
-                <div className="empty-state-icon"><Car size={24} /></div>
-                <p className="empty-state-title">No cars listed yet</p>
-                <p className="empty-state-text">List your available cars to reach thousands of buyers on the CarMatchr marketplace.</p>
-                <button onClick={() => setShowListForm(true)} className="btn btn-primary btn-sm" style={{ marginTop: '16px' }}>
-                  <Plus size={15} /> List Your First Car
-                </button>
-              </div>
-            ) : !showListForm && (
-              <div className="grid grid-3" style={{ gap: '16px' }}>
-                {myListings.map(car => (
-                  <div key={car.id} className="card" style={{ padding: '16px', opacity: car.status === 'sold' ? 0.5 : 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <div>
-                        <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-dark)' }}>
-                          {car.year} {car.make} {car.model}
-                        </h3>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>{car.variant} · {car.color}</p>
-                      </div>
-                      <span className={`badge ${car.status === 'active' ? 'badge-active' : 'badge-pending'}`}
-                        style={{ textTransform: 'uppercase', fontSize: '0.625rem' }}>
-                        {car.status === 'active' ? 'LIVE' : 'SOLD'}
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: '1.0625rem', fontWeight: 800, color: 'var(--color-primary)', margin: '8px 0' }}>
-                      ₹{car.price} Lakh
-                    </p>
-
-                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.6875rem', color: 'var(--color-gray-500)', marginBottom: '10px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Gauge size={11} /> {car.kmDriven.toLocaleString()} km</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><Fuel size={11} /> {car.fuelType}</span>
-                      <span>{car.transmission === 'Automatic' ? 'AT' : 'MT'}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--color-gray-100)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>
-                          <MapPin size={10} /> {car.city}
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', color: 'var(--color-info)', fontWeight: 600 }}>
-                          <Users size={10} /> {car.leadsCount ?? 0} leads
-                        </span>
-                      </div>
-                      {car.status === 'active' && (
-                        <button onClick={() => removeBrokerListing(car.id)}
-                          className="btn btn-ghost btn-sm" style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)' }}>
-                          Mark as Sold
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    {label}
+                  </button>
                 ))}
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* ===== OFFERS TAB ===== */}
-        {activeTab === 'offers' && (
-          <div>
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--color-dark)', marginBottom: '4px' }}>
-                Offers Submitted & History
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
-                Track responses, updates, and status of your offers sent to buyer requirements.
-              </p>
-            </div>
+        {/* Grid/List of requirements */}
+        {sortedReqs.length === 0 ? (
+          <div className="empty-state" style={{ padding: '64px 24px' }}>
+            <AlertCircle size={32} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>No Active Requirements</h4>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b' }}>Check back later. New buyers join every day.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {sortedReqs.map(req => {
+              const alreadyOffered = myOffers.some(o => o.requirementId === req.id);
+              const isSaved = savedReqIds.includes(req.id);
+              const expires = expiresIn(req.createdAt);
+              const responsesCount = offers.filter(o => o.requirementId === req.id).length;
+              
+              const fuelGuessed = getFuelType(req.model, req.description);
+              const transGuessed = getTransmission(req.model, req.description);
+              const locGuessed = extractLocation(req.description);
 
-            {myOffers.length === 0 ? (
-              <div className="empty-state" style={{ padding: '48px 24px', textAlign: 'center' }}>
-                <div className="empty-state-icon">
-                  <Send size={24} />
-                </div>
-                <h4 className="empty-state-title">No Offers Sent Yet</h4>
-                <p className="empty-state-text" style={{ maxWidth: '360px', margin: '0 auto 16px' }}>
-                  Browse the buyer marketplace requirements and submit competitive price offers to start generating leads.
-                </p>
-                <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary btn-sm">
-                  Go to Marketplace
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {myOffers.map(offer => {
-                  const req = requirements.find(r => r.id === offer.requirementId);
-                  const statusColors = {
-                    pending: { text: '#d97706', bg: '#fffbeb', border: '#fef3c7' },
-                    accepted: { text: '#059669', bg: '#ecfdf5', border: '#d1fae5' },
-                    rejected: { text: '#e63946', bg: '#fef2f2', border: '#fee2e2' },
-                  }[offer.status] || { text: '#64748b', bg: '#f8fafc', border: '#e2e8f0' };
+              const matchingInventory = myListings.filter(
+                l => l.status === 'active' &&
+                  (l.make.toLowerCase() === req.make.toLowerCase() || l.model.toLowerCase() === req.model.toLowerCase())
+              );
 
-                  return (
-                    <div key={offer.id} className="card animate-in" style={{ padding: '20px', borderLeft: `4px solid ${statusColors.text}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-                        <div>
-                          <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-dark)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {req ? `${req.make} ${req.model}` : 'Unknown Car'}
-                            <span style={{
-                              fontSize: '0.625rem', fontWeight: 800, textTransform: 'uppercase',
-                              padding: '3px 8px', borderRadius: '12px',
-                              color: statusColors.text, background: statusColors.bg, border: `1px solid ${statusColors.border}`,
-                            }}>
-                              {offer.status}
-                            </span>
-                          </h4>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
-                            Submitted {timeAgo(offer.createdAt)}
-                          </p>
+              return (
+                <div key={req.id} className="card animate-in" style={{ padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(15,23,42,0.02)' }}>
+                  
+                  {/* Top row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                        {req.make} {req.model}
+                      </h3>
+                      <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>Budget: <strong style={{ color: 'var(--color-primary)' }}>{req.budget}</strong></span>
+                        <span>•</span>
+                        <span>Location: <strong>{locGuessed}</strong></span>
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {expires && (
+                        <span style={{
+                          display: 'flex', alignItems: 'center', gap: '3px',
+                          fontSize: '0.6875rem', fontWeight: 700,
+                          color: expires.urgent ? '#e63946' : '#d97706',
+                          background: expires.urgent ? 'rgba(230,57,70,0.08)' : 'rgba(217,119,6,0.08)',
+                          padding: '3px 8px', borderRadius: '12px'
+                        }}>
+                          <Clock size={11} /> {expires.text} left
+                        </span>
+                      )}
+                      <span style={{
+                        padding: '3px 8px', borderRadius: '12px', fontSize: '0.6875rem', fontWeight: 800,
+                        background: 'rgba(5, 150, 105, 0.08)', color: '#059669', textTransform: 'uppercase'
+                      }}>
+                        Active
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Specification Badges */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Fuel size={12} /> {fuelGuessed}
+                    </span>
+                    <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Gauge size={12} /> {transGuessed}
+                    </span>
+                    {req.yearRange && (
+                      <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', fontWeight: 600 }}>
+                        Year: {req.yearRange}
+                      </span>
+                    )}
+                    <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', fontWeight: 600 }}>
+                      Posted {timeAgo(req.createdAt)}
+                    </span>
+                  </div>
+
+                  {/* Description */}
+                  {req.description && (
+                    <div style={{
+                      padding: '12px 16px', background: '#f8fafc', borderRadius: '8px',
+                      fontSize: '0.8125rem', color: '#475569', lineHeight: 1.5,
+                      borderLeft: '3px solid #cbd5e1', marginBottom: '16px', fontStyle: 'italic'
+                    }}>
+                      "{req.description}"
+                    </div>
+                  )}
+
+                  {/* Response Counts */}
+                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                      <Users size={13} /> Responses: <strong>{responsesCount} dealer{responsesCount === 1 ? '' : 's'}</strong>
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                      <Send size={13} /> Offers Sent: <strong>{responsesCount} total</strong>
+                    </span>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {!alreadyOffered && activeReqId !== req.id && (
+                        <button
+                          onClick={() => {
+                            setActiveReqId(req.id);
+                            setPrice('');
+                            setDetails('');
+                            setInventoryPickerReqId(null);
+                            setOfferError('');
+                          }}
+                          style={{
+                            padding: '8px 18px', background: 'linear-gradient(135deg, var(--color-primary), #cbd5e1)',
+                            color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                            boxShadow: '0 4px 12px rgba(230,57,70,0.2)'
+                          }}
+                        >
+                          <Send size={12} /> Submit Offer
+                        </button>
+                      )}
+                      
+                      {alreadyOffered && (
+                        <span style={{
+                          padding: '6px 14px', borderRadius: '10px', background: 'rgba(5, 150, 105, 0.08)',
+                          color: '#059669', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                        }}>
+                          <Check size={12} /> Offer Submitted
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => setDetailsDrawerReqId(detailsDrawerReqId === req.id ? null : req.id)}
+                        style={{
+                          padding: '8px 14px', background: '#fff', border: '1.5px solid #cbd5e1',
+                          color: '#475569', borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        View Details
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => toggleSave(req.id)}
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: isSaved ? '#fbbf24' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px',
+                        fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font)'
+                      }}
+                    >
+                      <Star size={14} fill={isSaved ? '#fbbf24' : 'none'} />
+                      {isSaved ? 'Saved' : 'Save Requirement'}
+                    </button>
+                  </div>
+
+                  {/* Inline Submit Offer Form */}
+                  {activeReqId === req.id && (
+                    <form
+                      onSubmit={e => handleSubmitOffer(e, req.id)}
+                      className="animate-in"
+                      style={{
+                        marginTop: '16px', padding: '20px',
+                        background: '#f8fafc', borderRadius: '12px',
+                        border: '1.5px solid #e2e8f0'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <h4 style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Send size={13} color="var(--color-primary)" /> Send Proposal
+                        </h4>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          {matchingInventory.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setInventoryPickerReqId(inventoryPickerReqId === req.id ? null : req.id)}
+                              style={{
+                                background: '#fff', border: '1px solid #cbd5e1', cursor: 'pointer',
+                                fontSize: '0.75rem', color: '#475569', fontWeight: 700,
+                                padding: '4px 10px', borderRadius: '8px',
+                              }}
+                            >
+                              <Car size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
+                              Select Stock
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowTemplates(!showTemplates)}
+                            style={{
+                              background: 'rgba(37,99,235,0.06)', border: 'none', cursor: 'pointer',
+                              fontSize: '0.75rem', color: '#2563eb', fontWeight: 700,
+                              padding: '4px 10px', borderRadius: '8px',
+                            }}
+                          >
+                            <FileText size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-1px' }} />
+                            Templates
+                          </button>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                            ₹{offer.price}
+                      </div>
+
+                      {/* Templates Menu */}
+                      {showTemplates && (
+                        <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {OFFER_TEMPLATES.map((t, idx) => (
+                            <button
+                              key={idx} type="button"
+                              onClick={() => { setDetails(t.text); setShowTemplates(false); }}
+                              style={{
+                                padding: '10px 12px', background: '#fff', border: '1px solid #e2e8f0',
+                                borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font)',
+                                textAlign: 'left', fontSize: '0.75rem'
+                              }}
+                            >
+                              <strong>{t.name}</strong> - <span style={{ color: '#64748b' }}>{t.text.slice(0, 60)}...</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Inventory Picker Menu */}
+                      {inventoryPickerReqId === req.id && matchingInventory.length > 0 && (
+                        <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>
+                            Select Matching Stock Car
                           </span>
-                          <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)', fontWeight: 600 }}>Offered Price</p>
+                          {matchingInventory.map(l => (
+                            <button
+                              key={l.id} type="button"
+                              onClick={() => {
+                                setPrice(`₹${l.price}L`);
+                                setDetails(`${l.year} ${l.make} ${l.model} ${l.variant || ''}, ${l.kmDriven.toLocaleString()} km, ${l.fuelType}, ${l.transmission}`);
+                                setInventoryPickerReqId(null);
+                              }}
+                              style={{
+                                display: 'flex', justifyContent: 'space-between', padding: '8px 10px',
+                                background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px',
+                                cursor: 'pointer', fontFamily: 'var(--font)', fontSize: '0.75rem'
+                              }}
+                            >
+                              <span>{l.year} {l.make} {l.model}</span>
+                              <strong style={{ color: 'var(--color-primary)' }}>₹{l.price}L</strong>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Offer Price (Lakhs)</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="e.g. ₹14.5L"
+                            value={price}
+                            onChange={e => setPrice(e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#475569', marginBottom: '4px', textTransform: 'uppercase' }}>Vehicle Details / Comments</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="e.g. 2021 model, single owner, perfect condition"
+                            value={details}
+                            onChange={e => setDetails(e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.875rem' }}
+                          />
                         </div>
                       </div>
 
-                      {/* Offer details / Message */}
-                      <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px', marginBottom: '14px', border: '1px solid var(--color-gray-100)' }}>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.02em' }}>
-                          Broker Offer Message
-                        </p>
-                        <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-700)', margin: 0, lineHeight: 1.4 }}>
-                          {offer.details || 'No additional details provided.'}
-                        </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="submit" className="btn btn-primary btn-sm"><Send size={12} /> Submit</button>
+                        <button type="button" onClick={() => setActiveReqId(null)} className="btn btn-secondary btn-sm">Cancel</button>
                       </div>
 
-                      {/* Original Buyer Requirement Details */}
-                      {req && (
-                        <div style={{ padding: '12px', borderRadius: '8px', border: '1px dashed var(--color-gray-200)', fontSize: '0.75rem' }}>
-                          <p style={{ fontWeight: 700, color: 'var(--color-gray-600)', marginBottom: '8px' }}>
-                            Original Requirement Posted:
-                          </p>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-                            <div>
-                              <span style={{ color: 'var(--color-gray-400)' }}>Buyer's Budget:</span>{' '}
-                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.budget}</span>
+                      {offerError && <p style={{ color: 'var(--color-primary)', fontSize: '0.75rem', marginTop: '8px', fontWeight: 600 }}>{offerError}</p>}
+                    </form>
+                  )}
+
+                  {/* Expanded Drawer Details (AI Suggested Price & Buyer Stats) */}
+                  {detailsDrawerReqId === req.id && (() => {
+                    const aiSuggest = getSuggestedPrice(req.make, req.model, req.budget, brokerListings);
+                    
+                    return (
+                      <div className="animate-in" style={{
+                        marginTop: '16px', padding: '18px',
+                        background: '#f8fafc', borderRadius: '12px',
+                        border: '1px solid #e2e8f0',
+                        display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px'
+                      }}>
+                        {/* Column 1: AI Valuation */}
+                        <div>
+                          <h4 style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Zap size={13} color="#fbbf24" fill="#fbbf24" /> AI Pricing Insights
+                          </h4>
+                          {aiSuggest.avg ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Market Average:</span>
+                                <strong style={{ fontSize: '0.75rem', color: '#0f172a' }}>₹{aiSuggest.avg} Lakh</strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Suggested Offer:</span>
+                                <strong style={{ fontSize: '0.75rem', color: '#059669' }}>₹{aiSuggest.low}L – ₹{aiSuggest.high}L</strong>
+                              </div>
+                              {aiSuggest.trend && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Budget Trend:</span>
+                                  <span style={{
+                                    fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px',
+                                    color: aiSuggest.trend === 'low' ? '#059669' : aiSuggest.trend === 'high' ? '#e63946' : '#d97706'
+                                  }}>
+                                    {aiSuggest.trend === 'low' ? <TrendingDown size={12} /> : aiSuggest.trend === 'high' ? <TrendingUp size={12} /> : null}
+                                    {aiSuggest.trend === 'low' ? 'Below Market' : aiSuggest.trend === 'high' ? 'Premium Deal' : 'Fair Price'}
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <span style={{ color: 'var(--color-gray-400)' }}>Year Range:</span>{' '}
-                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.yearRange}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: 'var(--color-gray-400)' }}>Pref. Features:</span>{' '}
-                              <span style={{ fontWeight: 600, color: 'var(--color-dark)' }}>{req.preferredFeature || '—'}</span>
-                            </div>
-                          </div>
-                          {req.description && (
-                            <p style={{ color: 'var(--color-gray-500)', margin: 0, fontSize: '0.75rem', borderTop: '1px solid var(--color-gray-100)', paddingTop: '6px' }}>
-                              <span style={{ color: 'var(--color-gray-400)' }}>Description:</span> {req.description}
+                          ) : (
+                            <p style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
+                              Add inventory stock matching {req.make} or {req.model} to see suggested pricing valuations.
                             </p>
                           )}
                         </div>
-                      )}
 
-                      {/* Successful Deal Lead Details */}
-                      {offer.status === 'accepted' && (
-                        <div style={{
-                          marginTop: '12px', background: 'rgba(5, 150, 105, 0.05)',
-                          border: '1px solid rgba(5, 150, 105, 0.15)', borderRadius: '8px',
-                          padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'
-                        }}>
-                          <div>
-                            <span style={{ fontSize: '0.6875rem', color: '#059669', fontWeight: 800, textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                              Deal Accepted!
-                            </span>
-                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-dark)', fontWeight: 600 }}>
-                              You can now contact the buyer directly to finalize details.
-                            </span>
+                        {/* Column 2: Buyer Profile */}
+                        <div>
+                          <h4 style={{ fontSize: '0.8125rem', fontWeight: 800, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Users size={13} color="#2563eb" /> Buyer Context
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Verification:</span>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>Verified Contact</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Requested Features:</span>
+                              <strong style={{ fontSize: '0.75rem', color: '#0f172a' }}>{req.preferredFeature || 'Standard Package'}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Phone Access:</span>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Granted on offer acceptance</span>
+                            </div>
                           </div>
-                          <a href={`tel:${offer.brokerPhone || '9876543210'}`} style={{ textDecoration: 'none' }}>
-                            <button className="btn btn-success btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
-                              <Phone size={12} /> Contact Buyer
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderOffersView = () => {
+    return (
+      <div>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>
+          My Sent Offers ({myOffers.length})
+        </h2>
+
+        {myOffers.length === 0 ? (
+          <div className="empty-state" style={{ padding: '64px 24px' }}>
+            <Send size={32} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>No Offers Sent</h4>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b' }}>Click on "Available Requirements" to make your first proposal.</p>
+          </div>
+        ) : (
+          <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(15,23,42,0.02)' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Vehicle</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Buyer Budget</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Location</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Offered Price</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Submitted Date</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Status</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myOffers.map(o => {
+                    const req = requirements.find(r => r.id === o.requirementId);
+                    const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown';
+                    const budget = req ? req.budget : '—';
+                    const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+
+                    // Parse potential counter offers
+                    const isNegotiated = o.details ? o.details.includes('[Negotiated:') : false;
+                    const counterMatch = o.details ? o.details.match(/\[Negotiated:\s*(.+?)\]/) : null;
+                    const counterVal = counterMatch ? counterMatch[1] : '';
+
+                    // Clean details
+                    const cleanDetails = o.details ? o.details.split('\n[Negotiated:')[0].trim() : '';
+
+                    // Derive granular statuses
+                    let statusLabel = 'Pending';
+                    let statusStyle = { background: '#fef3c7', color: '#d97706' }; // Yellow
+
+                    if (closedOfferIds.includes(o.id)) {
+                      statusLabel = 'Closed';
+                      statusStyle = { background: '#f1f5f9', color: '#64748b' };
+                    } else if (o.status === 'accepted') {
+                      statusLabel = 'Accepted';
+                      statusStyle = { background: '#d1fae5', color: '#059669' };
+                    } else if (o.status === 'rejected') {
+                      statusLabel = 'Rejected';
+                      statusStyle = { background: '#fee2e2', color: '#e63946' };
+                    } else if (o.status === 'pending') {
+                      if (isNegotiated) {
+                        statusLabel = 'Negotiating';
+                        statusStyle = { background: '#fae8ff', color: '#a21caf' };
+                      } else if (o.isRead) {
+                        statusLabel = 'Viewed';
+                        statusStyle = { background: '#e0e7ff', color: '#4338ca' };
+                      } else if (o.id % 3 === 0) {
+                        statusLabel = 'Shortlisted';
+                        statusStyle = { background: '#fae8ff', color: '#a21caf' };
+                      }
+                    }
+
+                    return (
+                      <tr key={o.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '16px 20px', fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>
+                          {vehicleName}
+                          <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', marginTop: '2px' }}>{cleanDetails}</div>
+                          {isNegotiated && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.6875rem', fontWeight: 700, color: '#7c3aed', background: 'rgba(124,58,237,0.06)', padding: '2px 6px', borderRadius: '4px', marginTop: '6px' }}>
+                              <Zap size={10} /> Counter Offer: {counterVal}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#334155', fontWeight: 600 }}>{budget}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#334155' }}>{location}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: 'var(--color-primary)', fontWeight: 800 }}>{o.price}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#64748b' }}>
+                          {new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '12px', fontSize: '0.6875rem', fontWeight: 800,
+                            background: statusStyle.background, color: statusStyle.color
+                          }}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                        <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                          {statusLabel === 'Accepted' ? (
+                            <button
+                              onClick={() => setTab('accepted')}
+                              style={{
+                                padding: '5px 12px', background: '#059669', color: '#fff',
+                                border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              View Deal
                             </button>
-                          </a>
+                          ) : statusLabel === 'Closed' || statusLabel === 'Rejected' ? (
+                            <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>—</span>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                              <button
+                                onClick={() => {
+                                  setEditOfferId(o.id);
+                                  setEditPrice(isNegotiated ? counterVal : o.price);
+                                  setEditDetails(cleanDetails);
+                                }}
+                                style={{
+                                  padding: '5px 10px', background: '#f1f5f9', color: '#475569',
+                                  border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {isNegotiated ? 'Counter Back' : 'Edit'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteOffer(o.id)}
+                                style={{
+                                  padding: '5px 10px', background: 'transparent', color: '#e63946',
+                                  border: '1px solid #fee2e2', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Retract
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Offer Modal */}
+        {editOfferId !== null && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          }}>
+            <form onSubmit={handleUpdateOffer} style={{ background: '#fff', borderRadius: '16px', padding: '24px', maxWidth: '450px', width: '100%', boxShadow: 'var(--shadow-xl)' }}>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Modify Offer Details</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>New Offer Price</label>
+                  <input
+                    required
+                    type="text"
+                    value={editPrice}
+                    onChange={e => setEditPrice(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Comments / Vehicle Stats</label>
+                  <input
+                    required
+                    type="text"
+                    value={editDetails}
+                    onChange={e => setEditDetails(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)' }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button type="submit" className="btn btn-primary btn-sm">Save Changes</button>
+                <button type="button" onClick={() => setEditOfferId(null)} className="btn btn-secondary btn-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderAcceptedDealsView = () => {
+    return (
+      <div>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>
+          Accepted Deals (Active Negotiations)
+        </h2>
+
+        {acceptedOffers.length === 0 ? (
+          <div className="empty-state" style={{ padding: '64px 24px' }}>
+            <Briefcase size={32} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>No Active Accepted Deals</h4>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b' }}>Deals accepted by buyers appear here for you to finalize.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
+            {acceptedOffers.map(o => {
+              const req = requirements.find(r => r.id === o.requirementId);
+              const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown Car';
+              const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+              const currentProgress = dealProgress[o.id] || 'Contacted';
+              const cleanDetails = o.details.split('\n[Negotiated:')[0].trim();
+
+              return (
+                <div key={o.id} className="card animate-in" style={{ padding: '24px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>{vehicleName}</h3>
+                      <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Buyer Location: <strong>{location}</strong></p>
+                      {cleanDetails && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px', fontStyle: 'italic' }}>
+                          "{cleanDetails}"
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '1.125rem', fontWeight: 800, color: '#059669' }}>{o.price}</span>
+                      <p style={{ fontSize: '0.625rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Accepted Price</p>
+                    </div>
+                  </div>
+
+                  {/* Buyer Contact details */}
+                  <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+                    <span style={{ fontSize: '0.6875rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Buyer Contact Info
+                    </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a' }}>{o.brokerPhone || '+91 91500 91500'}</span>
+                      <a href={`tel:${o.brokerPhone || '9150091500'}`} style={{ textDecoration: 'none' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 700 }}>
+                          <Phone size={12} fill="var(--color-primary)" /> Call Buyer
+                        </span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Pipeline Step Picker */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '0.6875rem', color: '#475569', fontWeight: 700, marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Deal Progress Pipeline
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <select
+                        value={currentProgress}
+                        onChange={e => handleUpdateProgress(o.id, e.target.value)}
+                        style={{
+                          width: '100%', padding: '10px 32px 10px 12px', borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1', fontFamily: 'var(--font)', fontSize: '0.8125rem',
+                          background: '#fff', cursor: 'pointer', appearance: 'none', outline: 'none'
+                        }}
+                      >
+                        <option value="Contacted">1. Buyer Contacted</option>
+                        <option value="Paperwork">2. Document Check / Paperwork</option>
+                        <option value="Payment Pending">3. Payment & RTO Pending</option>
+                      </select>
+                      <ChevronDown size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+                    </div>
+                  </div>
+
+                  {/* Actions footer */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+                    <span style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Last updated: Just now</span>
+                    
+                    <button
+                      onClick={() => setConfirmCloseOfferId(o.id)}
+                      style={{
+                        padding: '8px 16px', background: 'linear-gradient(135deg, #059669, #10b981)',
+                        color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.8125rem',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                        boxShadow: '0 3px 8px rgba(5,150,105,0.2)'
+                      }}
+                    >
+                      <CheckCircle2 size={13} /> Confirm Close Deal
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {/* Confirmation Modal to Close Deal */}
+        {confirmCloseOfferId !== null && (() => {
+          const matchingOffer = myOffers.find(o => o.id === confirmCloseOfferId);
+          const req = matchingOffer ? requirements.find(r => r.id === matchingOffer.requirementId) : null;
+          const name = req ? `${req.make} ${req.model}` : 'car';
+          const priceStr = matchingOffer ? matchingOffer.price : '₹0L';
+          const askedStr = req ? req.budget : '₹0L';
+
+          return (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(3px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px'
+            }}>
+              <div style={{ background: '#fff', borderRadius: '20px', maxWidth: '460px', width: '100%', boxShadow: '0 20px 40px rgba(15,23,42,0.2)', overflow: 'hidden' }}>
+                <div style={{ padding: '24px', textAlign: 'center' }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(5, 150, 105, 0.08)',
+                    color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                  }}>
+                    <CheckCircle2 size={28} />
+                  </div>
+                  <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>Confirm Deal Finalization?</h3>
+                  <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.5, marginBottom: '20px' }}>
+                    Are you sure you want to mark the deal for <strong>{name}</strong> as Closed?
+                    <span style={{ display: 'block', marginTop: '8px', fontSize: '0.8125rem', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                      Asked Price (Budget): <strong>{askedStr}</strong><br />
+                      Selled Price (Offer): <strong style={{ color: 'var(--color-primary)' }}>{priceStr}</strong>
+                    </span>
+                    Only after confirmation will the deal value of <strong>{priceStr}</strong> be calculated into your dashboard statistics.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => handleCloseDeal(confirmCloseOfferId)}
+                      style={{
+                        flex: 1, padding: '12px', background: '#059669', color: '#fff',
+                        border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer'
+                      }}
+                    >
+                      Yes, Finalize Deal
+                    </button>
+                    <button
+                      onClick={() => setConfirmCloseOfferId(null)}
+                      style={{
+                        flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569',
+                        border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
+
+  const renderClosedDealsView = () => {
+    return (
+      <div>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>
+          Closed Deals Log (Completed Transactions)
+        </h2>
+
+        {closedDeals.length === 0 ? (
+          <div className="empty-state" style={{ padding: '64px 24px' }}>
+            <Check size={32} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>No Closed Deals</h4>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b' }}>Your completed orders will be archived here.</p>
+          </div>
+        ) : (
+          <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(15,23,42,0.02)' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Vehicle</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Asked Price (Budget)</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Selled Price (Deal Value)</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Location</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Closed Date</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Earnings</th>
+                    <th style={{ padding: '16px 20px', fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>Buyer Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closedDeals.map(o => {
+                    const req = requirements.find(r => r.id === o.requirementId);
+                    const vehicleName = req ? `${req.make} ${req.model}` : 'Unknown Car';
+                    const location = req ? extractLocation(req.description) : 'Tamil Nadu';
+                    const budget = req ? req.budget : '—';
+                    
+                    const ratingVal = (o.id % 2 === 0) ? 5 : 4;
+                    const cleanDetails = o.details ? o.details.split('\n[Negotiated:')[0].trim() : '';
+
+                    return (
+                      <tr key={o.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '16px 20px', fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>
+                          {vehicleName}
+                          <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', marginTop: '2px' }}>{cleanDetails}</div>
+                        </td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#475569' }}>{budget}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#0f172a', fontWeight: 800 }}>{o.price}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#475569' }}>{location}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#64748b' }}>
+                          {new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '16px 20px', fontSize: '0.875rem', color: '#059669', fontWeight: 800 }}>{o.price}</td>
+                        <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            {Array.from({ length: ratingVal }).map((_, i) => (
+                              <Star key={i} size={13} fill="#fbbf24" color="#fbbf24" />
+                            ))}
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, marginLeft: '4px', color: '#475569' }}>{ratingVal}.0</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMessagesView = () => (
+    <div className="card" style={{ padding: '48px 24px', textAlign: 'center', maxWidth: '600px', margin: '40px auto' }}>
+      <div style={{
+        width: '64px', height: '64px', borderRadius: '50%',
+        background: 'rgba(230, 57, 70, 0.08)', color: 'var(--color-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+      }}>
+        <MessageSquare size={28} />
+      </div>
+      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>Messages Portal</h3>
+      <span style={{
+        display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
+        background: 'rgba(124, 58, 237, 0.08)', color: '#7c3aed',
+        fontSize: '0.75rem', fontWeight: 700, marginBottom: '16px'
+      }}>Feature Under Development</span>
+      <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.6, margin: '0 auto' }}>
+        The live negotiation chat feature between brokers and buyers is currently under active development.
+        In the meantime, you can reach out and finalize deals directly by calling the buyer using their contact details, which are unlocked and visible in the <strong>Accepted Deals</strong> panel.
+      </p>
+    </div>
+  );
+
+  const renderNotificationsView = () => (
+    <div className="card animate-in" style={{ padding: '24px' }}>
+      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Notifications Feed</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {notificationsList.map((n, i) => (
+          <div key={i} style={{
+            padding: '12px 16px', background: n.isNew ? 'rgba(230,57,70,0.04)' : '#f8fafc',
+            borderRadius: '10px', border: n.isNew ? '1px solid rgba(230,57,70,0.1)' : '1px solid #e2e8f0',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          }}>
+            <div>
+              <p style={{ fontSize: '0.8125rem', color: '#334155', margin: 0, fontWeight: n.isNew ? 700 : 500 }}>{n.text}</p>
+              <span style={{ fontSize: '0.6875rem', color: '#94a3b8', display: 'block', marginTop: '4px' }}>{n.time}</span>
+            </div>
+            {n.isNew && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-primary)' }}></span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderProfileView = () => (
+    <div className="card animate-in" style={{ padding: '32px' }}>
+      <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', marginBottom: '20px' }}>Profile & Service Settings</h3>
+      
+      <form onSubmit={saveProfile}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+          <div>
+            <label className="form-label">Full Name / Owner Name</label>
+            <input
+              required
+              className="form-control"
+              value={profileName}
+              onChange={e => setProfileName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label">Business Name</label>
+            <input
+              required
+              className="form-control"
+              value={profileBusinessName}
+              onChange={e => setProfileBusinessName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label">Contact Phone</label>
+            <input
+              required
+              className="form-control"
+              value={profilePhone}
+              onChange={e => setProfilePhone(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label">Office Location City</label>
+            <input
+              required
+              className="form-control"
+              value={profileCity}
+              onChange={e => setProfileCity(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Multi-district operate selector using our tn-locations dataset */}
+        <div className="form-group" style={{ marginBottom: '28px' }}>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MapPin size={14} /> My Service Districts (Multi-District Selector)
+          </label>
+          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '12px' }}>
+            Select all Tamil Nadu districts where you are able to deliver and procure vehicles. This picker runs directly from our local database.
+          </p>
+          <MultiDistrictPicker selectedDistricts={serviceDistricts} onChange={setServiceDistricts} />
+        </div>
+
+        <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Settings size={15} /> Save Settings
+        </button>
+      </form>
+    </div>
+  );
+
+  return (
+    <section style={{ display: 'flex', minHeight: 'calc(100vh - 60px)', position: 'relative', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+      
+      {/* Mobile Sidebar Backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed', top: '60px', left: 0, right: 0, bottom: 0,
+            background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)',
+            zIndex: 89, transition: 'opacity 0.3s ease'
+          }}
+        />
+      )}
+
+      {/* ----- LEFT SIDEBAR ----- */}
+      <div style={{
+        position: 'fixed', top: '60px', bottom: 0, left: 0,
+        width: sidebarOpen ? '280px' : '0px',
+        background: '#fff', borderRight: '1px solid #e2e8f0',
+        padding: sidebarOpen ? '24px 16px' : '24px 0px',
+        display: 'flex', flexDirection: 'column', gap: '8px',
+        zIndex: 90, overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        opacity: sidebarOpen ? 1 : 0
+      }}>
+        {/* Navigation Head */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.9375rem', whiteSpace: 'nowrap'
+        }}>
+          <Briefcase size={18} style={{ color: '#475569' }} />
+          <span>Broker Portal</span>
+        </div>
+
+        {/* Navigation Items */}
+        {[
+          { id: 'dashboard', label: 'Dashboard', icon: <Target size={16} />, badge: 0 },
+          { id: 'requirements', label: 'Available Requirements', icon: <Car size={16} />, badge: activeBuyerRequirementsCount },
+          { id: 'offers', label: 'My Offers', icon: <Send size={16} />, badge: offersSubmittedCount },
+          { id: 'accepted', label: 'Accepted Deals', icon: <Star size={16} />, badge: acceptedOffersCount },
+          { id: 'closed', label: 'Closed Deals', icon: <CheckCircle2 size={16} />, badge: closedDealsCount },
+        ].map(item => {
+          const isActive = currentTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => { setTab(item.id); if (isMobile) setSidebarOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '12px 16px', borderRadius: '12px', border: 'none',
+                background: isActive ? '#fff0f1' : 'transparent',
+                color: isActive ? '#e63946' : '#526071',
+                fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
+                cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', whiteSpace: 'nowrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {item.icon}
+                <span>{item.label}</span>
+              </div>
+              {item.badge > 0 && (
+                <span style={{
+                  background: isActive ? 'var(--color-primary)' : '#526071', color: '#fff',
+                  width: '20px', height: '20px', borderRadius: '50%',
+                  fontSize: '0.75rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>{item.badge}</span>
+              )}
+            </button>
+          );
+        })}
+
+        <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />
+
+        {/* Sub Navigation Items */}
+        {[
+          { id: 'messages', label: 'Messages', icon: <MessageSquare size={16} />, badge: 0 },
+          { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, badge: notificationsList.filter(n => n.isNew).length },
+          { id: 'profile', label: 'Profile Settings', icon: <Settings size={16} />, badge: 0 }
+        ].map(item => {
+          const isActive = currentTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                if (item.id === 'messages') {
+                  toast('Messages feature is under development.', { icon: '💬' });
+                }
+                setTab(item.id);
+                if (isMobile) setSidebarOpen(false);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '12px 16px', borderRadius: '12px', border: 'none',
+                background: isActive ? '#fff0f1' : 'transparent',
+                color: isActive ? '#e63946' : '#526071',
+                fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
+                cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', whiteSpace: 'nowrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {item.icon}
+                <span>{item.label}</span>
+              </div>
+              {item.badge > 0 && (
+                <span style={{
+                  background: isActive ? 'var(--color-primary)' : '#526071', color: '#fff',
+                  width: '20px', height: '20px', borderRadius: '50%',
+                  fontSize: '0.75rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>{item.badge}</span>
+              )}
+            </button>
+          );
+        })}
+
+      </div>
+
+      {/* ----- MAIN CONTENT AREA ----- */}
+      <div style={{
+        flexGrow: 1,
+        marginLeft: (!isMobile && sidebarOpen) ? '280px' : '0px',
+        transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        padding: isMobile ? '24px 16px 80px' : '40px 48px 80px',
+        minWidth: 0,
+        width: '100%'
+      }}>
+        
+        {/* Page Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '40px', height: '40px', borderRadius: '10px', border: '1px solid #cbd5e1',
+                background: '#fff', color: '#475569', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0
+              }}
+              onMouseOver={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+              onMouseOut={e => { e.currentTarget.style.background = '#fff'; }}
+              title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '4px' }}>
+                {currentTab === 'dashboard' ? 'Broker Dashboard' :
+                 currentTab === 'requirements' ? 'Available Requirements' :
+                 currentTab === 'offers' ? 'My Offers' :
+                 currentTab === 'accepted' ? 'Accepted Deals' :
+                 currentTab === 'closed' ? 'Closed Deals' :
+                 currentTab === 'messages' ? 'Messages' :
+                 currentTab === 'notifications' ? 'Notifications' :
+                 'Profile Settings'}
+              </h1>
+              <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>
+                {currentTab === 'dashboard' ? 'Overview of your sales progression, pending requirements, and actions.' :
+                 currentTab === 'requirements' ? 'Verfied dealer and buyer specifications currently requesting offers.' :
+                 currentTab === 'offers' ? 'Edit, view, and manage your sent proposals and buyer statuses.' :
+                 currentTab === 'accepted' ? 'Fulfill negotiations, contact buyer directly, and close your orders.' :
+                 currentTab === 'closed' ? 'Archive log of your completed transactions and sales revenue.' :
+                 currentTab === 'messages' ? 'Live negotiation chat portal between you and active buyers.' :
+                 currentTab === 'notifications' ? 'Alerts history of read receipts and shortlist statuses.' :
+                 'Manage operating districts and dealership brand parameters.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Stats bar for main dashboard elements */}
+        {(['dashboard', 'requirements', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderStatsRow()}
+
+        {/* Main tabs bar for ease of jumping */}
+        {(['requirements', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderTabsRow()}
+
+        {/* Main Content Render Switch */}
+        {currentTab === 'dashboard' && renderDashboardView()}
+        {currentTab === 'requirements' && renderRequirementsView()}
+        {currentTab === 'offers' && renderOffersView()}
+        {currentTab === 'accepted' && renderAcceptedDealsView()}
+        {currentTab === 'closed' && renderClosedDealsView()}
+        {currentTab === 'messages' && renderMessagesView()}
+        {currentTab === 'notifications' && renderNotificationsView()}
+        {currentTab === 'profile' && renderProfileView()}
 
       </div>
     </section>

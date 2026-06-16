@@ -823,6 +823,27 @@ app.patch('/api/offers/:id/reject', authenticate, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/offers/:id/negotiate', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { counterPrice } = req.body;
+  if (!counterPrice) return res.status(400).json({ error: 'Counter price is required.' });
+
+  const offer = await db.get('SELECT requirement_id FROM offers WHERE id = $1', [id]);
+  if (!offer) return res.status(404).json({ error: 'Offer not found.' });
+
+  const requirement = await db.get('SELECT buyer_id FROM requirements WHERE id = $1', [offer.requirement_id]);
+  if (requirement && Number(requirement.buyer_id) !== Number(req.user.sub) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only negotiate offers on your own requirements.' });
+  }
+
+  const currentOffer = await db.get('SELECT details, price FROM offers WHERE id = $1', [id]);
+  const cleanDetails = currentOffer.details ? currentOffer.details.split('\n[Negotiated:')[0].trim() : '';
+  const newDetails = `${cleanDetails}\n[Negotiated: ${counterPrice}]`;
+  await db.run("UPDATE offers SET details = $1, status = 'pending' WHERE id = $2", [newDetails, id]);
+  res.json({ ok: true });
+});
+
+
 app.patch('/api/offers/:id/accept', authenticate, async (req, res) => {
   const { id } = req.params;
   const reqId = Number(req.body.reqId);

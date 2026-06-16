@@ -64,6 +64,7 @@ interface DataContextType {
   acceptOffer: (offerId: number, reqId: number) => void;
   rejectOffer: (offerId: number) => void;
   markOfferRead: (offerId: number) => void;
+  negotiateOffer: (offerId: number, counterPrice: string) => Promise<void>;
   addBrokerListing: (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>) => Promise<number | null>;
   removeBrokerListing: (id: number) => void;
   refreshData: () => Promise<void>;
@@ -212,6 +213,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const negotiateOffer = async (offerId: number, counterPrice: string) => {
+    setOffers((prev) =>
+      prev.map((o) =>
+        o.id === offerId
+          ? { ...o, details: `${o.details.split('\n[Negotiated:')[0].trim()}\n[Negotiated: ${counterPrice}]`, status: 'pending' }
+          : o
+      )
+    );
+    if (isLoaded) {
+      await fetch(`${API_BASE}/api/offers/${offerId}/negotiate`, {
+        method: 'PATCH',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ counterPrice }),
+      }).catch(console.error);
+    }
+  };
+
   const addBrokerListing = async (listing: Omit<BrokerListing, 'id' | 'status' | 'createdAt' | 'images' | 'leadsCount'>): Promise<number | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/listings`, {
@@ -291,6 +309,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         acceptOffer,
         rejectOffer,
         markOfferRead,
+        negotiateOffer,
         addBrokerListing,
         removeBrokerListing,
         refreshData,

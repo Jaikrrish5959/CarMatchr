@@ -66,7 +66,7 @@ const getDealerRating = (brokerId: number) => {
 
 const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead } = useData();
+  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead, negotiateOffer } = useData();
   const { brands } = useCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'active';
@@ -102,6 +102,10 @@ const BuyerDashboard: React.FC = () => {
   const [expandedReqs, setExpandedReqs] = useState<Record<number, boolean>>({});
   const [sortBy, setSortBy] = useState('latest');
   const [summaryReqId, setSummaryReqId] = useState<number | null>(null);
+  
+  // Negotiation state
+  const [negotiateOfferId, setNegotiateOfferId] = useState<number | null>(null);
+  const [counterPriceInput, setCounterPriceInput] = useState('');
 
   const selectedBrand = brands.find((b) => b.name === make);
   const modelFeatures = selectedBrand?.models.find((m) => m.name === model)?.features ?? [];
@@ -844,7 +848,7 @@ const BuyerDashboard: React.FC = () => {
 
                             {offer.details && (
                               <p style={{ fontSize: '0.8125rem', color: '#475569', lineHeight: 1.6, margin: '8px 0 12px' }}>
-                                {offer.details}
+                                {offer.details.split('\n[Negotiated:')[0].trim()}
                               </p>
                             )}
 
@@ -865,77 +869,162 @@ const BuyerDashboard: React.FC = () => {
                               </div>
                             )}
 
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              {offer.status === 'pending' && req.status === 'open' && (
-                                <>
-                                  <button
-                                    onClick={() => { markOfferRead(offer.id); acceptOffer(offer.id, req.id); }}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      padding: '8px 16px',
-                                      borderRadius: '8px',
-                                      border: 'none',
-                                      background: 'linear-gradient(135deg, #059669, #047857)',
-                                      color: '#fff',
-                                      fontFamily: 'var(--font)',
-                                      fontWeight: 700,
-                                      fontSize: '0.8125rem',
-                                      cursor: 'pointer',
-                                      boxShadow: '0 2px 8px rgba(5,150,105,0.2)'
-                                    }}
-                                  >
-                                    <Check size={13} /> Accept Offer
-                                  </button>
-                                  <button
-                                    onClick={() => { markOfferRead(offer.id); rejectOffer(offer.id); }}
-                                    style={{
-                                      padding: '8px 14px',
-                                      borderRadius: '8px',
-                                      border: '1.5px solid #e2e8f0',
-                                      background: '#fff',
-                                      color: '#64748b',
-                                      fontFamily: 'var(--font)',
-                                      fontWeight: 600,
-                                      fontSize: '0.8125rem',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    Reject
-                                  </button>
-                                  {!offer.isRead && (
-                                    <button
-                                      onClick={() => markOfferRead(offer.id)}
-                                      style={{
-                                        marginLeft: 'auto',
-                                        padding: '8px 12px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: 'transparent',
-                                        color: '#94a3b8',
-                                        fontFamily: 'var(--font)',
-                                        fontWeight: 600,
-                                        fontSize: '0.75rem',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      Mark as Read
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                              {isAccepted && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>
-                                  <Check size={12} /> Accepted Deal
-                                </span>
-                              )}
-                              {isRejected && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>
-                                  <X size={12} /> Rejected Offer
-                                </span>
-                              )}
-                            </div>
+                            {offer.details && offer.details.includes('[Negotiated:') && (() => {
+                               const match = offer.details.match(/\[Negotiated:\s*(.+?)\]/);
+                               return (
+                                 <div style={{
+                                   fontSize: '0.75rem', fontWeight: 700, color: '#7c3aed',
+                                   background: 'rgba(124, 58, 237, 0.08)', padding: '4px 10px',
+                                   borderRadius: '8px', marginBottom: '8px', width: 'fit-content'
+                                 }}>
+                                   Negotiation Pending (You countered: {match ? match[1] : '—'})
+                                 </div>
+                               );
+                             })()}
+
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+                                {offer.status === 'pending' && req.status === 'open' && (
+                                  <>
+                                    {negotiateOfferId === offer.id ? (
+                                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '4px', flexWrap: 'wrap' }}>
+                                        <div style={{ position: 'relative', flex: 1, minWidth: '150px' }}>
+                                          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 700 }}>₹</span>
+                                          <input
+                                            type="text"
+                                            placeholder="Counter price (e.g. 14.5L)"
+                                            value={counterPriceInput}
+                                            onChange={e => setCounterPriceInput(e.target.value)}
+                                            style={{
+                                              width: '100%', padding: '8px 12px 8px 20px', borderRadius: '8px',
+                                              border: '1.5px solid var(--color-primary)', fontFamily: 'var(--font)',
+                                              fontSize: '0.8125rem', boxSizing: 'border-box'
+                                            }}
+                                          />
+                                        </div>
+                                        <button
+                                          onClick={async () => {
+                                            if (!counterPriceInput.trim()) {
+                                              toast.error('Please enter a counter price.');
+                                              return;
+                                            }
+                                            await negotiateOffer(offer.id, counterPriceInput);
+                                            setNegotiateOfferId(null);
+                                            setCounterPriceInput('');
+                                            toast.success('Counter offer sent to dealer!');
+                                          }}
+                                          style={{
+                                            padding: '8px 14px', borderRadius: '8px', border: 'none',
+                                            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff',
+                                            fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.8125rem',
+                                            cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.2)'
+                                          }}
+                                        >
+                                          Send Counter
+                                        </button>
+                                        <button
+                                          onClick={() => { setNegotiateOfferId(null); setCounterPriceInput(''); }}
+                                          style={{
+                                            padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1',
+                                            background: '#fff', color: '#475569', fontFamily: 'var(--font)',
+                                            fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer'
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => { markOfferRead(offer.id); acceptOffer(offer.id, req.id); }}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, #059669, #047857)',
+                                            color: '#fff',
+                                            fontFamily: 'var(--font)',
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 8px rgba(5,150,105,0.2)'
+                                          }}
+                                        >
+                                          <Check size={13} /> Accept Offer
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setNegotiateOfferId(offer.id);
+                                            setCounterPriceInput('');
+                                          }}
+                                          style={{
+                                            padding: '8px 14px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #7c3aed',
+                                            background: '#fff',
+                                            color: '#7c3aed',
+                                            fontFamily: 'var(--font)',
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Negotiate
+                                        </button>
+                                        <button
+                                          onClick={() => { markOfferRead(offer.id); rejectOffer(offer.id); }}
+                                          style={{
+                                            padding: '8px 14px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #e2e8f0',
+                                            background: '#fff',
+                                            color: '#64748b',
+                                            fontFamily: 'var(--font)',
+                                            fontWeight: 600,
+                                            fontSize: '0.8125rem',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Reject
+                                        </button>
+                                      </>
+                                    )}
+                                    
+                                    {!offer.isRead && (
+                                      <button
+                                        onClick={() => markOfferRead(offer.id)}
+                                        style={{
+                                          marginLeft: 'auto',
+                                          padding: '8px 12px',
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          background: 'transparent',
+                                          color: '#94a3b8',
+                                          fontFamily: 'var(--font)',
+                                          fontWeight: 600,
+                                          fontSize: '0.75rem',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Mark as Read
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                
+                                {isAccepted && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>
+                                    <Check size={12} /> Accepted Deal
+                                  </span>
+                                )}
+                                {isRejected && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>
+                                    <X size={12} /> Rejected Offer
+                                  </span>
+                                )}
+                              </div>
                           </div>
                         );
                       })}
