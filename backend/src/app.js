@@ -14,7 +14,7 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './db/index.js';
 import { seedCatalog } from './services/catalogSeeder.js';
-import { authenticate, requireRole, requireOwnership, JWT_SECRET } from './middleware/auth.js';
+import { authenticate, requireRole, requireOwnership, adminAuth, signAdminToken, JWT_SECRET } from './middleware/auth.js';
 import nodemailer from 'nodemailer';
 
 // ========== EMAIL VERIFICATION SETUP ==========
@@ -1212,11 +1212,47 @@ app.get('/api/listings/:id/leads', authenticate, async (req, res) => {
 
 // ========== ADMIN (authenticated + admin role) ==========
 
-app.get('/api/admin/users', authenticate, requireRole('admin'), async (_req, res) => {
-  const rows = await db.all(
-    'SELECT id, email, role, status, name, business_name AS "businessName", phone, city FROM users ORDER BY created_at DESC'
-  );
-  res.json(rows);
+app.get('/api/admin/users', (req, res, next) => {
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    const token = header.slice(7);
+    try {
+      const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
+      if (decoded.owner) {
+        req.adminOwner = decoded;
+        return next();
+      }
+    } catch {
+      // fallback to regular authenticate
+    }
+  }
+  authenticate(req, res, (err) => {
+    if (err) return next(err);
+    requireRole('admin')(req, res, next);
+  });
+}, async (req, res) => {
+  if (req.adminOwner) {
+    // Standalone Admin App: return only buyers with query filter support
+    const { q } = req.query;
+    const rows = await db.all(
+      `SELECT id, email, name, status, city, created_at AS "createdAt"
+       FROM users WHERE role = 'buyer' ORDER BY created_at DESC`
+    );
+    const filtered = q
+      ? rows.filter(r =>
+          r.email?.toLowerCase().includes(q.toLowerCase()) ||
+          r.name?.toLowerCase().includes(q.toLowerCase()) ||
+          r.city?.toLowerCase().includes(q.toLowerCase())
+        )
+      : rows;
+    return res.json(filtered);
+  } else {
+    // Old Admin Dashboard: return all users
+    const rows = await db.all(
+      'SELECT id, email, role, status, name, business_name AS "businessName", phone, city FROM users ORDER BY created_at DESC'
+    );
+    return res.json(rows);
+  }
 });
 
 app.post('/api/admin/features', authenticate, requireRole('admin'), async (req, res) => {
@@ -1588,6 +1624,266 @@ app.post('/api/admin/master-data/:type/bulk', authenticate, requireRole('admin')
   });
 
   res.json({ ok: true, inserted: filtered.length });
+});
+
+
+
+// ========== STANDALONE ADMIN APP ROUTES (Owner-Only, adminAuth) ==========
+// These routes use a SEPARATE JWT signed with ADMIN_JWT_SECRET.
+// Public user JWTs will be rejected by adminAuth middleware.
+
+async function logAdminAction(action, targetType, targetId) {
+  try {
+    await db.run(
+      'INSERT INTO admin_logs (action, target_type, target_id) VALUES ($1, $2, $3)',
+      [action, targetType, String(targetId ?? '')]
+    );
+  } catch (err) {
+    console.error('Failed to write admin log:', err);
+  }
+}
+
+// POST /api/admin/auth/login — Owner login, no DB lookup
+app.post('/api/admin/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  const ownerEmail = process.env.ADMIN_EMAIL;
+  const ownerPassword = process.env.ADMIN_PASSWORD;
+
+  if (!ownerEmail || !ownerPassword) {
+    return res.status(500).json({ error: 'Admin credentials not configured on server.' });
+  }
+
+  if (email.toLowerCase().trim() !== ownerEmail.toLowerCase().trim()) {
+    return res.status(401).json({ error: 'Invalid credentials.' });
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  const crypto = (await import('crypto')).default;
+  const inputBuf = Buffer.from(password);
+  const expectedBuf = Buffer.from(ownerPassword);
+  let match = false;
+  if (inputBuf.length === expectedBuf.length) {
+    match = crypto.timingSafeEqual(inputBuf, expectedBuf);
+  }
+
+  if (!match) {
+    return res.status(401).json({ error: 'Invalid credentials.' });
+  }
+
+  const token = signAdminToken();
+  return res.json({ token, owner: { email: ownerEmail } });
+});
+
+// GET /api/admin/dashboard/stats — Overview counts
+app.get('/api/admin/dashboard/stats', adminAuth, async (_req, res) => {
+  const [users, brokers, requirements, offers, listings] = await Promise.all([
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'buyer'"),
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'broker'"),
+    db.get('SELECT COUNT(*) AS cnt FROM requirements'),
+    db.get('SELECT COUNT(*) AS cnt FROM offers'),
+    db.get('SELECT COUNT(*) AS cnt FROM broker_listings'),
+  ]);
+  const [activeUsers, suspendedUsers, activeBrokers, suspendedBrokers, openReqs, closedReqs] = await Promise.all([
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'buyer' AND status = 'active'"),
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'buyer' AND status = 'pending'"),
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'broker' AND status = 'active'"),
+    db.get("SELECT COUNT(*) AS cnt FROM users WHERE role = 'broker' AND status = 'pending'"),
+    db.get("SELECT COUNT(*) AS cnt FROM requirements WHERE status = 'open'"),
+    db.get("SELECT COUNT(*) AS cnt FROM requirements WHERE status = 'closed'"),
+  ]);
+  res.json({
+    totalUsers: Number(users?.cnt ?? 0),
+    totalBrokers: Number(brokers?.cnt ?? 0),
+    totalRequirements: Number(requirements?.cnt ?? 0),
+    totalOffers: Number(offers?.cnt ?? 0),
+    totalListings: Number(listings?.cnt ?? 0),
+    activeUsers: Number(activeUsers?.cnt ?? 0),
+    suspendedUsers: Number(suspendedUsers?.cnt ?? 0),
+    activeBrokers: Number(activeBrokers?.cnt ?? 0),
+    suspendedBrokers: Number(suspendedBrokers?.cnt ?? 0),
+    openRequirements: Number(openReqs?.cnt ?? 0),
+    closedRequirements: Number(closedReqs?.cnt ?? 0),
+  });
+});
+
+
+// PATCH /api/admin/users/:id/suspend — Suspend or unsuspend a buyer
+app.patch('/api/admin/users/:id/suspend', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const { suspended } = req.body;
+  if (typeof suspended !== 'boolean') {
+    return res.status(400).json({ error: '"suspended" boolean field is required.' });
+  }
+  const row = await db.get("SELECT id FROM users WHERE id = $1 AND role = 'buyer'", [id]);
+  if (!row) return res.status(404).json({ error: 'User not found.' });
+
+  const newStatus = suspended ? 'pending' : 'active';
+  await db.run('UPDATE users SET status = $1 WHERE id = $2', [newStatus, id]);
+  await logAdminAction(suspended ? 'suspend_user' : 'unsuspend_user', 'user', id);
+  res.json({ ok: true, status: newStatus });
+});
+
+// GET /api/admin/brokers — List all brokers
+app.get('/api/admin/brokers', adminAuth, async (req, res) => {
+  const { q } = req.query;
+  const rows = await db.all(`
+    SELECT u.id, u.email, u.business_name AS "businessName", u.phone, u.city,
+           u.dealer_type AS "dealerType", u.status, u.created_at AS "createdAt",
+           COUNT(bl.id)::int AS "listingCount"
+    FROM users u
+    LEFT JOIN broker_listings bl ON bl.broker_id = u.id
+    WHERE u.role = 'broker'
+    GROUP BY u.id
+    ORDER BY u.created_at DESC
+  `);
+  const filtered = q
+    ? rows.filter(r =>
+        r.email?.toLowerCase().includes(q.toLowerCase()) ||
+        r.businessName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.city?.toLowerCase().includes(q.toLowerCase())
+      )
+    : rows;
+  res.json(filtered);
+});
+
+// PATCH /api/admin/brokers/:id/suspend — Suspend or unsuspend a broker
+app.patch('/api/admin/brokers/:id/suspend', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const { suspended } = req.body;
+  if (typeof suspended !== 'boolean') {
+    return res.status(400).json({ error: '"suspended" boolean field is required.' });
+  }
+  const row = await db.get("SELECT id FROM users WHERE id = $1 AND role = 'broker'", [id]);
+  if (!row) return res.status(404).json({ error: 'Broker not found.' });
+
+  const newStatus = suspended ? 'pending' : 'active';
+  await db.run('UPDATE users SET status = $1 WHERE id = $2', [newStatus, id]);
+  await logAdminAction(suspended ? 'suspend_broker' : 'unsuspend_broker', 'broker', id);
+  res.json({ ok: true, status: newStatus });
+});
+
+// GET /api/admin/requirements — List all requirements
+app.get('/api/admin/requirements', adminAuth, async (req, res) => {
+  const { q } = req.query;
+  const rows = await db.all(`
+    SELECT r.id, r.description, r.status, r.vehicle_type AS "vehicleType",
+           r.city, r.state, r.budget_max AS "budgetMax", r.created_at AS "createdAt",
+           u.email AS "buyerEmail", u.name AS "buyerName",
+           b.name AS "brandName", m.name AS "modelName"
+    FROM requirements r
+    LEFT JOIN users u ON u.id = r.buyer_id
+    LEFT JOIN brands b ON b.id = r.brand_id
+    LEFT JOIN models m ON m.id = r.model_id
+    ORDER BY r.created_at DESC
+  `);
+  const filtered = q
+    ? rows.filter(r =>
+        r.buyerEmail?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brandName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.modelName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.city?.toLowerCase().includes(q.toLowerCase()) ||
+        r.description?.toLowerCase().includes(q.toLowerCase())
+      )
+    : rows;
+  res.json(filtered);
+});
+
+// DELETE /api/admin/requirements/:id — Delete a requirement
+app.delete('/api/admin/requirements/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const row = await db.get('SELECT id FROM requirements WHERE id = $1', [id]);
+  if (!row) return res.status(404).json({ error: 'Requirement not found.' });
+  await db.run('DELETE FROM requirements WHERE id = $1', [id]);
+  await logAdminAction('delete_requirement', 'requirement', id);
+  res.json({ ok: true });
+});
+
+// GET /api/admin/offers — List all offers
+app.get('/api/admin/offers', adminAuth, async (req, res) => {
+  const { q } = req.query;
+  const rows = await db.all(`
+    SELECT o.id, o.price, o.status, o.details, o.variant, o.year,
+           o.dealer_name AS "dealerName", o.dealer_location AS "dealerLocation",
+           o.created_at AS "createdAt",
+           ub.email AS "buyerEmail",
+           ubr.email AS "brokerEmail", ubr.business_name AS "brokerName",
+           b.name AS "brandName", m.name AS "modelName"
+    FROM offers o
+    LEFT JOIN requirements r ON r.id = o.requirement_id
+    LEFT JOIN users ub ON ub.id = r.buyer_id
+    LEFT JOIN users ubr ON ubr.id = o.broker_id
+    LEFT JOIN brands b ON b.id = r.brand_id
+    LEFT JOIN models m ON m.id = r.model_id
+    ORDER BY o.created_at DESC
+  `);
+  const filtered = q
+    ? rows.filter(r =>
+        r.buyerEmail?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brokerEmail?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brokerName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brandName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.modelName?.toLowerCase().includes(q.toLowerCase())
+      )
+    : rows;
+  res.json(filtered);
+});
+
+// DELETE /api/admin/offers/:id — Delete an offer
+app.delete('/api/admin/offers/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const row = await db.get('SELECT id FROM offers WHERE id = $1', [id]);
+  if (!row) return res.status(404).json({ error: 'Offer not found.' });
+  await db.run('DELETE FROM offers WHERE id = $1', [id]);
+  await logAdminAction('delete_offer', 'offer', id);
+  res.json({ ok: true });
+});
+
+// GET /api/admin/listings — List all broker listings
+app.get('/api/admin/listings', adminAuth, async (req, res) => {
+  const { q } = req.query;
+  const rows = await db.all(`
+    SELECT bl.id, bl.year, bl.price, bl.status, bl.city, bl.km_driven AS "kmDriven",
+           bl.fuel_type AS "fuelType", bl.transmission, bl.created_at AS "createdAt",
+           u.email AS "brokerEmail", u.business_name AS "brokerName",
+           b.name AS "brandName", m.name AS "modelName"
+    FROM broker_listings bl
+    LEFT JOIN users u ON u.id = bl.broker_id
+    LEFT JOIN brands b ON b.id = bl.brand_id
+    LEFT JOIN models m ON m.id = bl.model_id
+    ORDER BY bl.created_at DESC
+  `);
+  const filtered = q
+    ? rows.filter(r =>
+        r.brokerEmail?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brokerName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.brandName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.modelName?.toLowerCase().includes(q.toLowerCase()) ||
+        r.city?.toLowerCase().includes(q.toLowerCase())
+      )
+    : rows;
+  res.json(filtered);
+});
+
+// DELETE /api/admin/listings/:id — Delete a listing
+app.delete('/api/admin/listings/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const row = await db.get('SELECT id FROM broker_listings WHERE id = $1', [id]);
+  if (!row) return res.status(404).json({ error: 'Listing not found.' });
+  await db.run('DELETE FROM broker_listings WHERE id = $1', [id]);
+  await logAdminAction('delete_listing', 'listing', id);
+  res.json({ ok: true });
+});
+
+// GET /api/admin/logs — View admin action audit log
+app.get('/api/admin/logs', adminAuth, async (_req, res) => {
+  const rows = await db.all(
+    'SELECT id, action, target_type AS "targetType", target_id AS "targetId", created_at AS "createdAt" FROM admin_logs ORDER BY created_at DESC LIMIT 500'
+  );
+  res.json(rows);
 });
 
 

@@ -7,6 +7,13 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+if (!ADMIN_JWT_SECRET) {
+  console.error('FATAL: ADMIN_JWT_SECRET environment variable is not set.');
+  console.error('Create a .env file with ADMIN_JWT_SECRET=<your-admin-secret>');
+  process.exit(1);
+}
+
 /**
  * Middleware: verify JWT and attach decoded payload to req.user.
  * Rejects with 401 if token is missing or invalid.
@@ -69,6 +76,47 @@ export function requireOwnership(paramName = 'id') {
     }
     next();
   };
+}
+
+// ========== STANDALONE ADMIN APP AUTH ==========
+// Uses a completely separate JWT secret — public user tokens are NEVER valid here.
+
+/**
+ * Sign a short-lived JWT for the standalone admin app.
+ * Payload marks this as an owner-level token using the dedicated ADMIN_JWT_SECRET.
+ */
+export function signAdminToken() {
+  return jwt.sign(
+    { owner: true },
+    ADMIN_JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+}
+
+/**
+ * Middleware: verify admin-only JWT (signed with ADMIN_JWT_SECRET).
+ * Public user JWTs signed with JWT_SECRET will be rejected.
+ */
+export function adminAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Admin authentication required.' });
+  }
+
+  try {
+    const token = header.slice(7);
+    const decoded = jwt.verify(token, ADMIN_JWT_SECRET);
+    if (!decoded.owner) {
+      return res.status(403).json({ error: 'Not authorized as owner.' });
+    }
+    req.adminOwner = decoded;
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Admin session expired. Please log in again.' });
+    }
+    return res.status(401).json({ error: 'Invalid admin authentication token.' });
+  }
 }
 
 export { JWT_SECRET };

@@ -178,6 +178,14 @@ export async function initDb() {
         FOREIGN KEY (listing_id) REFERENCES broker_listings(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS admin_logs (
+      id SERIAL PRIMARY KEY,
+      action VARCHAR(100) NOT NULL,
+      target_type VARCHAR(50) NOT NULL,
+      target_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_requirements_buyer ON requirements(buyer_id);
     CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status);
     CREATE INDEX IF NOT EXISTS idx_broker_listings_broker ON broker_listings(broker_id);
@@ -186,7 +194,9 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_offers_broker ON offers(broker_id);
     CREATE INDEX IF NOT EXISTS idx_contact_listing ON contact_events(listing_id);
     CREATE INDEX IF NOT EXISTS idx_listing_images_listing ON listing_images(listing_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at);
   `);
+
 
   // Migrate existing databases safely
   try {
