@@ -24,10 +24,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try {
-      const data = await res.json();
-      msg = data.error || msg;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        msg = data.error || msg;
+      }
     } catch { /* ignore */ }
     throw new Error(msg);
+  }
+
+  const contentType = res.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    throw new Error('Server returned non-JSON response. Make sure VITE_API_URL env variable is set to your backend URL and the site is redeployed.');
   }
 
   return res.json();
