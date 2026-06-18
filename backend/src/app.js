@@ -200,7 +200,8 @@ app.use(cors({
     const isAllowed = allowedOrigins.includes(origin) || 
                       origin === 'https://carmatchr.com' || 
                       origin === 'https://www.carmatchr.com' ||
-                      origin.endsWith('.carmatchr.com');
+                      origin.endsWith('.carmatchr.com') ||
+                      (origin.includes('carmatchr') && origin.endsWith('.onrender.com'));
                       
     if (isAllowed) return cb(null, true);
     cb(new Error('Not allowed by CORS'));
