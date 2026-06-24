@@ -1099,21 +1099,59 @@ const BuyerDashboard: React.FC = () => {
                               );
                             })()}
 
-                            {offer.details && offer.details.includes('[Negotiated:') && (() => {
-                               const match = offer.details.match(/\[Negotiated:\s*(.+?)\]/);
+                            {offer.details && (offer.details.includes('[Negotiated:') || offer.details.includes('[Broker Counter:')) && (() => {
+                               let negotiationText = '';
+                               let isBrokerCounter = false;
+                               
+                               // Check for broker's counter response
+                               const brokerMatch = offer.details.match(/\[Broker Counter:\s*(.+?)\]/);
+                               if (brokerMatch) {
+                                 negotiationText = brokerMatch[1];
+                                 isBrokerCounter = true;
+                               } else {
+                                 // Check for customer's counter
+                                 const customerMatch = offer.details.match(/\[Negotiated:\s*(.+?)\]/);
+                                 if (customerMatch) {
+                                   negotiationText = customerMatch[1];
+                                 }
+                               }
+                               
                                return (
-                                 <div style={{
-                                   fontSize: '0.75rem', fontWeight: 700, color: '#7c3aed',
-                                   background: 'rgba(124, 58, 237, 0.08)', padding: '4px 10px',
-                                   borderRadius: '8px', marginBottom: '8px', width: 'fit-content'
-                                 }}>
-                                   Negotiation Pending (You countered: {match ? match[1] : '—'})
-                                 </div>
+                                 <>
+                                   {isBrokerCounter ? (
+                                     // Broker has responded with their counter
+                                     <div style={{
+                                       fontSize: '0.75rem', fontWeight: 700, color: '#059669',
+                                       background: 'rgba(5, 150, 105, 0.08)', padding: '4px 10px',
+                                       borderRadius: '8px', marginBottom: '8px', width: 'fit-content'
+                                     }}>
+                                       ✓ Broker Counter: ₹{negotiationText}
+                                     </div>
+                                   ) : offer.negotiationAwaitingFrom === 'broker' ? (
+                                     // Waiting for broker response
+                                     <div style={{
+                                       fontSize: '0.75rem', fontWeight: 700, color: '#dc2626',
+                                       background: 'rgba(220, 38, 38, 0.08)', padding: '4px 10px',
+                                       borderRadius: '8px', marginBottom: '8px', width: 'fit-content'
+                                     }}>
+                                       ⏳ Waiting for broker response to your counter offer: ₹{negotiationText}
+                                     </div>
+                                   ) : (
+                                     // Negotiation pending, can counter again
+                                     <div style={{
+                                       fontSize: '0.75rem', fontWeight: 700, color: '#7c3aed',
+                                       background: 'rgba(124, 58, 237, 0.08)', padding: '4px 10px',
+                                       borderRadius: '8px', marginBottom: '8px', width: 'fit-content'
+                                     }}>
+                                       Negotiation Pending (You countered: ₹{negotiationText})
+                                     </div>
+                                   )}
+                                 </>
                                );
                              })()}
 
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
-                                {offer.status === 'pending' && req.status === 'open' && (
+                                {offer.status === 'pending' && req.status === 'open' && offer.negotiationAwaitingFrom !== 'broker' && (
                                   <>
                                     {negotiateOfferId === offer.id ? (
                                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '4px', flexWrap: 'wrap' }}>
@@ -1267,6 +1305,24 @@ const BuyerDashboard: React.FC = () => {
                                       </button>
                                     )}
                                   </>
+                                )}
+                                
+                                {offer.status === 'pending' && req.status === 'open' && offer.negotiationAwaitingFrom === 'broker' && (
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(220, 38, 38, 0.08)',
+                                    border: '1.5px solid rgba(220, 38, 38, 0.2)',
+                                    fontSize: '0.8125rem',
+                                    fontWeight: 600,
+                                    color: '#dc2626'
+                                  }}>
+                                    <span style={{ fontSize: '1rem' }}>⏳</span>
+                                    <span>Waiting for broker's response. You cannot accept until they reply.</span>
+                                  </div>
                                 )}
                                 
                                 {isAccepted && (

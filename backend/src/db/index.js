@@ -254,7 +254,8 @@ export async function initDb() {
     { name: 'insurance_valid_till', type: 'VARCHAR(100)' },
     { name: 'service_history', type: 'VARCHAR(100)' },
     { name: 'vehicle_condition', type: 'VARCHAR(100)' },
-    { name: 'shortlisted', type: 'BOOLEAN DEFAULT FALSE' }
+    { name: 'shortlisted', type: 'BOOLEAN DEFAULT FALSE' },
+    { name: 'negotiation_awaiting_from', type: "VARCHAR(20) CHECK (negotiation_awaiting_from IN ('broker', 'buyer'))" }
   ];
 
   for (const col of offerCols) {

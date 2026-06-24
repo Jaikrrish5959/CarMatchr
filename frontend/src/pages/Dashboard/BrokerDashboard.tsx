@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
+import { getToken } from '../../services/authService';
 import { useSearchParams } from 'react-router-dom';
 import {
   Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
@@ -405,13 +406,40 @@ const BrokerDashboard: React.FC = () => {
     }
   };
 
-  const handleUpdateOffer = (e: React.FormEvent) => {
+  const handleUpdateOffer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editOfferId !== null) {
-      const updated = { ...editedOffers, [editOfferId]: { price: editPrice, details: editDetails } };
-      setEditedOffers(updated);
-      setEditOfferId(null);
-      toast.success('Offer updated successfully!');
+      try {
+        const token = getToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`http://localhost:4001/api/offers/${editOfferId}/respond-counter`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            price: editPrice,
+            details: editDetails
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to update offer');
+        }
+
+        const updated = { ...editedOffers, [editOfferId]: { price: editPrice, details: editDetails } };
+        setEditedOffers(updated);
+        setEditOfferId(null);
+        
+        // Refresh data to get updated negotiation status
+        await refreshData();
+        
+        toast.success('Counter offer submitted successfully!');
+      } catch (error) {
+        console.error('Error updating offer:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to update offer');
+      }
     }
   };
 
@@ -929,10 +957,10 @@ const BrokerDashboard: React.FC = () => {
                             setVehicleCondition('Excellent');
                           }}
                           style={{
-                            padding: '8px 18px', background: 'linear-gradient(135deg, var(--color-primary), #cbd5e1)',
+                            padding: '8px 18px', background: 'linear-gradient(135deg, var(--color-primary), #dc2622)',
                             color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                            boxShadow: '0 4px 12px rgba(230,57,70,0.2)'
+                            boxShadow: '0 4px 12px rgba(230,57,70,0.3)'
                           }}
                         >
                           <Send size={12} /> Submit Offer
@@ -940,12 +968,41 @@ const BrokerDashboard: React.FC = () => {
                       )}
                       
                       {alreadyOffered && (
-                        <span style={{
-                          padding: '6px 14px', borderRadius: '10px', background: 'rgba(5, 150, 105, 0.08)',
-                          color: '#059669', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
-                        }}>
-                          <Check size={12} /> Offer Submitted
-                        </span>
+                        <>
+                          {(() => {
+                            // Check if any offer for this requirement is awaiting broker response
+                            const awaitingResponse = myOffers
+                              .filter(o => o.requirementId === req.id)
+                              .some(o => o.negotiationAwaitingFrom === 'broker');
+                            
+                            const brokerResponded = myOffers
+                              .filter(o => o.requirementId === req.id)
+                              .some(o => o.negotiationAwaitingFrom === 'buyer');
+                            
+                            return brokerResponded ? (
+                              <span style={{
+                                padding: '6px 14px', borderRadius: '10px', background: '#d1fae5',
+                                color: '#059669', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}>
+                                ✓ Response Sent
+                              </span>
+                            ) : awaitingResponse ? (
+                              <span style={{
+                                padding: '6px 14px', borderRadius: '10px', background: '#fee2e2',
+                                color: '#e63946', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}>
+                                ⏳ Counter Awaiting
+                              </span>
+                            ) : (
+                              <span style={{
+                                padding: '6px 14px', borderRadius: '10px', background: 'rgba(5, 150, 105, 0.08)',
+                                color: '#059669', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}>
+                                <Check size={12} /> Offer Submitted
+                              </span>
+                            );
+                          })()}
+                        </>
                       )}
 
                       <button
@@ -1408,7 +1465,14 @@ const BrokerDashboard: React.FC = () => {
                       statusLabel = 'Rejected';
                       statusStyle = { background: '#fee2e2', color: '#e63946' };
                     } else if (o.status === 'pending') {
-                      if (isNegotiated) {
+                      // Check if waiting for broker response vs broker already responded
+                      if (o.negotiationAwaitingFrom === 'broker') {
+                        statusLabel = '⏳ Awaiting Your Response';
+                        statusStyle = { background: '#fee2e2', color: '#e63946' }; // Red - action needed
+                      } else if (o.negotiationAwaitingFrom === 'buyer') {
+                        statusLabel = '✓ Response Submitted';
+                        statusStyle = { background: '#d1fae5', color: '#059669' }; // Green - you responded
+                      } else if (isNegotiated) {
                         statusLabel = 'Negotiating';
                         statusStyle = { background: '#fae8ff', color: '#a21caf' };
                       } else if (o.isRead) {
@@ -1461,20 +1525,37 @@ const BrokerDashboard: React.FC = () => {
                             <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>—</span>
                           ) : (
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                              <button
-                                onClick={() => {
-                                  setEditOfferId(o.id);
-                                  setEditPrice(isNegotiated ? counterVal : o.price);
-                                  setEditDetails(cleanDetails);
-                                }}
-                                style={{
-                                  padding: '5px 10px', background: '#f1f5f9', color: '#475569',
-                                  border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                {isNegotiated ? 'Counter Back' : 'Edit'}
-                              </button>
+                              {o.negotiationAwaitingFrom === 'broker' ? (
+                                <button
+                                  onClick={() => {
+                                    setEditOfferId(o.id);
+                                    setEditPrice(isNegotiated ? counterVal : o.price);
+                                    setEditDetails(cleanDetails);
+                                  }}
+                                  style={{
+                                    padding: '5px 10px', background: '#f1f5f9', color: '#475569',
+                                    border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Counter Back
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setEditOfferId(o.id);
+                                    setEditPrice(o.price);
+                                    setEditDetails(cleanDetails);
+                                  }}
+                                  style={{
+                                    padding: '5px 10px', background: '#f1f5f9', color: '#475569',
+                                    border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDeleteOffer(o.id)}
                                 style={{

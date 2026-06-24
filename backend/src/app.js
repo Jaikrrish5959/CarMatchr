@@ -699,8 +699,8 @@ app.get('/api/data', authenticate, async (_req, res) => {
     createdAt: r.created_at,
     vehicleType: r.vehicle_type ?? 'new',
     variant: r.variant ?? '',
-    budgetMin: r.budget_min ? formatBudget(r.budget_min) : '',
-    budgetMax: r.budget_max ? formatBudget(r.budget_max) : '',
+    budgetMin: r.budget_min ? String(r.budget_min) : '',
+    budgetMax: r.budget_max ? String(r.budget_max) : '',
     state: r.state ?? 'Tamil Nadu',
     city: r.city ?? '',
     fuelType: r.fuel_type ?? '',
@@ -744,6 +744,7 @@ app.get('/api/data', authenticate, async (_req, res) => {
     serviceHistory: o.service_history ?? '',
     vehicleCondition: o.vehicle_condition ?? '',
     shortlisted: !!o.shortlisted,
+    negotiationAwaitingFrom: o.negotiation_awaiting_from ?? null,
   }));
 
   const listingRows = await db.all(`
@@ -946,7 +947,7 @@ app.patch('/api/offers/:id/negotiate', authenticate, async (req, res) => {
   const currentOffer = await db.get('SELECT details, price FROM offers WHERE id = $1', [id]);
   const cleanDetails = currentOffer.details ? currentOffer.details.split('\n[Negotiated:')[0].trim() : '';
   const newDetails = `${cleanDetails}\n[Negotiated: ${counterPrice}]`;
-  await db.run("UPDATE offers SET details = $1, status = 'pending' WHERE id = $2", [newDetails, id]);
+  await db.run("UPDATE offers SET details = $1, status = 'pending', negotiation_awaiting_from = 'broker' WHERE id = $2", [newDetails, id]);
   res.json({ ok: true });
 });
 
@@ -959,11 +960,42 @@ app.patch('/api/offers/:id/accept', authenticate, async (req, res) => {
   if (requirement && Number(requirement.buyer_id) !== Number(req.user.sub) && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'You can only accept offers on your own requirements.' });
   }
+  
+  // Check if offer has pending negotiation awaiting broker response
+  const offer = await db.get('SELECT negotiation_awaiting_from FROM offers WHERE id = $1', [id]);
+  if (offer && offer.negotiation_awaiting_from === 'broker') {
+    return res.status(400).json({ error: 'You cannot accept this offer. The broker has not yet responded to your counter offer.' });
+  }
+  
   await db.transaction(async (tx) => {
-    await tx.run("UPDATE offers SET status = 'accepted' WHERE id = $1", [id]);
+    await tx.run("UPDATE offers SET status = 'accepted', negotiation_awaiting_from = NULL WHERE id = $1", [id]);
     await tx.run("UPDATE offers SET status = 'rejected' WHERE requirement_id = $1 AND id != $2", [reqId, id]);
     await tx.run("UPDATE requirements SET status = 'closed' WHERE id = $1", [reqId]);
   });
+  res.json({ ok: true });
+});
+
+// Broker responds to customer's counter-offer
+app.patch('/api/offers/:id/respond-counter', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { price, details } = req.body;
+  if (!price) return res.status(400).json({ error: 'Price is required.' });
+
+  const offer = await db.get('SELECT broker_id, requirement_id, details FROM offers WHERE id = $1', [id]);
+  if (!offer) return res.status(404).json({ error: 'Offer not found.' });
+
+  // Verify the authenticated user is the broker who sent the offer
+  if (Number(offer.broker_id) !== Number(req.user.sub) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You can only respond to offers you sent.' });
+  }
+
+  // Update offer with broker's counter price and set negotiation_awaiting_from to 'buyer'
+  const cleanDetails = offer.details ? offer.details.split('\n[Broker Counter:')[0].trim() : '';
+  const newDetails = `${cleanDetails}\n[Broker Counter: ${price}]`;
+  await db.run(
+    "UPDATE offers SET details = $1, price = $2, negotiation_awaiting_from = 'buyer' WHERE id = $3",
+    [newDetails, price, id]
+  );
   res.json({ ok: true });
 });
 

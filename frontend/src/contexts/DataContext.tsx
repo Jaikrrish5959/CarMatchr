@@ -75,6 +75,7 @@ export interface Offer {
 
   // Workflow state
   shortlisted?: boolean;
+  negotiationAwaitingFrom?: 'broker' | 'buyer' | null; // Tracks who negotiation is awaiting response from
 }
 
 export interface BrokerListing {
@@ -231,7 +232,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const acceptOffer = (offerId: number, reqId: number) => {
     setOffers((prev) =>
-      prev.map((o) => (o.id === offerId ? { ...o, status: 'accepted' } : o.requirementId === reqId ? { ...o, status: 'rejected' } : o))
+      prev.map((o) => (o.id === offerId ? { ...o, status: 'accepted', negotiationAwaitingFrom: null } : o.requirementId === reqId ? { ...o, status: 'rejected' } : o))
     );
     closeRequirement(reqId);
     if (isLoaded) {
@@ -239,7 +240,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: 'PATCH',
         headers: authJsonHeaders(),
         body: JSON.stringify({ reqId }),
-      }).catch(console.error);
+      })
+        .then((res) => {
+          if (!res.ok) {
+            // Revert UI if acceptance failed
+            setOffers((prev) =>
+              prev.map((o) => (o.id === offerId ? { ...o, status: 'pending' } : o.requirementId === reqId ? { ...o, status: 'pending' } : o))
+            );
+            return res.json().then((data) => {
+              console.error('Offer acceptance failed:', data.error);
+            });
+          }
+        })
+        .catch(console.error);
     }
   };
 
@@ -265,7 +278,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOffers((prev) =>
       prev.map((o) =>
         o.id === offerId
-          ? { ...o, details: `${(o.details || '').split('\n[Negotiated:')[0].trim()}\n[Negotiated: ${counterPrice}]`, status: 'pending' }
+          ? { ...o, details: `${(o.details || '').split('\n[Negotiated:')[0].trim()}\n[Negotiated: ${counterPrice}]`, status: 'pending', negotiationAwaitingFrom: 'broker' }
           : o
       )
     );
