@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
 import { useCatalog } from '../../hooks/useCatalog';
+import { useNotifications } from '../../contexts/NotificationContext';
+import ConversationCenter from '../../components/ConversationCenter';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles,
@@ -71,6 +73,7 @@ const BuyerDashboard: React.FC = () => {
   const { brands } = useCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'active';
+  const { notifications, totalUnread, markRead, markAllRead } = useNotifications();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -164,6 +167,7 @@ const BuyerDashboard: React.FC = () => {
   const completedReqs = myReqs.filter(r => r.status === 'closed').length;
   
   const myOffers = offers.filter(o => myReqs.some(r => r.id === o.requirementId));
+  const conversationThreadCount = useMemo(() => new Set(myOffers.map((offer) => `${offer.requirementId}:${offer.brokerId}`)).size, [myOffers]);
   const totalOffersReceived = myOffers.length;
 
   let totalSavings = 0;
@@ -286,6 +290,103 @@ const BuyerDashboard: React.FC = () => {
   };
 
   const renderActiveTabContent = () => {
+    if (currentTab === 'messages') {
+      return (
+        <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(15,23,42,0.05)' }}>
+          <div style={{ padding: '24px 28px', borderBottom: '1px solid #e2e8f0' }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Messages Portal</h3>
+            <p style={{ margin: '6px 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+              Chat with dealers tied to your active or completed offers.
+            </p>
+          </div>
+          <div style={{ padding: '24px' }}>
+            <ConversationCenter mode="buyer" />
+          </div>
+        </div>
+      );
+    }
+
+    if (currentTab === 'notifications') {
+      return (
+        <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(15,23,42,0.05)' }}>
+          <div style={{ padding: '24px 28px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <div>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Notifications Feed</h3>
+              <p style={{ margin: '6px 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+                Read status updates, offer alerts, and deal activity in one place.
+              </p>
+            </div>
+            {totalUnread > 0 && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#fff',
+                  color: '#334155',
+                  fontWeight: 700,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {notifications.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b', border: '1px dashed #e2e8f0', borderRadius: '16px', background: '#f8fafc' }}>
+                <Bell size={36} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>No notifications yet</div>
+                <p style={{ margin: '8px auto 0', maxWidth: '340px', fontSize: '0.875rem', lineHeight: 1.7 }}>
+                  You will see offer changes, shortlist updates, and deal activity here.
+                </p>
+              </div>
+            ) : (
+              notifications.map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => markRead(notification.id)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    border: '1px solid',
+                    borderColor: notification.isRead ? '#e2e8f0' : '#fecaca',
+                    borderRadius: '16px',
+                    padding: '16px 18px',
+                    background: notification.isRead ? '#fff' : '#fff5f5',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    boxShadow: notification.isRead ? 'none' : '0 8px 24px rgba(230,57,70,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: notification.isRead ? '#cbd5e1' : '#e63946', flexShrink: 0 }} />
+                        <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a' }}>{notification.title}</h4>
+                        <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#e63946', background: 'rgba(230,57,70,0.08)', padding: '2px 8px', borderRadius: '999px' }}>
+                          {notification.priority}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, color: '#475569', fontSize: '0.875rem', lineHeight: 1.6 }}>{notification.message}</p>
+                    </div>
+                    <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      {new Date(notification.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
     if (currentTab === 'history') {
       return (
         <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(15,23,42,0.05)' }}>
@@ -1591,7 +1692,9 @@ const BuyerDashboard: React.FC = () => {
         <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />
         
         {/* Messages */}
-        <button style={{
+        <button
+          onClick={() => { setTab('messages'); if (isMobile) setSidebarOpen(false); }}
+          style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1625,12 +1728,14 @@ const BuyerDashboard: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            3
+            {conversationThreadCount}
           </span>
         </button>
 
         {/* Notifications */}
-        <button style={{
+        <button
+          onClick={() => { setTab('notifications'); if (isMobile) setSidebarOpen(false); }}
+          style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1664,7 +1769,7 @@ const BuyerDashboard: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            5
+            {totalUnread}
           </span>
         </button>
         
@@ -1786,9 +1891,23 @@ const BuyerDashboard: React.FC = () => {
                 </button>
                 <div>
                   <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '4px' }}>
-                    My Requirements
+                    {currentTab === 'active' ? 'My Requirements' :
+                     currentTab === 'completed' ? 'Completed Requirements' :
+                     currentTab === 'history' ? 'Deal History' :
+                     currentTab === 'all' ? 'All Posted Requirements' :
+                     currentTab === 'messages' ? 'Messages' :
+                     currentTab === 'notifications' ? 'Notifications' :
+                     'Profile Settings'}
                   </h1>
-                  <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>Post what you need. Verified dealers compete to get you the best deal.</p>
+                  <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>
+                    {currentTab === 'active' ? 'Post what you need. Verified dealers compete to get you the best deal.' :
+                     currentTab === 'completed' ? 'Review closed deals and the savings you secured.' :
+                     currentTab === 'history' ? 'Track every deal you closed from start to finish.' :
+                     currentTab === 'all' ? 'Browse all your posted requirements in one place.' :
+                     currentTab === 'messages' ? 'Chat directly with dealers about your offers and deal progress.' :
+                     currentTab === 'notifications' ? 'View deal updates, offer alerts, and platform activity.' :
+                     'Manage your buyer profile and preferences.'}
+                  </p>
                 </div>
               </div>
               <button

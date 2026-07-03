@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
+import ConversationCenter from '../../components/ConversationCenter';
 import { getToken } from '../../services/authService';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -1852,24 +1853,8 @@ const BrokerDashboard: React.FC = () => {
   };
 
   const renderMessagesView = () => (
-    <div className="card" style={{ padding: '48px 24px', textAlign: 'center', maxWidth: '600px', margin: '40px auto' }}>
-      <div style={{
-        width: '64px', height: '64px', borderRadius: '50%',
-        background: 'rgba(230, 57, 70, 0.08)', color: 'var(--color-primary)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-      }}>
-        <MessageSquare size={28} />
-      </div>
-      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>Messages Portal</h3>
-      <span style={{
-        display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
-        background: 'rgba(124, 58, 237, 0.08)', color: '#7c3aed',
-        fontSize: '0.75rem', fontWeight: 700, marginBottom: '16px'
-      }}>Feature Under Development</span>
-      <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.6, margin: '0 auto' }}>
-        The live negotiation chat feature between brokers and buyers is currently under active development.
-        In the meantime, you can reach out and finalize deals directly by calling the buyer using their contact details, which are unlocked and visible in the <strong>Accepted Deals</strong> panel.
-      </p>
+    <div style={{ paddingTop: '8px' }}>
+      <ConversationCenter mode="broker" />
     </div>
   );
 
@@ -2031,13 +2016,7 @@ const BrokerDashboard: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => {
-                if (item.id === 'messages') {
-                  toast('Messages feature is under development.', { icon: '💬' });
-                }
-                setTab(item.id);
-                if (isMobile) setSidebarOpen(false);
-              }}
+              onClick={() => { setTab(item.id); if (isMobile) setSidebarOpen(false); }}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 width: '100%', padding: '12px 16px', borderRadius: '12px', border: 'none',

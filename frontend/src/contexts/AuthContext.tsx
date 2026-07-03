@@ -53,6 +53,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
+  // If the stored session token is missing or no longer valid, clear it early.
+  useEffect(() => {
+    if (!user) return;
+
+    const token = authService.getToken();
+    if (!token) {
+      setUser(null);
+      authService.clearSession();
+      return;
+    }
+
+    let cancelled = false;
+
+    const validateSession = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/data`, {
+          headers: authService.authHeaders(),
+        });
+
+        if (!cancelled && response.status === 401) {
+          setUser(null);
+          authService.clearSession();
+        }
+      } catch {
+        // Keep the session if the server is temporarily unavailable.
+      }
+    };
+
+    validateSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   // ─── Login ──────────────────────────────────────────────────────────────────
   const login = async (
     email: string,

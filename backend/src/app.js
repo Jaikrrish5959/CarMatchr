@@ -19,14 +19,15 @@ import nodemailer from 'nodemailer';
 
 // ========== EMAIL VERIFICATION SETUP ==========
 let transporter = null;
+let testAccount = null;
 
-function getTransporter() {
+async function getTransporter() {
   if (transporter) return transporter;
 
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: process.env.SMTP_SECURE === 'true',
       family: 4, // Force IPv4 to prevent ENETUNREACH routing errors on cloud platforms like Render
       auth: {
@@ -35,44 +36,68 @@ function getTransporter() {
       },
     });
     console.log('Using configured SMTP transporter for email verification.');
-  } else {
-    console.error('CRITICAL: SMTP configuration is missing! Real email verification will fail.');
+    return transporter;
   }
-  return transporter;
+
+  if (process.env.NODE_ENV === 'development') {
+    if (!testAccount) {
+      testAccount = await nodemailer.createTestAccount();
+    }
+
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    console.warn('SMTP config missing. Using Ethereal test email account for local development.');
+    return transporter;
+  }
+
+  throw new Error('SMTP configuration is missing. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
 }
 
 async function sendOtpEmail(email, otp) {
-  try {
-    const mailTransporter = getTransporter();
-    if (!mailTransporter) {
-      console.error(`Cannot send verification email to ${email} - SMTP is not configured.`);
-      return;
-    }
+  const mailTransporter = await getTransporter();
+  const usingDevFallback = process.env.NODE_ENV === 'development' && !(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
-    await mailTransporter.sendMail({
-      from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
-      to: email,
-      subject: 'CarMatchr - Login Verification Code',
-      text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 10 minutes.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h2 style="color: #E53935; text-align: center;">CarMatchr</h2>
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
-          <p>Hello,</p>
-          <p>You requested to log in to your CarMatchr account. Please use the following 6-digit verification code to complete your login:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; background: #f1f5f9; padding: 12px 24px; border-radius: 6px; border: 1px dashed #cbd5e1;">${otp}</span>
-          </div>
-          <p style="color: #64748b; font-size: 14px;">This code is valid for 10 minutes. If you did not request this login, you can safely ignore this email.</p>
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 15px;" />
-          <p style="font-size: 12px; color: #94a3b8; text-align: center;">&copy; ${new Date().getFullYear()} CarMatchr. All rights reserved.</p>
+  const info = await mailTransporter.sendMail({
+    from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || testAccount?.user}>`,
+    to: email,
+    subject: 'CarMatchr - Login Verification Code',
+    text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 10 minutes.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #E53935; text-align: center;">CarMatchr</h2>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+        <p>Hello,</p>
+        <p>You requested to log in to your CarMatchr account. Please use the following 6-digit verification code to complete your login:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; background: #f1f5f9; padding: 12px 24px; border-radius: 6px; border: 1px dashed #cbd5e1;">${otp}</span>
         </div>
-      `,
-    });
-    console.log(`Verification email successfully sent to ${email}.`);
-  } catch (err) {
-    console.error('Error sending verification email:', err.message);
+        <p style="color: #64748b; font-size: 14px;">This code is valid for 10 minutes. If you did not request this login, you can safely ignore this email.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 15px;" />
+        <p style="font-size: 12px; color: #94a3b8; text-align: center;">&copy; ${new Date().getFullYear()} CarMatchr. All rights reserved.</p>
+      </div>
+    `,
+  });
+
+  if (usingDevFallback) {
+    console.log(`Verification OTP for ${email}: ${otp}`);
   }
+
+  if (usingDevFallback && info?.messageId) {
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) {
+      console.log(`Verification email preview for ${email}: ${previewUrl}`);
+    }
+  }
+
+  console.log(`Verification email successfully sent to ${email}.`);
+  return info;
 }
 
 
@@ -158,6 +183,12 @@ const offerSchema = z.object({
   insuranceValidTill: z.string().optional().nullable(),
   serviceHistory: z.string().optional().nullable(),
   vehicleCondition: z.string().optional().nullable(),
+});
+
+const messageSchema = z.object({
+  requirementId: z.number().int(),
+  brokerId: z.number().int(),
+  body: z.string().min(1),
 });
 
 const listingSchema = z.object({
@@ -546,8 +577,15 @@ app.post('/api/auth/login', async (req, res) => {
     [otp, expiresAt, found.id]
   );
 
-  // Send the verification code email
-  sendOtpEmail(found.email, otp);
+  // Send the verification code email and fail fast if delivery is unavailable.
+  try {
+    await sendOtpEmail(found.email, otp);
+  } catch (err) {
+    console.error('Error sending verification email:', err.message);
+    return res.status(503).json({
+      error: 'Unable to send verification code email right now. Please check SMTP settings and try again.',
+    });
+  }
 
   return res.json({
     requiresVerification: true,
@@ -997,6 +1035,104 @@ app.patch('/api/offers/:id/respond-counter', authenticate, async (req, res) => {
     [newDetails, price, id]
   );
   res.json({ ok: true });
+});
+
+// ========== MESSAGES (authenticated) ==========
+
+app.get('/api/messages', authenticate, async (req, res) => {
+  const requirementId = Number(req.query.requirementId);
+  const brokerId = Number(req.query.brokerId);
+
+  if (!requirementId || !brokerId) {
+    return res.status(400).json({ error: 'requirementId and brokerId are required.' });
+  }
+
+  const requirement = await db.get('SELECT id, buyer_id FROM requirements WHERE id = $1', [requirementId]);
+  const offer = await db.get('SELECT id, broker_id FROM offers WHERE requirement_id = $1 AND broker_id = $2 LIMIT 1', [requirementId, brokerId]);
+  if (!requirement || !offer) {
+    return res.status(404).json({ error: 'Conversation thread not found.' });
+  }
+
+  if (req.user.role !== 'admin') {
+    const userId = Number(req.user.sub);
+    const isBuyer = Number(requirement.buyer_id) === userId;
+    const isBroker = Number(offer.broker_id) === userId;
+    if (!isBuyer && !isBroker) {
+      return res.status(403).json({ error: 'You can only view your own conversation threads.' });
+    }
+  }
+
+  const rows = await db.all(
+    `
+      SELECT
+        m.id,
+        m.requirement_id,
+        m.broker_id,
+        m.sender_id,
+        m.sender_role,
+        m.body,
+        m.created_at,
+        u.name,
+        u.business_name
+      FROM messages m
+      LEFT JOIN users u ON u.id = m.sender_id
+      WHERE m.requirement_id = $1 AND m.broker_id = $2
+      ORDER BY m.created_at ASC, m.id ASC
+    `,
+    [requirementId, brokerId]
+  );
+
+  res.json(rows.map((row) => ({
+    id: row.id,
+    requirementId: row.requirement_id,
+    brokerId: row.broker_id,
+    senderId: row.sender_id,
+    senderRole: row.sender_role,
+    senderName: row.business_name || row.name || (row.sender_role === 'buyer' ? 'Buyer' : 'Dealer'),
+    body: row.body,
+    createdAt: row.created_at,
+  })));
+});
+
+app.post('/api/messages', authenticate, async (req, res) => {
+  const result = messageSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: 'requirementId, brokerId and body are required.' });
+  }
+
+  const payload = result.data;
+  const requirement = await db.get('SELECT id, buyer_id FROM requirements WHERE id = $1', [payload.requirementId]);
+  const offer = await db.get('SELECT id, broker_id FROM offers WHERE requirement_id = $1 AND broker_id = $2 LIMIT 1', [payload.requirementId, payload.brokerId]);
+
+  if (!requirement || !offer) {
+    return res.status(404).json({ error: 'Conversation thread not found.' });
+  }
+
+  const currentUserId = Number(req.user.sub);
+  const isBuyer = Number(requirement.buyer_id) === currentUserId;
+  const isBroker = Number(offer.broker_id) === currentUserId;
+
+  if (req.user.role !== 'admin' && !isBuyer && !isBroker) {
+    return res.status(403).json({ error: 'You can only send messages in your own conversation threads.' });
+  }
+
+  const senderRole = req.user.role === 'admin' ? 'admin' : req.user.role;
+  const senderId = currentUserId;
+
+  const created = await db.get(
+    `
+      INSERT INTO messages (requirement_id, broker_id, sender_id, sender_role, body)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, created_at
+    `,
+    [payload.requirementId, payload.brokerId, senderId, senderRole, payload.body.trim()]
+  );
+
+  res.json({
+    ok: true,
+    id: created.id,
+    createdAt: created.created_at,
+  });
 });
 
 // ========== BROKER LISTINGS (authenticated) ==========

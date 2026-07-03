@@ -167,6 +167,22 @@ export async function initDb() {
         FOREIGN KEY (broker_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      requirement_id INTEGER NOT NULL,
+      broker_id INTEGER NOT NULL,
+      sender_id INTEGER NOT NULL,
+      sender_role VARCHAR(20) NOT NULL CHECK (sender_role IN ('buyer', 'broker', 'admin')),
+      body TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_message_requirement
+        FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE,
+      CONSTRAINT fk_message_broker
+        FOREIGN KEY (broker_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT fk_message_sender
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS contact_events (
       id SERIAL PRIMARY KEY,
       listing_id INTEGER NOT NULL,
@@ -192,6 +208,8 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_broker_listings_status ON broker_listings(status);
     CREATE INDEX IF NOT EXISTS idx_offers_requirement ON offers(requirement_id);
     CREATE INDEX IF NOT EXISTS idx_offers_broker ON offers(broker_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_requirement_broker ON messages(requirement_id, broker_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
     CREATE INDEX IF NOT EXISTS idx_contact_listing ON contact_events(listing_id);
     CREATE INDEX IF NOT EXISTS idx_listing_images_listing ON listing_images(listing_id);
     CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at);
@@ -264,6 +282,24 @@ export async function initDb() {
     } catch (err) {
       if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
         console.error(`Migration error (offers ${col.name}):`, err);
+      }
+    }
+  }
+
+  const messageCols = [
+    { name: 'requirement_id', type: 'INTEGER' },
+    { name: 'broker_id', type: 'INTEGER' },
+    { name: 'sender_id', type: 'INTEGER' },
+    { name: 'sender_role', type: "VARCHAR(20) CHECK (sender_role IN ('buyer', 'broker', 'admin'))" },
+    { name: 'body', type: 'TEXT' },
+  ];
+
+  for (const col of messageCols) {
+    try {
+      await db.run(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (messages ${col.name}):`, err);
       }
     }
   }

@@ -1,8 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, X, Star, AlertCircle, Info, Lock } from 'lucide-react';
+import { Bell, CheckCheck, X, Star, AlertCircle, Info, MessageSquare } from 'lucide-react';
 import { useNotifications, type AppNotification } from '../contexts/NotificationContext';
-import toast from 'react-hot-toast';
+import { useAuth } from '../hooks/useAuth';
 
 // ─── Priority styling ─────────────────────────────────────────────────────────
 const PRIORITY_STYLE = {
@@ -50,6 +50,7 @@ interface Props {
 
 const NotificationDropdown: React.FC<Props> = ({ onClose }) => {
   const { notifications, totalUnread, markRead, markAllRead } = useNotifications();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -75,10 +76,8 @@ const NotificationDropdown: React.FC<Props> = ({ onClose }) => {
   };
 
   const handleMessagesClick = () => {
-    toast('💬 Messaging between buyers and dealers will be available in a future release.', {
-      duration: 4000,
-      style: { borderRadius: '14px', background: '#1e1b4b', color: '#c7d2fe', fontWeight: 600, border: '1px solid #4338ca' },
-    });
+    const target = user?.role === 'broker' ? '/broker-dashboard?tab=messages' : '/buyer-dashboard?tab=messages';
+    navigate(target);
     onClose();
   };
 
@@ -173,11 +172,11 @@ const NotificationDropdown: React.FC<Props> = ({ onClose }) => {
           background: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
         }}>
-          <Lock size={15} color="#fff" />
+          <MessageSquare size={15} color="#fff" />
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#3730a3' }}>Messages</div>
-          <div style={{ fontSize: '0.6875rem', color: '#6d28d9' }}>Feature under development</div>
+          <div style={{ fontSize: '0.6875rem', color: '#6d28d9' }}>Open the chat thread</div>
         </div>
       </div>
 
