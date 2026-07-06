@@ -8,7 +8,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import {
   Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles,
   Phone, CalendarRange, Star, Bell, MapPin, List, Settings, HelpCircle,
-  Menu, Lock, Unlock
+  Menu, Lock, Unlock, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import tnLocations from '../../data/tn-locations.json';
@@ -2563,6 +2563,7 @@ const BuyerDashboard: React.FC = () => {
                       </div>
                     </div>
                     
+                    {/* Dealer contact + profile link */}
                     <div style={{
                       marginTop: '16px',
                       background: '#f8fafc',
@@ -2571,11 +2572,39 @@ const BuyerDashboard: React.FC = () => {
                       padding: '12px 16px'
                     }}>
                       <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '8px' }}>Dealer Contact Details</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                         <Phone size={14} color="var(--color-primary)" />
-                        <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>{accepted.brokerPhone || 'Contact details provided upon acceptance'}</span>
+                        {accepted.brokerPhone ? (
+                          <a
+                            href={`tel:${accepted.brokerPhone}`}
+                            style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--color-primary)', textDecoration: 'none' }}
+                          >
+                            {accepted.brokerPhone}
+                          </a>
+                        ) : (
+                          <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#64748b' }}>Contact details provided upon acceptance</span>
+                        )}
                       </div>
                     </div>
+
+                    {/* View Dealer Profile link */}
+                    {accepted.brokerId && (
+                      <Link
+                        to={`/dealers/${accepted.brokerId}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                          marginTop: '12px', padding: '10px 16px',
+                          background: '#f1f5f9', border: '1px solid #e2e8f0',
+                          borderRadius: '10px', color: '#334155',
+                          fontWeight: 700, fontSize: '0.8125rem', textDecoration: 'none',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+                      >
+                        <ExternalLink size={14} /> View Dealer Profile
+                      </Link>
+                    )}
                   </div>
                 ) : (
                   <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '12px', color: '#64748b', fontSize: '0.8125rem', textAlign: 'center' }}>

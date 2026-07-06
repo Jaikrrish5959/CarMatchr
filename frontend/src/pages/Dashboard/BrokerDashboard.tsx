@@ -8,7 +8,7 @@ import {
   Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
-  Bell, MessageSquare, Check, Briefcase, CalendarRange
+  Bell, MessageSquare, Check, Briefcase, CalendarRange, MapPin
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -1958,12 +1958,67 @@ const BrokerDashboard: React.FC = () => {
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         opacity: sidebarOpen ? 1 : 0
       }}>
+        {/* ── Sidebar Profile Card ── */}
+        {(() => {
+          const bName = user?.businessName || user?.name || 'Broker';
+          const initials = bName.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? '').join('');
+          const location = [user?.city, user?.state].filter(Boolean).join(', ');
+
+          // Profile completion: count how many key fields are filled
+          const fields = [user?.businessName, user?.phone, user?.city, user?.state, user?.description, user?.website, user?.mapsLink];
+          const filled = fields.filter(Boolean).length;
+          const completionPct = Math.round((filled / fields.length) * 100);
+          const completionColor = completionPct >= 80 ? '#10b981' : completionPct >= 50 ? '#f59e0b' : '#e63946';
+
+          return (
+            <div style={{
+              background: 'linear-gradient(135deg, #f8fafc, #fff)',
+              border: '1px solid #e2e8f0', borderRadius: '16px',
+              padding: '16px', marginBottom: '8px', whiteSpace: 'nowrap',
+            }}>
+              {/* Avatar + name */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                  background: 'linear-gradient(135deg, var(--color-primary), #c62a36)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontWeight: 900, fontSize: '1rem',
+                }}>{initials}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.875rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bName}</div>
+                  {location && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                      <MapPin size={10} /> {location}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Completion bar */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#94a3b8' }}>Profile Complete</span>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 800, color: completionColor }}>{completionPct}%</span>
+                </div>
+                <div style={{ height: 5, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${completionPct}%`, background: completionColor, borderRadius: 999, transition: 'width 0.6s ease' }} />
+                </div>
+                {completionPct < 80 && (
+                  <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '4px', fontWeight: 600 }}>
+                    Complete your profile in Settings ↗
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Navigation Head */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '12px',
-          padding: '12px 16px', color: '#475569', fontWeight: 700, fontSize: '0.9375rem', whiteSpace: 'nowrap'
+          padding: '4px 16px 8px', color: '#94a3b8', fontWeight: 700, fontSize: '0.6875rem', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em'
         }}>
-          <Briefcase size={18} style={{ color: '#475569' }} />
+          <Briefcase size={12} style={{ color: '#94a3b8' }} />
           <span>Broker Portal</span>
         </div>
 

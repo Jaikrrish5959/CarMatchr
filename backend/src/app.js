@@ -1365,7 +1365,13 @@ app.get('/api/dealers', async (req, res) => {
 app.get('/api/dealers/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const row = await db.get("SELECT id, email, role, status, business_name, phone, city, dealer_type, created_at, license FROM users WHERE id = $1 AND role = 'broker' AND status = 'active'", [id]);
+    const row = await db.get(
+      `SELECT id, email, role, status, business_name, name, phone, city, state, address,
+              dealer_type, created_at, license, description, website, maps_link,
+              authorized_brands, showroom_address, business_type
+       FROM users WHERE id = $1 AND role = 'broker' AND status = 'active'`,
+      [id]
+    );
     
     if (!row) {
       return res.status(404).json({ error: 'Dealer not found.' });
@@ -1410,13 +1416,22 @@ app.get('/api/dealers/:id', async (req, res) => {
     const dealerProfile = {
        id: row.id,
        businessName: row.business_name,
+       ownerName: row.name,
        city: row.city,
+       state: row.state,
+       address: row.address,
        phone: row.phone,
        email: row.email,
        dealerType: row.dealer_type,
+       businessType: row.business_type,
        createdAt: row.created_at,
        license: row.license,
-       // Placeholders
+       description: row.description,
+       website: row.website,
+       mapsLink: row.maps_link,
+       authorizedBrands: row.authorized_brands,
+       showroomAddress: row.showroom_address,
+       // Placeholders (would be replaced by a real ratings table later)
        rating: (Math.random() * (5.0 - 4.0) + 4.0).toFixed(1),
        reviews: Math.floor(Math.random() * 500) + 10,
        yearsInBusiness: Math.floor(Math.random() * 20) + 1,
