@@ -92,12 +92,13 @@ const Marketplace: React.FC = () => {
     const numericId = car.id.startsWith('bl-') ? parseInt(car.id.replace('bl-', ''), 10) : parseInt(car.id, 10);
     const bl = brokerListings.find(l => l.id === numericId);
     if (!bl) return;
+    const cleanPhone = (user?.phone && user.phone.startsWith('+91')) ? user.phone.slice(3) : (user?.phone || '');
     setContactModal({
       brokerName: bl.brokerName,
       listingId: car.id,
       buyerName: user?.name || '',
       buyerEmail: user?.email || '',
-      buyerPhone: user?.phone || '',
+      buyerPhone: cleanPhone,
       verified: false
     });
   };
@@ -110,11 +111,11 @@ const Marketplace: React.FC = () => {
       return;
     }
     if (!contactModal.buyerPhone.trim()) {
-      toast.error('Please enter your phone number.');
+      toast.error('Please enter your mobile number.');
       return;
     }
-    if (!/^[\d\s+\-()]{7,15}$/.test(contactModal.buyerPhone)) {
-      toast.error('Please enter a valid phone number.');
+    if (!/^\d{10}$/.test(contactModal.buyerPhone.trim())) {
+      toast.error('Please enter a valid 10-digit mobile number.');
       return;
     }
     setShowContactOtp(true);
@@ -133,7 +134,7 @@ const Marketplace: React.FC = () => {
         body: JSON.stringify({
           buyerName: contactModal.buyerName.trim(),
           buyerEmail: contactModal.buyerEmail.trim(),
-          buyerPhone: contactModal.buyerPhone.trim(),
+          buyerPhone: `+91${contactModal.buyerPhone.trim()}`,
           phoneOtp: otp
         })
       });
@@ -501,12 +502,26 @@ const Marketplace: React.FC = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Your Phone Number (For Verification) *</label>
-                    <input
-                      type="tel" className="form-control" placeholder="+91 9876543210" required
-                      value={contactModal.buyerPhone}
-                      onChange={e => setContactModal({ ...contactModal, buyerPhone: e.target.value })}
-                    />
+                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Your Mobile Number (For Verification) *</label>
+                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <select
+                        style={{
+                          padding: '10px 12px', border: '1px solid var(--color-gray-200)',
+                          borderRadius: '10px', fontSize: '0.875rem', outline: 'none',
+                          background: '#f8fafc', color: 'var(--color-gray-700)', fontWeight: 600,
+                          width: '100px', pointerEvents: 'none'
+                        }}
+                        tabIndex={-1}
+                      >
+                        <option>+91 (IN)</option>
+                      </select>
+                      <input
+                        type="tel" className="form-control" placeholder="Enter your 10-digit mobile number" required
+                        value={contactModal.buyerPhone}
+                        onChange={e => setContactModal({ ...contactModal, buyerPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                        style={{ flex: 1 }}
+                      />
+                    </div>
                   </div>
 
                   <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }}>
@@ -519,7 +534,7 @@ const Marketplace: React.FC = () => {
                     ✓ Request Successfully Logged!
                   </p>
                   <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.5 }}>
-                    Your contact request has been sent to <strong>{contactModal.brokerName}</strong>. They will reach out to you at <strong>{contactModal.buyerPhone}</strong> shortly.
+                    Your contact request has been sent to <strong>{contactModal.brokerName}</strong>. They will reach out to you at <strong>+91 {contactModal.buyerPhone}</strong> shortly.
                   </p>
                   <button onClick={() => setContactModal(null)} className="btn btn-secondary btn-block" style={{ marginTop: '20px' }}>
                     Close
@@ -534,7 +549,7 @@ const Marketplace: React.FC = () => {
       {/* OTP verification for contact modal */}
       {showContactOtp && contactModal && (
         <OtpModal
-          phone={contactModal.buyerPhone.trim()}
+          phone={`+91${contactModal.buyerPhone.trim()}`}
           title="Verify Buyer Phone"
           subtitle="Enter the 6-digit verification code to log your dealer contact request."
           onVerified={(otp) => {

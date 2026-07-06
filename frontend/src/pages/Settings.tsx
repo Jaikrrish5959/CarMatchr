@@ -171,7 +171,7 @@ const ProfileSettings: React.FC = () => {
   const [form, setForm] = useState({
     name: user?.name ?? '',
     businessName: user?.businessName ?? '',
-    phone: user?.phone ?? '',
+    phone: (user?.phone && user.phone.startsWith('+91')) ? user.phone.slice(3) : (user?.phone ?? ''),
     email: user?.email ?? '',
     state: user?.state ?? '',
     city: user?.city ?? '',
@@ -216,8 +216,16 @@ const ProfileSettings: React.FC = () => {
     setSaving(true);
     try {
       const token = getToken();
+      
+      // Validate mobile number format
+      if (form.phone.trim() && !/^\d{10}$/.test(form.phone.trim())) {
+        toast.error('Please enter a valid 10-digit mobile number.');
+        setSaving(false);
+        return;
+      }
+
       const payload: Record<string, string | null> = {
-        phone: form.phone.trim() || null,
+        phone: form.phone.trim() ? `+91${form.phone.trim()}` : null,
         city: form.city.trim() || null,
         state: form.state.trim() || null,
         address: form.address.trim() || null,
@@ -226,7 +234,8 @@ const ProfileSettings: React.FC = () => {
       };
 
       // If phone changed, require OTP
-      const phoneChanged = (form.phone.trim() || null) !== (user.phone || null);
+      const cleanUserPhone = (user.phone && user.phone.startsWith('+91')) ? user.phone.slice(3) : (user.phone || '');
+      const phoneChanged = form.phone.trim() !== cleanUserPhone;
       const isOtpString = typeof phoneOtp === 'string';
       if (phoneChanged && !isOtpString) {
         setSaving(false);
@@ -262,7 +271,7 @@ const ProfileSettings: React.FC = () => {
       }
 
       updateUser({
-        phone: form.phone.trim() || undefined,
+        phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
         phoneVerified: isOtpString ? true : user.phoneVerified,
         city: form.city.trim() || undefined,
         state: form.state.trim() || undefined,
@@ -335,7 +344,26 @@ const ProfileSettings: React.FC = () => {
         <input style={input} value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="Your full name" />
       </FormField>
       <FormField label="Mobile Number" icon={<Phone size={13} />} hint="Used so dealers can contact you directly.">
-        <input style={input} value={form.phone} onChange={e => handleChange('phone', e.target.value)} placeholder="+91 98765 43210" type="tel" />
+        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+          <select
+            style={{
+              padding: '10px 12px', border: '1px solid var(--color-gray-200)',
+              borderRadius: '10px', fontSize: '0.875rem', outline: 'none',
+              background: '#f8fafc', color: 'var(--color-gray-700)', fontWeight: 600,
+              width: '100px', pointerEvents: 'none'
+            }}
+            tabIndex={-1}
+          >
+            <option>+91 (IN)</option>
+          </select>
+          <input
+            style={{ ...input, flex: 1 }}
+            value={form.phone}
+            onChange={e => handleChange('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+            placeholder="Enter your 10-digit mobile number"
+            type="tel"
+          />
+        </div>
       </FormField>
       <FormField label="Email Address" icon={<Mail size={13} />} hint="Email cannot be changed.">
         <input style={inputDisabled} value={form.email} readOnly />
@@ -485,7 +513,26 @@ const ProfileSettings: React.FC = () => {
           <input style={input} value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="Owner's name" />
         </FormField>
         <FormField label="Mobile Number" icon={<Phone size={13} />}>
-          <input style={input} value={form.phone} onChange={e => handleChange('phone', e.target.value)} placeholder="+91 98765 43210" type="tel" />
+          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <select
+              style={{
+                padding: '10px 12px', border: '1px solid var(--color-gray-200)',
+                borderRadius: '10px', fontSize: '0.875rem', outline: 'none',
+                background: '#f8fafc', color: 'var(--color-gray-700)', fontWeight: 600,
+                width: '100px', pointerEvents: 'none'
+              }}
+              tabIndex={-1}
+            >
+              <option>+91 (IN)</option>
+            </select>
+            <input
+              style={{ ...input, flex: 1 }}
+              value={form.phone}
+              onChange={e => handleChange('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="Enter your 10-digit mobile number"
+              type="tel"
+            />
+          </div>
         </FormField>
         <FormField label="Email Address" icon={<Mail size={13} />} hint="Cannot be changed.">
           <input style={inputDisabled} value={form.email} readOnly />
@@ -898,9 +945,9 @@ const ProfileSettings: React.FC = () => {
         </div>
       )}
       {/* Phone OTP Modal (triggered on phone change or Verify Now) */}
-      {showPhoneOtpModal && user?.phone && (
+      {showPhoneOtpModal && (
         <OtpModal
-          phone={form.phone.trim() || user.phone}
+          phone={`+91${form.phone.trim() || ((user?.phone && user.phone.startsWith('+91')) ? user.phone.slice(3) : user?.phone)}`}
           title="Verify Phone Number"
           subtitle="Enter the 6-digit code sent to your phone to confirm ownership."
           onVerified={(otp) => {

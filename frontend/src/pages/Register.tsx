@@ -136,11 +136,11 @@ const Register: React.FC = () => {
       return;
     }
     if (!brokerForm.phone.trim()) {
-      toast.error('Phone number is required.');
+      toast.error('Mobile number is required.');
       return;
     }
-    if (!/^[\d\s+\-()]{7,15}$/.test(brokerForm.phone)) {
-      toast.error('Please enter a valid phone number.');
+    if (!/^\d{10}$/.test(brokerForm.phone.trim())) {
+      toast.error('Please enter a valid 10-digit mobile number.');
       return;
     }
     if (!brokerForm.dealerType) {
@@ -160,7 +160,7 @@ const Register: React.FC = () => {
         businessName: brokerForm.businessName.trim(),
         license: brokerForm.license.trim(),
         city: brokerForm.city,
-        phone: brokerForm.phone.trim(),
+        phone: `+91${brokerForm.phone.trim()}`,
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType as 'new' | 'used' | 'both',
         phoneOtp: brokerPhoneVerifiedOtp,
@@ -193,15 +193,16 @@ const Register: React.FC = () => {
       if (!form.businessName.trim()) return 'Please enter your dealership name.';
       if (!form.license.trim()) return 'Please enter your license number.';
       if (!form.city) return 'Please select your city.';
-      if (!form.phone.trim()) return 'Phone number is required for broker accounts.';
       if (!form.dealerType) return 'Please select your Dealer Type.';
-      if (!phoneVerifiedOtp) return 'Please verify your phone number before creating your account.';
     }
+    if (!form.phone.trim()) return 'Mobile number is required.';
+    if (!/^\d{10}$/.test(form.phone.trim())) return 'Please enter a valid 10-digit mobile number.';
+    if (!phoneVerifiedOtp) return 'Please verify your mobile number before creating your account.';
+
     if (!form.email.trim()) return 'Please enter your email address.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
     if (!form.password) return 'Please enter a password.';
     if (form.password.length < 6) return 'Password must be at least 6 characters.';
-    if (form.phone && !/^[\d\s+\-()]{7,15}$/.test(form.phone)) return 'Please enter a valid phone number.';
     return null;
   };
 
@@ -223,12 +224,12 @@ const Register: React.FC = () => {
         status: 'active',
         name: role === 'buyer' ? form.name.trim() : undefined,
         businessName: role === 'broker' ? form.businessName.trim() : undefined,
-        phone: form.phone.trim() || undefined,
+        phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
         license: role === 'broker' ? form.license.trim() : undefined,
         city: form.city || undefined,
         dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
         // @ts-ignore — phoneOtp passed to backend
-        phoneOtp: role === 'broker' ? phoneVerifiedOtp : undefined,
+        phoneOtp: phoneVerifiedOtp || undefined,
       });
       if (!result.ok) {
         const message = result.error ?? 'Unable to create account.';
@@ -326,16 +327,31 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Phone Number *</label>
+                  <label className="form-label">Mobile Number *</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      style={{
+                        padding: '10px 12px', border: '1px solid var(--color-gray-200)',
+                        borderRadius: '10px', fontSize: '0.875rem', outline: 'none',
+                        background: '#f8fafc', color: 'var(--color-gray-700)', fontWeight: 600,
+                        width: '120px', pointerEvents: 'none'
+                      }}
+                      tabIndex={-1}
+                    >
+                      <option>+91 (IN)</option>
+                    </select>
                     <input
                       type="tel" className="form-control" required
-                      placeholder="+91 9876543210"
+                      placeholder="Enter your 10-digit mobile number"
                       value={brokerForm.phone}
-                      onChange={e => { setBrokerForm({ ...brokerForm, phone: e.target.value }); setBrokerPhoneVerifiedOtp(null); }}
+                      onChange={e => {
+                        const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setBrokerForm({ ...brokerForm, phone: cleanVal });
+                        setBrokerPhoneVerifiedOtp(null);
+                      }}
                       style={{ flex: 1 }}
                     />
-                    {brokerForm.phone.trim().length >= 7 && (
+                    {brokerForm.phone.length === 10 && (
                       brokerPhoneVerifiedOtp ? (
                         <div style={{
                           display: 'flex', alignItems: 'center', gap: '6px',
@@ -441,17 +457,33 @@ const Register: React.FC = () => {
                 )}
 
                 <div className="form-group">
-                  <label className="form-label">Phone Number {role === 'broker' ? '*' : ''}</label>
+                  <label className="form-label">Mobile Number *</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      style={{
+                        padding: '10px 12px', border: '1px solid var(--color-gray-200)',
+                        borderRadius: '10px', fontSize: '0.875rem', outline: 'none',
+                        background: '#f8fafc', color: 'var(--color-gray-700)', fontWeight: 600,
+                        width: '120px', pointerEvents: 'none'
+                      }}
+                      tabIndex={-1}
+                    >
+                      <option>+91 (IN)</option>
+                    </select>
                     <input
                       type="tel" name="phone" className="form-control"
-                      placeholder="+91 9876543210"
+                      placeholder="Enter your 10-digit mobile number"
                       value={form.phone}
-                      onChange={e => { handleChange(e); setPhoneVerifiedOtp(null); }}
-                      required={role === 'broker'}
+                      onChange={e => {
+                        const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setForm({ ...form, phone: cleanVal });
+                        setPhoneVerifiedOtp(null);
+                        setError('');
+                      }}
+                      required
                       style={{ flex: 1 }}
                     />
-                    {role === 'broker' && form.phone.trim().length >= 7 && (
+                    {form.phone.length === 10 && (
                       phoneVerifiedOtp ? (
                         <div style={{
                           display: 'flex', alignItems: 'center', gap: '6px',
@@ -477,9 +509,9 @@ const Register: React.FC = () => {
                       )
                     )}
                   </div>
-                  {role === 'broker' && !phoneVerifiedOtp && form.phone.trim().length >= 7 && (
+                  {!phoneVerifiedOtp && form.phone.length === 10 && (
                     <p style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '4px', fontWeight: 600 }}>
-                      ⚠ Phone verification is required for broker accounts.
+                      ⚠ Mobile verification is required before registration.
                     </p>
                   )}
                 </div>
@@ -544,13 +576,13 @@ const Register: React.FC = () => {
       {/* OTP Modal for standard broker registration */}
       {showOtpModal && (
         <OtpModal
-          phone={form.phone.trim()}
-          title="Verify Broker Phone"
-          subtitle="Enter the 6-digit code sent to your phone to confirm your identity as a dealer."
+          phone={`+91${form.phone.trim()}`}
+          title="Verify Mobile Number"
+          subtitle="Enter the 6-digit code sent to your phone to confirm your identity."
           onVerified={(otp) => {
             setPhoneVerifiedOtp(otp);
             setShowOtpModal(false);
-            toast.success('Phone verified! You can now complete registration.');
+            toast.success('Mobile number verified successfully!');
           }}
           onClose={() => setShowOtpModal(false)}
         />
@@ -559,13 +591,13 @@ const Register: React.FC = () => {
       {/* OTP Modal for Google broker registration */}
       {showBrokerOtpModal && (
         <OtpModal
-          phone={brokerForm.phone.trim()}
-          title="Verify Broker Phone"
-          subtitle="Enter the 6-digit code sent to your phone to confirm your identity as a dealer."
+          phone={`+91${brokerForm.phone.trim()}`}
+          title="Verify Mobile Number"
+          subtitle="Enter the 6-digit code sent to your phone to confirm your identity."
           onVerified={(otp) => {
             setBrokerPhoneVerifiedOtp(otp);
             setShowBrokerOtpModal(false);
-            toast.success('Phone verified! You can now complete registration.');
+            toast.success('Mobile number verified successfully!');
           }}
           onClose={() => setShowBrokerOtpModal(false)}
         />

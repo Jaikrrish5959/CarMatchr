@@ -152,14 +152,11 @@ const registerSchema = z.object({
   role: z.enum(['buyer', 'broker']),
   name: z.string().optional().nullable(),
   businessName: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
+  phone: z.string().min(7, 'Phone number is required.'),
   license: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   dealerType: z.enum(['new', 'used', 'both']).optional().nullable(),
-}).refine(data => {
-  if (data.role === 'broker' && !data.phone) return false;
-  return true;
-}, { message: 'Broker account requires a contact number.', path: ['phone'] });
+});
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -583,11 +580,11 @@ app.post('/api/auth/register', async (req, res) => {
   const user = result.data;
   const { phoneOtp } = req.body;
 
-  // For brokers, verify the phone OTP before creating the account
+  // Verify the phone OTP before creating the account
   let phoneVerified = false;
-  if (user.role === 'broker' && user.phone) {
+  if (user.phone) {
     if (!phoneOtp) {
-      return res.status(400).json({ error: 'Phone verification is required for broker accounts. Please verify your phone number.' });
+      return res.status(400).json({ error: 'Phone verification is required. Please verify your phone number.' });
     }
     const otpRow = await db.get(
       'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
