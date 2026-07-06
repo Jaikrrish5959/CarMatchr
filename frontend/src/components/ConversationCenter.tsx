@@ -107,8 +107,19 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     }
   }, [threads, activeThreadId]);
 
+  const prevThreadIdRef = useRef(activeThreadId);
+  const prevCountRef = useRef(messages.length);
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const threadChanged = prevThreadIdRef.current !== activeThreadId;
+    const newMessagesAdded = messages.length > prevCountRef.current;
+
+    if (threadChanged || newMessagesAdded) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    prevThreadIdRef.current = activeThreadId;
+    prevCountRef.current = messages.length;
   }, [activeThreadId, messages]);
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null;
