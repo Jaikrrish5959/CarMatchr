@@ -95,6 +95,8 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
 
   useEffect(() => {
     if (!threads.length) {
@@ -107,20 +109,11 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     }
   }, [threads, activeThreadId]);
 
-  const prevThreadIdRef = useRef(activeThreadId);
-  const prevCountRef = useRef(messages.length);
-
+  // When the active thread changes, reset the userScrolledUp flag and scroll to bottom
   useEffect(() => {
-    const threadChanged = prevThreadIdRef.current !== activeThreadId;
-    const newMessagesAdded = messages.length > prevCountRef.current;
-
-    if (threadChanged || newMessagesAdded) {
-      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-
-    prevThreadIdRef.current = activeThreadId;
-    prevCountRef.current = messages.length;
-  }, [activeThreadId, messages]);
+    userScrolledUpRef.current = false;
+    endRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+  }, [activeThreadId]);
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null;
 
@@ -146,7 +139,20 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
         }
         const data = await response.json();
         if (!cancelled) {
-          setMessages(Array.isArray(data) ? data : []);
+          const incoming: ConversationMessage[] = Array.isArray(data) ? data : [];
+          setMessages((prev) => {
+            // Only update if the last message ID differs (avoids re-render on same data)
+            const lastPrev = prev.at(-1)?.id;
+            const lastNext = incoming.at(-1)?.id;
+            if (lastPrev === lastNext && prev.length === incoming.length) return prev;
+            // Scroll to bottom only if user hasn't manually scrolled up
+            if (!userScrolledUpRef.current) {
+              requestAnimationFrame(() => {
+                endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+              });
+            }
+            return incoming;
+          });
         }
       } catch {
         if (!cancelled) setMessages([]);
@@ -199,6 +205,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       }
 
       setDraft('');
+      userScrolledUpRef.current = false;
 
       const reload = await fetch(
         `${API_BASE}/api/messages?requirementId=${activeThread.requirementId}&brokerId=${activeThread.brokerId}`,
@@ -207,6 +214,9 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       if (reload.ok) {
         const data = await reload.json();
         setMessages(Array.isArray(data) ? data : []);
+        requestAnimationFrame(() => {
+          endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        });
       }
     } catch {
       return;
@@ -315,7 +325,16 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: 0, padding: '20px', background: 'linear-gradient(180deg, #fff 0%, #fafafa 100%)', overflowY: 'auto' }}>
+            <div
+              ref={scrollContainerRef}
+              onScroll={() => {
+                const el = scrollContainerRef.current;
+                if (!el) return;
+                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                userScrolledUpRef.current = !isNearBottom;
+              }}
+              style={{ flex: 1, minHeight: 0, padding: '20px', background: 'linear-gradient(180deg, #fff 0%, #fafafa 100%)', overflowY: 'auto' }}
+            >
               {isLoadingMessages ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
                   <div style={{ width: '34px', height: '34px', margin: '0 auto 12px', borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#e63946', animation: 'spin 0.8s linear infinite' }} />
