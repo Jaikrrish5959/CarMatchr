@@ -16,6 +16,15 @@ export interface User {
   license?: string;
   city?: string;
   dealerType?: 'new' | 'used' | 'both';
+  state?: string;
+  address?: string;
+  authorizedBrands?: string;
+  showroomAddress?: string;
+  businessType?: 'dealer' | 'individual';
+  description?: string;
+  website?: string;
+  mapsLink?: string;
+  language?: string;
 }
 
 interface AuthContextType {

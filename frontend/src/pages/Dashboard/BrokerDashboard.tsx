@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
 import ConversationCenter from '../../components/ConversationCenter';
 import { getToken } from '../../services/authService';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
@@ -2008,23 +2008,42 @@ const BrokerDashboard: React.FC = () => {
 
         {/* Sub Navigation Items */}
         {[
-          { id: 'messages', label: 'Messages', icon: <MessageSquare size={16} />, badge: 0 },
-          { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, badge: notificationsList.filter(n => n.isNew).length },
-          { id: 'profile', label: 'Profile Settings', icon: <Settings size={16} />, badge: 0 }
+          { id: 'messages', label: 'Messages', icon: <MessageSquare size={16} />, badge: 0, isLink: false },
+          { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, badge: notificationsList.filter(n => n.isNew).length, isLink: false },
+          { id: 'profile', label: 'Profile Settings', icon: <Settings size={16} />, badge: 0, isLink: true, to: '/settings' }
         ].map(item => {
           const isActive = currentTab === item.id;
+          const style = {
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', padding: '12px 16px', borderRadius: '12px', border: 'none',
+            background: isActive ? '#fff0f1' : 'transparent',
+            color: isActive ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
+            cursor: 'pointer', textAlign: 'left' as const, transition: 'all 0.2s', whiteSpace: 'nowrap' as const,
+            textDecoration: 'none'
+          };
+          
+          if (item.isLink) {
+            return (
+              <Link
+                key={item.id}
+                to={item.to!}
+                onClick={() => { if (isMobile) setSidebarOpen(false); }}
+                style={style}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+              </Link>
+            );
+          }
+
           return (
             <button
               key={item.id}
               onClick={() => { setTab(item.id); if (isMobile) setSidebarOpen(false); }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '12px 16px', borderRadius: '12px', border: 'none',
-                background: isActive ? '#fff0f1' : 'transparent',
-                color: isActive ? '#e63946' : '#526071',
-                fontFamily: 'var(--font)', fontWeight: 700, fontSize: '0.875rem',
-                cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', whiteSpace: 'nowrap'
-              }}
+              style={style}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {item.icon}

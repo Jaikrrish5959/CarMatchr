@@ -4,7 +4,7 @@ import { useData } from '../../hooks/useData';
 import { useCatalog } from '../../hooks/useCatalog';
 import { useNotifications } from '../../contexts/NotificationContext';
 import ConversationCenter from '../../components/ConversationCenter';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   Plus, X, Check, Clock, MessageSquare, Loader2, ChevronDown, Car, Sparkles,
   Phone, CalendarRange, Star, Bell, MapPin, List, Settings, HelpCircle,
@@ -1776,7 +1776,7 @@ const BuyerDashboard: React.FC = () => {
         <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />
         
         {/* Profile Settings */}
-        <button style={{
+        <Link to="/settings" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
@@ -1792,11 +1792,12 @@ const BuyerDashboard: React.FC = () => {
           cursor: 'pointer',
           textAlign: 'left',
           transition: 'all 0.2s',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          textDecoration: 'none'
         }}>
           <Settings size={18} style={{ color: '#526071' }} />
           <span>Profile Settings</span>
-        </button>
+        </Link>
 
         {/* Help & Support */}
         <button style={{

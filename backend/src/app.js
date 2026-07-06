@@ -315,6 +315,15 @@ const mapUser = (row) => ({
   license: row.license ?? undefined,
   city: row.city ?? undefined,
   dealerType: row.dealer_type ?? undefined,
+  state: row.state ?? undefined,
+  address: row.address ?? undefined,
+  authorizedBrands: row.authorized_brands ?? undefined,
+  showroomAddress: row.showroom_address ?? undefined,
+  businessType: row.business_type ?? undefined,
+  description: row.description ?? undefined,
+  website: row.website ?? undefined,
+  mapsLink: row.maps_link ?? undefined,
+  language: row.language ?? undefined,
 });
 
 function parseBudgetNumber(value) {
@@ -632,25 +641,93 @@ app.post('/api/auth/verify-login', async (req, res) => {
 // Update own profile
 app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async (req, res) => {
   const { id } = req.params;
-  const { phone, name } = req.body;
+  const {
+    phone,
+    name,
+    business_name,
+    city,
+    state,
+    address,
+    authorized_brands,
+    showroom_address,
+    business_type,
+    description,
+    website,
+    maps_link,
+    language
+  } = req.body;
+
   const row = await db.get('SELECT * FROM users WHERE id = $1', [id]);
   if (!row) return res.status(404).json({ error: 'User not found.' });
 
   const updatedPhone = phone !== undefined ? (phone || null) : row.phone;
-  const updatedName = name !== undefined ? (name || null) : (row.name ?? row.business_name ?? null);
+  const updatedCity = city !== undefined ? (city || null) : row.city;
+  const updatedState = state !== undefined ? (state || null) : row.state;
+  const updatedAddress = address !== undefined ? (address || null) : row.address;
+  const updatedAuthorizedBrands = authorized_brands !== undefined ? (authorized_brands || null) : row.authorized_brands;
+  const updatedShowroomAddress = showroom_address !== undefined ? (showroom_address || null) : row.showroom_address;
+  const updatedBusinessType = business_type !== undefined ? (business_type || null) : row.business_type;
+  const updatedDescription = description !== undefined ? (description || null) : row.description;
+  const updatedWebsite = website !== undefined ? (website || null) : row.website;
+  const updatedMapsLink = maps_link !== undefined ? (maps_link || null) : row.maps_link;
+  const updatedLanguage = language !== undefined ? (language || null) : row.language;
 
   if (row.role === 'broker') {
-    await db.run('UPDATE users SET phone = $1, business_name = $2 WHERE id = $3', [
-      updatedPhone,
-      updatedName,
-      id,
-    ]);
+    const updatedBusinessName = business_name !== undefined ? (business_name || null) : (row.business_name || name || null);
+    await db.run(
+      `UPDATE users SET 
+        phone = $1, 
+        business_name = $2, 
+        city = $3, 
+        state = $4, 
+        address = $5, 
+        authorized_brands = $6, 
+        showroom_address = $7, 
+        business_type = $8, 
+        description = $9, 
+        website = $10, 
+        maps_link = $11, 
+        language = $12
+       WHERE id = $13`,
+      [
+        updatedPhone,
+        updatedBusinessName,
+        updatedCity,
+        updatedState,
+        updatedAddress,
+        updatedAuthorizedBrands,
+        updatedShowroomAddress,
+        updatedBusinessType,
+        updatedDescription,
+        updatedWebsite,
+        updatedMapsLink,
+        updatedLanguage,
+        id,
+      ]
+    );
   } else {
-    await db.run('UPDATE users SET phone = $1, name = $2 WHERE id = $3', [
-      updatedPhone,
-      updatedName,
-      id,
-    ]);
+    const updatedName = name !== undefined ? (name || null) : (row.name || null);
+    await db.run(
+      `UPDATE users SET 
+        phone = $1, 
+        name = $2, 
+        city = $3, 
+        state = $4, 
+        address = $5, 
+        description = $6, 
+        language = $7
+       WHERE id = $8`,
+      [
+        updatedPhone,
+        updatedName,
+        updatedCity,
+        updatedState,
+        updatedAddress,
+        updatedDescription,
+        updatedLanguage,
+        id,
+      ]
+    );
   }
 
   const updated = await db.get('SELECT * FROM users WHERE id = $1', [id]);

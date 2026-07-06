@@ -166,22 +166,22 @@ const ProfileSettings: React.FC = () => {
   // ── Dealer state
   const [dealerTab, setDealerTab] = useState<DealerTab>('business');
 
-  // ── Shared form state
+  // ─── Shared form state
   const [form, setForm] = useState({
     name: user?.name ?? '',
     businessName: user?.businessName ?? '',
     phone: user?.phone ?? '',
     email: user?.email ?? '',
-    state: user?.city ? 'Tamil Nadu' : '',
+    state: user?.state ?? '',
     city: user?.city ?? '',
-    address: '',
-    authorizedBrands: '',
-    showroomAddress: '',
-    businessType: 'dealer' as 'dealer' | 'individual',
-    description: '',
-    website: '',
-    mapsLink: '',
-    language: 'English',
+    address: user?.address ?? '',
+    authorizedBrands: user?.authorizedBrands ?? '',
+    showroomAddress: user?.showroomAddress ?? '',
+    businessType: (user?.businessType ?? 'dealer') as 'dealer' | 'individual',
+    description: user?.description ?? '',
+    website: user?.website ?? '',
+    mapsLink: user?.mapsLink ?? '',
+    language: user?.language ?? 'English',
   });
 
   const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(() =>
@@ -215,11 +215,20 @@ const ProfileSettings: React.FC = () => {
       const payload: Record<string, string | null> = {
         phone: form.phone.trim() || null,
         city: form.city.trim() || null,
+        state: form.state.trim() || null,
+        address: form.address.trim() || null,
+        language: form.language || null,
+        description: form.description.trim() || null,
       };
       if (isBuyer) {
         payload.name = form.name.trim() || null;
       } else {
         payload.business_name = form.businessName.trim() || null;
+        payload.authorized_brands = form.authorizedBrands.trim() || null;
+        payload.showroom_address = form.showroomAddress.trim() || null;
+        payload.business_type = form.businessType || null;
+        payload.website = form.website.trim() || null;
+        payload.maps_link = form.mapsLink.trim() || null;
       }
 
       const res = await fetch(`${API_BASE}/api/users/${user.id}/profile`, {
@@ -240,9 +249,20 @@ const ProfileSettings: React.FC = () => {
       updateUser({
         phone: form.phone.trim() || undefined,
         city: form.city.trim() || undefined,
+        state: form.state.trim() || undefined,
+        address: form.address.trim() || undefined,
+        language: form.language || undefined,
+        description: form.description.trim() || undefined,
         ...(isBuyer
           ? { name: form.name.trim() || undefined }
-          : { businessName: form.businessName.trim() || undefined }),
+          : {
+              businessName: form.businessName.trim() || undefined,
+              authorizedBrands: form.authorizedBrands.trim() || undefined,
+              showroomAddress: form.showroomAddress.trim() || undefined,
+              businessType: form.businessType || undefined,
+              website: form.website.trim() || undefined,
+              mapsLink: form.mapsLink.trim() || undefined,
+            }),
       });
 
       toast.success('Profile saved!');
@@ -532,15 +552,16 @@ const ProfileSettings: React.FC = () => {
         <input style={input} value={form.mapsLink} onChange={e => handleChange('mapsLink', e.target.value)} placeholder="https://maps.google.com/..." />
       </FormField>
       <button
-        onClick={() => toast.success('Public profile saved!')}
+        onClick={handleSave} disabled={saving}
         style={{
           marginTop: '4px', padding: '11px 24px', background: 'var(--color-primary)',
           color: '#fff', border: 'none', borderRadius: '10px',
-          fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: '8px',
+          fontWeight: 800, fontSize: '0.9rem', cursor: saving ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', gap: '8px', opacity: saving ? 0.7 : 1,
         }}
       >
-        <Save size={15} /> Save Public Profile
+        {saving ? <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Save size={15} />}
+        {saving ? 'Saving…' : 'Save Public Profile'}
       </button>
     </div>
   );

@@ -60,6 +60,15 @@ export async function initDb() {
       license VARCHAR(100),
       city VARCHAR(100),
       dealer_type VARCHAR(50) CHECK (dealer_type IN ('new', 'used', 'both')),
+      state VARCHAR(100),
+      address TEXT,
+      authorized_brands TEXT,
+      showroom_address TEXT,
+      business_type VARCHAR(50),
+      description TEXT,
+      website TEXT,
+      maps_link TEXT,
+      language VARCHAR(50),
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(email, role)
     );
@@ -317,6 +326,28 @@ export async function initDb() {
   } catch (err) {
     if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
       console.error('Migration error (otp_expires_at):', err);
+    }
+  }
+
+  const extraUserCols = [
+    { name: 'state', type: 'VARCHAR(100)' },
+    { name: 'address', type: 'TEXT' },
+    { name: 'authorized_brands', type: 'TEXT' },
+    { name: 'showroom_address', type: 'TEXT' },
+    { name: 'business_type', type: 'VARCHAR(50)' },
+    { name: 'description', type: 'TEXT' },
+    { name: 'website', type: 'TEXT' },
+    { name: 'maps_link', type: 'TEXT' },
+    { name: 'language', type: 'VARCHAR(50)' }
+  ];
+
+  for (const col of extraUserCols) {
+    try {
+      await db.run(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (users ${col.name}):`, err);
+      }
     }
   }
 }
