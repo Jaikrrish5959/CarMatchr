@@ -30,10 +30,6 @@ interface ConversationThread {
   requirement?: Requirement;
 }
 
-function threadIdFor(requirementId: number, brokerId: number) {
-  return `req-${requirementId}-broker-${brokerId}`;
-}
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -44,13 +40,15 @@ function buildThreads(mode: ConversationMode, userId: number | undefined, requir
   const grouped = new Map<string, ConversationThread>();
 
   offers.forEach((offer) => {
+    if (offer.status !== 'accepted') return;
+
     const requirement = requirements.find((item) => item.id === offer.requirementId);
     if (!requirement) return;
 
     if (mode === 'buyer' && requirement.buyerId !== userId) return;
     if (mode === 'broker' && offer.brokerId !== userId) return;
 
-    const id = threadIdFor(offer.requirementId, offer.brokerId);
+    const id = `buyer-${requirement.buyerId}-broker-${offer.brokerId}`;
     const title = mode === 'buyer'
       ? (offer.dealerName || offer.brokerName || 'Dealer')
       : `${requirement.make} ${requirement.model}`;
@@ -122,9 +120,12 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     }
 
     let cancelled = false;
+    let isFirstLoad = true;
 
     const loadMessages = async () => {
-      setIsLoadingMessages(true);
+      if (isFirstLoad) {
+        setIsLoadingMessages(true);
+      }
       try {
         const url = `${API_BASE}/api/messages?requirementId=${activeThread.requirementId}&brokerId=${activeThread.brokerId}`;
         const response = await fetch(url, { headers: authHeaders() });
@@ -139,7 +140,10 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       } catch {
         if (!cancelled) setMessages([]);
       } finally {
-        if (!cancelled) setIsLoadingMessages(false);
+        if (!cancelled) {
+          setIsLoadingMessages(false);
+          isFirstLoad = false;
+        }
       }
     };
 

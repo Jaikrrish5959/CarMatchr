@@ -1048,15 +1048,15 @@ app.get('/api/messages', authenticate, async (req, res) => {
   }
 
   const requirement = await db.get('SELECT id, buyer_id FROM requirements WHERE id = $1', [requirementId]);
-  const offer = await db.get('SELECT id, broker_id FROM offers WHERE requirement_id = $1 AND broker_id = $2 LIMIT 1', [requirementId, brokerId]);
-  if (!requirement || !offer) {
-    return res.status(404).json({ error: 'Conversation thread not found.' });
+  if (!requirement) {
+    return res.status(404).json({ error: 'Requirement not found.' });
   }
+  const buyerId = requirement.buyer_id;
 
   if (req.user.role !== 'admin') {
     const userId = Number(req.user.sub);
-    const isBuyer = Number(requirement.buyer_id) === userId;
-    const isBroker = Number(offer.broker_id) === userId;
+    const isBuyer = Number(buyerId) === userId;
+    const isBroker = Number(brokerId) === userId;
     if (!isBuyer && !isBroker) {
       return res.status(403).json({ error: 'You can only view your own conversation threads.' });
     }
@@ -1075,11 +1075,12 @@ app.get('/api/messages', authenticate, async (req, res) => {
         u.name,
         u.business_name
       FROM messages m
+      INNER JOIN requirements r ON r.id = m.requirement_id
       LEFT JOIN users u ON u.id = m.sender_id
-      WHERE m.requirement_id = $1 AND m.broker_id = $2
+      WHERE r.buyer_id = $1 AND m.broker_id = $2
       ORDER BY m.created_at ASC, m.id ASC
     `,
-    [requirementId, brokerId]
+    [buyerId, brokerId]
   );
 
   res.json(rows.map((row) => ({
