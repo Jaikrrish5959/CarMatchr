@@ -9,6 +9,7 @@ export interface AuthUser {
   name?: string;
   businessName?: string;
   phone?: string;
+  phoneVerified?: boolean;
   role: 'buyer' | 'broker' | 'admin';
   status: 'active' | 'pending';
   license?: string;
@@ -218,6 +219,7 @@ export async function registerBrokerWithGoogle(data: {
   phone: string;
   credential: string;
   dealerType: 'new' | 'used' | 'both';
+  phoneOtp?: string;
 }): Promise<LoginResult> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/google/register`, {
@@ -236,6 +238,38 @@ export async function registerBrokerWithGoogle(data: {
     saveSession(token, user);
 
     return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+// ─── Phone OTP API calls ──────────────────────────────────────────────────────
+
+export async function sendOtp(phone: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Failed to send OTP.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function verifyOtp(phone: string, otp: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'OTP verification failed.' };
+    return { ok: true };
   } catch {
     return { ok: false, error: 'Server unavailable. Please try again.' };
   }

@@ -14,6 +14,8 @@ import {
 import CitySelector from '../components/CitySelector';
 import FilterPanel from '../components/FilterPanel';
 import { useCatalog } from '../hooks/useCatalog';
+import OtpModal from '../components/OtpModal';
+import toast from 'react-hot-toast';
 
 const Marketplace: React.FC = () => {
   const { brokerListings } = useData();
@@ -29,7 +31,15 @@ const Marketplace: React.FC = () => {
   const [wishlist, setWishlist] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem('carmatchr_wishlist'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
   });
-  const [contactModal, setContactModal] = useState<{ brokerName: string; phone: string; email: string; listingId: string } | null>(null);
+  const [contactModal, setContactModal] = useState<{
+    brokerName: string;
+    listingId: string;
+    buyerName: string;
+    buyerEmail: string;
+    buyerPhone: string;
+    verified: boolean;
+  } | null>(null);
+  const [showContactOtp, setShowContactOtp] = useState(false);
   const [activeImage, setActiveImage] = useState<Record<string, number>>({});
 
   // --- Convert broker listings to CarListing format ---
@@ -82,12 +92,61 @@ const Marketplace: React.FC = () => {
     const numericId = car.id.startsWith('bl-') ? parseInt(car.id.replace('bl-', ''), 10) : parseInt(car.id, 10);
     const bl = brokerListings.find(l => l.id === numericId);
     if (!bl) return;
-    setContactModal({ brokerName: bl.brokerName, phone: user?.phone || 'N/A', email: '', listingId: car.id });
-    
-    fetch(`${API_BASE}/api/listings/${bl.id}/contact`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ buyerName: user?.name || 'Anonymous', buyerEmail: user?.email || '', buyerPhone: user?.phone || '' }),
-    }).catch(console.error);
+    setContactModal({
+      brokerName: bl.brokerName,
+      listingId: car.id,
+      buyerName: user?.name || '',
+      buyerEmail: user?.email || '',
+      buyerPhone: user?.phone || '',
+      verified: false
+    });
+  };
+
+  const handleVerifyContactRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactModal) return;
+    if (!contactModal.buyerName.trim()) {
+      toast.error('Please enter your name.');
+      return;
+    }
+    if (!contactModal.buyerPhone.trim()) {
+      toast.error('Please enter your phone number.');
+      return;
+    }
+    if (!/^[\d\s+\-()]{7,15}$/.test(contactModal.buyerPhone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+    setShowContactOtp(true);
+  };
+
+  const submitContactLead = async (otp: string) => {
+    if (!contactModal) return;
+    const numericId = contactModal.listingId.startsWith('bl-') ? parseInt(contactModal.listingId.replace('bl-', ''), 10) : parseInt(contactModal.listingId, 10);
+    const bl = brokerListings.find(l => l.id === numericId);
+    if (!bl) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/listings/${bl.id}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          buyerName: contactModal.buyerName.trim(),
+          buyerEmail: contactModal.buyerEmail.trim(),
+          buyerPhone: contactModal.buyerPhone.trim(),
+          phoneOtp: otp
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Verification failed. Please check the code.');
+        return;
+      }
+      setContactModal(prev => prev ? { ...prev, verified: true } : null);
+      toast.success('Contact request successfully verified and logged!');
+    } catch {
+      toast.error('Unable to verify right now. Please try again.');
+    }
   };
 
   const activeFilterCount = [filters.make, filters.bodyType, filters.fuelType, filters.transmission].filter(Boolean).length
@@ -392,38 +451,98 @@ const Marketplace: React.FC = () => {
           <div className="card animate-in" style={{ maxWidth: '420px', width: '90%', padding: '32px', position: 'relative' }}
             onClick={e => e.stopPropagation()}>
             <button onClick={() => setContactModal(null)} style={{
-              position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none',
-              cursor: 'pointer', color: 'var(--color-gray-400)',
-            }}><X size={18} /></button>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 800, marginBottom: '16px', color: 'var(--color-dark)' }}>
+              position: 'absolute', top: '16px', right: '16px', background: 'var(--color-gray-100)', border: 'none',
+              cursor: 'pointer', color: 'var(--color-gray-500)', width: '32px', height: '32px', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}><X size={15} /></button>
+            
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px', color: 'var(--color-dark)' }}>
               Contact Broker
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ padding: '14px', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
-                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{contactModal.brokerName}</p>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginBottom: '20px' }}>
+              Connect directly with verified listing broker
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '14px', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(230,57,70,0.1)' }}>
+                <p style={{ fontWeight: 800, fontSize: '0.9375rem', color: 'var(--color-primary)', marginBottom: '4px' }}>{contactModal.brokerName}</p>
                 {(() => {
                   const numericId = contactModal.listingId.startsWith('bl-') ? parseInt(contactModal.listingId.replace('bl-', ''), 10) : parseInt(contactModal.listingId, 10);
                   const bl = brokerListings.find(l => l.id === numericId);
                   return bl ? (
                     <>
-                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '8px' }}>
-                        <Phone size={14} color="var(--color-primary)" />
-                        <a href={`tel:${bl.brokerName}`} style={{ fontWeight: 600 }}>Contact via Platform</a>
-                      </p>
-                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', color: 'var(--color-gray-600)', marginTop: '6px' }}>
-                        <MapPin size={14} color="var(--color-primary)" />
-                        {bl.city}
+                      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--color-gray-600)', marginTop: '6px' }}>
+                        <MapPin size={12} color="var(--color-primary)" />
+                        Showroom Location: {bl.city}
                       </p>
                     </>
                   ) : null;
                 })()}
               </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>
-                ✓ Your contact request has been logged. The broker will be notified.
-              </p>
+
+              {!contactModal.verified ? (
+                <form onSubmit={handleVerifyContactRequest} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Your Name *</label>
+                    <input
+                      type="text" className="form-control" placeholder="John Doe" required
+                      value={contactModal.buyerName}
+                      onChange={e => setContactModal({ ...contactModal, buyerName: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Your Email</label>
+                    <input
+                      type="email" className="form-control" placeholder="you@example.com"
+                      value={contactModal.buyerEmail}
+                      onChange={e => setContactModal({ ...contactModal, buyerEmail: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Your Phone Number (For Verification) *</label>
+                    <input
+                      type="tel" className="form-control" placeholder="+91 9876543210" required
+                      value={contactModal.buyerPhone}
+                      onChange={e => setContactModal({ ...contactModal, buyerPhone: e.target.value })}
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }}>
+                    Verify Phone & Request Contact
+                  </button>
+                </form>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                  <p style={{ fontSize: '0.9375rem', color: 'var(--color-success)', fontWeight: 800, marginBottom: '6px' }}>
+                    ✓ Request Successfully Logged!
+                  </p>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.5 }}>
+                    Your contact request has been sent to <strong>{contactModal.brokerName}</strong>. They will reach out to you at <strong>{contactModal.buyerPhone}</strong> shortly.
+                  </p>
+                  <button onClick={() => setContactModal(null)} className="btn btn-secondary btn-block" style={{ marginTop: '20px' }}>
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* OTP verification for contact modal */}
+      {showContactOtp && contactModal && (
+        <OtpModal
+          phone={contactModal.buyerPhone.trim()}
+          title="Verify Buyer Phone"
+          subtitle="Enter the 6-digit verification code to log your dealer contact request."
+          onVerified={(otp) => {
+            setShowContactOtp(false);
+            submitContactLead(otp);
+          }}
+          onClose={() => setShowContactOtp(false)}
+        />
       )}
     </section>
   );

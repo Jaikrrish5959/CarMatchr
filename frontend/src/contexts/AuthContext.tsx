@@ -13,6 +13,7 @@ export interface User {
   name?: string;
   businessName?: string;
   phone?: string;
+  phoneVerified?: boolean;
   license?: string;
   city?: string;
   dealerType?: 'new' | 'used' | 'both';
@@ -42,6 +43,7 @@ interface AuthContextType {
     phone: string;
     credential: string;
     dealerType: 'new' | 'used' | 'both';
+    phoneOtp?: string;
   }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -167,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: string;
       credential: string;
       dealerType: 'new' | 'used' | 'both';
+      phoneOtp?: string;
     }
   ): Promise<{ ok: boolean; error?: string; user?: User }> => {
     const result = await authService.registerBrokerWithGoogle(data);

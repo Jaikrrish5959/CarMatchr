@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { API_BASE } from '../services/api';
 import { getToken } from '../services/authService';
 import toast from 'react-hot-toast';
+import OtpModal from '../components/OtpModal';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -190,6 +191,9 @@ const ProfileSettings: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
 
+  // ── Phone OTP verification
+  const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
+
   // ── Password modal
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [pwdForm, setPwdForm] = useState({ current: '', newPwd: '', confirm: '' });
@@ -207,7 +211,7 @@ const ProfileSettings: React.FC = () => {
     if (user) saveNotifPrefs(user.id, updated);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (phoneOtp?: string | React.MouseEvent) => {
     if (!user) return;
     setSaving(true);
     try {
@@ -220,6 +224,17 @@ const ProfileSettings: React.FC = () => {
         language: form.language || null,
         description: form.description.trim() || null,
       };
+
+      // If phone changed, require OTP
+      const phoneChanged = (form.phone.trim() || null) !== (user.phone || null);
+      const isOtpString = typeof phoneOtp === 'string';
+      if (phoneChanged && !isOtpString) {
+        setSaving(false);
+        setShowPhoneOtpModal(true);
+        return;
+      }
+      if (isOtpString) payload.phoneOtp = phoneOtp;
+
       if (isBuyer) {
         payload.name = form.name.trim() || null;
       } else {
@@ -248,6 +263,7 @@ const ProfileSettings: React.FC = () => {
 
       updateUser({
         phone: form.phone.trim() || undefined,
+        phoneVerified: isOtpString ? true : user.phoneVerified,
         city: form.city.trim() || undefined,
         state: form.state.trim() || undefined,
         address: form.address.trim() || undefined,
@@ -600,9 +616,9 @@ const ProfileSettings: React.FC = () => {
 
   const dealerVerifTab = (
     <div>
-      <SectionTitle subtitle="Your account verification status (read only)">Verification Status</SectionTitle>
+      <SectionTitle subtitle="Your account verification status">Verification Status</SectionTitle>
       {[
-        { label: 'Mobile Verified', done: !!user?.phone, sub: user?.phone ?? 'Not added' },
+        { label: 'Mobile Verified', done: !!user?.phoneVerified, sub: user?.phoneVerified ? user?.phone ?? 'Verified' : (user?.phone ? 'Phone added but not verified' : 'Not added') },
         { label: 'Email Verified', done: true, sub: user?.email ?? '' },
         { label: 'Business Verified', done: user?.status === 'active', sub: user?.status === 'active' ? 'Your business is verified' : 'Pending admin review' },
       ].map(v => (
@@ -617,11 +633,25 @@ const ProfileSettings: React.FC = () => {
             ? <CheckCircle2 size={22} color="#16a34a" />
             : <AlertTriangle size={22} color="#f59e0b" />
           }
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--color-gray-900)' }}>{v.label}</div>
             <div style={{ fontSize: '0.75rem', color: v.done ? '#16a34a' : '#f59e0b', fontWeight: 600 }}>{v.sub}</div>
           </div>
-          {v.done && <BadgeCheck size={16} color="#16a34a" style={{ marginLeft: 'auto' }} />}
+          {v.done
+            ? <BadgeCheck size={16} color="#16a34a" style={{ marginLeft: 'auto' }} />
+            : (v.label === 'Mobile Verified' && user?.phone && (
+              <button
+                onClick={() => setShowPhoneOtpModal(true)}
+                style={{
+                  padding: '7px 16px', background: 'var(--color-primary)',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                }}
+              >
+                Verify Now
+              </button>
+            ))
+          }
         </div>
       ))}
     </div>
@@ -866,6 +896,19 @@ const ProfileSettings: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* Phone OTP Modal (triggered on phone change or Verify Now) */}
+      {showPhoneOtpModal && user?.phone && (
+        <OtpModal
+          phone={form.phone.trim() || user.phone}
+          title="Verify Phone Number"
+          subtitle="Enter the 6-digit code sent to your phone to confirm ownership."
+          onVerified={(otp) => {
+            setShowPhoneOtpModal(false);
+            handleSave(otp);
+          }}
+          onClose={() => setShowPhoneOtpModal(false)}
+        />
       )}
     </div>
   );

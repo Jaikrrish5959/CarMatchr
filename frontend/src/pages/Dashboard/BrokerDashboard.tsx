@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useData';
+import { useNotifications } from '../../contexts/NotificationContext';
 import ConversationCenter from '../../components/ConversationCenter';
 import { getToken } from '../../services/authService';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -8,7 +9,8 @@ import {
   Clock, Send, CheckCircle2, AlertCircle, Car, Fuel,
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
-  Bell, MessageSquare, Check, Briefcase, CalendarRange, MapPin
+  Bell, MessageSquare, Check, Briefcase, CalendarRange, MapPin,
+  CheckCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -118,6 +120,7 @@ const SORT_LABELS: Record<SortOrder, string> = {
 const BrokerDashboard: React.FC = () => {
   const { user, updateUser } = useAuth();
   const { requirements, offers, addOffer, brokerListings, refreshData } = useData();
+  const { notifications, totalUnread, markRead, markAllRead } = useNotifications();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'dashboard';
 
@@ -491,51 +494,7 @@ const BrokerDashboard: React.FC = () => {
     toast.success('Profile settings saved successfully!');
   };
 
-  // Generate notifications feed dynamically based on backend data (negotiations, accepts, rejects)
-  const getNotifications = () => {
-    const list = [
-      { text: 'Verify your WhatsApp contact number in settings to get direct buyer alerts.', time: '1 day ago', isNew: false },
-      { text: 'Admin approved your operating service area updates.', time: '3 days ago', isNew: false }
-    ];
-
-    myOffers.forEach(o => {
-      const req = requirements.find(r => r.id === o.requirementId);
-      const vehicleName = req ? `${req.make} ${req.model}` : 'car';
-      
-      if (closedOfferIds.includes(o.id)) {
-        list.unshift({
-          text: `Deal closed! The transaction for ${vehicleName} was confirmed closed.`,
-          time: 'Recently',
-          isNew: false
-        });
-      } else if (o.status === 'accepted') {
-        list.unshift({
-          text: `Deal won! Buyer accepted your offer of ${o.price} on ${vehicleName}.`,
-          time: timeAgo(o.createdAt),
-          isNew: true
-        });
-      } else if (o.status === 'rejected') {
-        list.unshift({
-          text: `Offer rejected by buyer for ${vehicleName}.`,
-          time: timeAgo(o.createdAt),
-          isNew: false
-        });
-      } else if (o.details && o.details.includes('[Negotiated:')) {
-        const match = o.details.match(/\[Negotiated:\s*(.+?)\]/);
-        const counterPrice = match ? match[1] : '—';
-        list.unshift({
-          text: `Counter offer received! Buyer countered ${counterPrice} on ${vehicleName}.`,
-          time: timeAgo(o.createdAt),
-          isNew: true
-        });
-      }
-    });
-
-    return list;
-  };
-
-  const notificationsList = getNotifications();
-
+  
   /* ============================================================
      RENDER SECTIONS / VIEWS
      ============================================================ */
@@ -1859,22 +1818,127 @@ const BrokerDashboard: React.FC = () => {
   );
 
   const renderNotificationsView = () => (
-    <div className="card animate-in" style={{ padding: '24px' }}>
-      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Notifications Feed</h3>
+    <div className="card animate-in" style={{ padding: '24px 28px', border: '1px solid #e2e8f0', borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(15,23,42,0.05)' }}>
+      <div style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Notifications Feed</h3>
+          <p style={{ margin: '6px 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+            Alerts history of read receipts, counter offers, and shortlist statuses.
+          </p>
+        </div>
+        {totalUnread > 0 && (
+          <button
+            type="button"
+            onClick={markAllRead}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              background: '#fff',
+              color: '#334155',
+              fontWeight: 700,
+              fontSize: '0.8125rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+          >
+            <CheckCheck size={14} /> Mark all read
+          </button>
+        )}
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {notificationsList.map((n, i) => (
-          <div key={i} style={{
-            padding: '12px 16px', background: n.isNew ? 'rgba(230,57,70,0.04)' : '#f8fafc',
-            borderRadius: '10px', border: n.isNew ? '1px solid rgba(230,57,70,0.1)' : '1px solid #e2e8f0',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-          }}>
-            <div>
-              <p style={{ fontSize: '0.8125rem', color: '#334155', margin: 0, fontWeight: n.isNew ? 700 : 500 }}>{n.text}</p>
-              <span style={{ fontSize: '0.6875rem', color: '#94a3b8', display: 'block', marginTop: '4px' }}>{n.time}</span>
-            </div>
-            {n.isNew && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-primary)' }}></span>}
+        {notifications.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b', border: '1px dashed #e2e8f0', borderRadius: '16px', background: '#f8fafc' }}>
+            <Bell size={36} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
+            <div style={{ fontWeight: 800, color: '#0f172a' }}>No notifications yet</div>
+            <p style={{ margin: '8px auto 0', maxWidth: '340px', fontSize: '0.875rem', lineHeight: 1.7 }}>
+              You will see offer updates, acceptances, and matching requirement alerts here.
+            </p>
           </div>
-        ))}
+        ) : (
+          notifications.map((n) => {
+            const isUnread = !n.isRead;
+            return (
+              <div
+                key={n.id}
+                onClick={() => markRead(n.id)}
+                style={{
+                  padding: '16px 18px',
+                  background: isUnread ? '#fff5f5' : '#fff',
+                  borderRadius: '16px',
+                  border: '1px solid',
+                  borderColor: isUnread ? '#fecaca' : '#e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: '16px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  boxShadow: isUnread ? '0 8px 24px rgba(230,57,70,0.06)' : 'none',
+                  boxSizing: 'border-box',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = isUnread ? '#f87171' : '#cbd5e1';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = isUnread ? '#fecaca' : '#e2e8f0';
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: isUnread ? '#e63946' : '#cbd5e1', flexShrink: 0 }} />
+                    <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a' }}>{n.title}</h4>
+                    <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#e63946', background: 'rgba(230,57,70,0.08)', padding: '2px 8px', borderRadius: '999px' }}>
+                      {n.priority}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, color: '#475569', fontSize: '0.875rem', lineHeight: 1.6 }}>{n.message}</p>
+                  
+                  {isUnread && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markRead(n.id);
+                      }}
+                      style={{
+                        marginTop: '10px',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #fecaca',
+                        background: '#fff',
+                        color: '#e63946',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = '#e63946';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = '#fff';
+                        e.currentTarget.style.color = '#e63946';
+                      }}
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </div>
+                <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {new Date(n.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -2064,7 +2128,7 @@ const BrokerDashboard: React.FC = () => {
         {/* Sub Navigation Items */}
         {[
           { id: 'messages', label: 'Messages', icon: <MessageSquare size={16} />, badge: 0, isLink: false },
-          { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, badge: notificationsList.filter(n => n.isNew).length, isLink: false },
+          { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, badge: totalUnread, isLink: false },
           { id: 'profile', label: 'Profile Settings', icon: <Settings size={16} />, badge: 0, isLink: true, to: '/settings' }
         ].map(item => {
           const isActive = currentTab === item.id;

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
-import { UserPlus, Loader2, AlertCircle } from 'lucide-react';
+import { UserPlus, Loader2, AlertCircle, Phone, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cities } from '../data/carDatabase';
+import OtpModal from '../components/OtpModal';
 
 const Register: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -16,6 +17,12 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState<{name: string, businessName: string, license: string, phone: string, city: string, email: string, password: string, dealerType: 'new' | 'used' | 'both' | ''}>({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '', dealerType: '' });
+
+  // Phone OTP verification states
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [phoneVerifiedOtp, setPhoneVerifiedOtp] = useState<string | null>(null);  // otp code confirmed
+  const [brokerPhoneVerifiedOtp, setBrokerPhoneVerifiedOtp] = useState<string | null>(null);
+  const [showBrokerOtpModal, setShowBrokerOtpModal] = useState(false);
 
   // Google OAuth specific states
   const [googleProfileData, setGoogleProfileData] = useState<{
@@ -132,12 +139,17 @@ const Register: React.FC = () => {
       toast.error('Phone number is required.');
       return;
     }
-    if (!/^[\d\s\+\-()]{7,15}$/.test(brokerForm.phone)) {
+    if (!/^[\d\s+\-()]{7,15}$/.test(brokerForm.phone)) {
       toast.error('Please enter a valid phone number.');
       return;
     }
     if (!brokerForm.dealerType) {
       toast.error('Please select your Dealer Type.');
+      return;
+    }
+    if (!brokerPhoneVerifiedOtp) {
+      toast.error('Please verify your phone number before completing registration.');
+      setShowBrokerOtpModal(true);
       return;
     }
 
@@ -151,6 +163,7 @@ const Register: React.FC = () => {
         phone: brokerForm.phone.trim(),
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType as 'new' | 'used' | 'both',
+        phoneOtp: brokerPhoneVerifiedOtp,
       });
 
       if (!result.ok) {
@@ -182,12 +195,13 @@ const Register: React.FC = () => {
       if (!form.city) return 'Please select your city.';
       if (!form.phone.trim()) return 'Phone number is required for broker accounts.';
       if (!form.dealerType) return 'Please select your Dealer Type.';
+      if (!phoneVerifiedOtp) return 'Please verify your phone number before creating your account.';
     }
     if (!form.email.trim()) return 'Please enter your email address.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
     if (!form.password) return 'Please enter a password.';
     if (form.password.length < 6) return 'Password must be at least 6 characters.';
-    if (form.phone && !/^[\d\s\+\-()]{7,15}$/.test(form.phone)) return 'Please enter a valid phone number.';
+    if (form.phone && !/^[\d\s+\-()]{7,15}$/.test(form.phone)) return 'Please enter a valid phone number.';
     return null;
   };
 
@@ -213,6 +227,8 @@ const Register: React.FC = () => {
         license: role === 'broker' ? form.license.trim() : undefined,
         city: form.city || undefined,
         dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
+        // @ts-ignore — phoneOtp passed to backend
+        phoneOtp: role === 'broker' ? phoneVerifiedOtp : undefined,
       });
       if (!result.ok) {
         const message = result.error ?? 'Unable to create account.';
@@ -311,12 +327,40 @@ const Register: React.FC = () => {
 
                 <div className="form-group">
                   <label className="form-label">Phone Number *</label>
-                  <input
-                    type="tel" className="form-control" required
-                    placeholder="+91 9876543210"
-                    value={brokerForm.phone}
-                    onChange={e => setBrokerForm({ ...brokerForm, phone: e.target.value })}
-                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="tel" className="form-control" required
+                      placeholder="+91 9876543210"
+                      value={brokerForm.phone}
+                      onChange={e => { setBrokerForm({ ...brokerForm, phone: e.target.value }); setBrokerPhoneVerifiedOtp(null); }}
+                      style={{ flex: 1 }}
+                    />
+                    {brokerForm.phone.trim().length >= 7 && (
+                      brokerPhoneVerifiedOtp ? (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0',
+                          borderRadius: '10px', color: '#16a34a', fontWeight: 700, fontSize: '0.8125rem',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <CheckCircle2 size={15} /> Verified
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowBrokerOtpModal(true)}
+                          style={{
+                            padding: '8px 16px', background: 'var(--color-primary)',
+                            color: '#fff', border: 'none', borderRadius: '10px',
+                            fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                            whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px',
+                          }}
+                        >
+                          <Phone size={13} /> Verify
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
@@ -398,7 +442,46 @@ const Register: React.FC = () => {
 
                 <div className="form-group">
                   <label className="form-label">Phone Number {role === 'broker' ? '*' : ''}</label>
-                  <input type="tel" name="phone" className="form-control" placeholder="+91 9876543210" value={form.phone} onChange={handleChange} required={role === 'broker'} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="tel" name="phone" className="form-control"
+                      placeholder="+91 9876543210"
+                      value={form.phone}
+                      onChange={e => { handleChange(e); setPhoneVerifiedOtp(null); }}
+                      required={role === 'broker'}
+                      style={{ flex: 1 }}
+                    />
+                    {role === 'broker' && form.phone.trim().length >= 7 && (
+                      phoneVerifiedOtp ? (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0',
+                          borderRadius: '10px', color: '#16a34a', fontWeight: 700, fontSize: '0.8125rem',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <CheckCircle2 size={15} /> Verified
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowOtpModal(true)}
+                          style={{
+                            padding: '8px 16px', background: 'var(--color-primary)',
+                            color: '#fff', border: 'none', borderRadius: '10px',
+                            fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                            whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px',
+                          }}
+                        >
+                          <Phone size={13} /> Verify
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {role === 'broker' && !phoneVerifiedOtp && form.phone.trim().length >= 7 && (
+                    <p style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '4px', fontWeight: 600 }}>
+                      ⚠ Phone verification is required for broker accounts.
+                    </p>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -457,6 +540,36 @@ const Register: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* OTP Modal for standard broker registration */}
+      {showOtpModal && (
+        <OtpModal
+          phone={form.phone.trim()}
+          title="Verify Broker Phone"
+          subtitle="Enter the 6-digit code sent to your phone to confirm your identity as a dealer."
+          onVerified={(otp) => {
+            setPhoneVerifiedOtp(otp);
+            setShowOtpModal(false);
+            toast.success('Phone verified! You can now complete registration.');
+          }}
+          onClose={() => setShowOtpModal(false)}
+        />
+      )}
+
+      {/* OTP Modal for Google broker registration */}
+      {showBrokerOtpModal && (
+        <OtpModal
+          phone={brokerForm.phone.trim()}
+          title="Verify Broker Phone"
+          subtitle="Enter the 6-digit code sent to your phone to confirm your identity as a dealer."
+          onVerified={(otp) => {
+            setBrokerPhoneVerifiedOtp(otp);
+            setShowBrokerOtpModal(false);
+            toast.success('Phone verified! You can now complete registration.');
+          }}
+          onClose={() => setShowBrokerOtpModal(false)}
+        />
+      )}
     </section>
   );
 };

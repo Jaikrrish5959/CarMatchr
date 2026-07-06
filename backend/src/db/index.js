@@ -69,8 +69,17 @@ export async function initDb() {
       website TEXT,
       maps_link TEXT,
       language VARCHAR(50),
+      phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(email, role)
+    );
+
+    CREATE TABLE IF NOT EXISTS phone_verifications (
+      id SERIAL PRIMARY KEY,
+      phone VARCHAR(20) NOT NULL UNIQUE,
+      otp_code VARCHAR(10) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS brands (
@@ -349,6 +358,30 @@ export async function initDb() {
         console.error(`Migration error (users ${col.name}):`, err);
       }
     }
+  }
+
+  // Migrate: add phone_verified column to existing users tables
+  try {
+    await db.run('ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE;');
+  } catch (err) {
+    if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+      console.error('Migration error (phone_verified):', err);
+    }
+  }
+
+  // Create phone_verifications table for temporary OTP storage (if not exists)
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS phone_verifications (
+        id SERIAL PRIMARY KEY,
+        phone VARCHAR(20) NOT NULL UNIQUE,
+        otp_code VARCHAR(10) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (err) {
+    console.error('Migration error (phone_verifications table):', err);
   }
 }
 

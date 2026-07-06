@@ -347,9 +347,8 @@ const BuyerDashboard: React.FC = () => {
               </div>
             ) : (
               notifications.map((notification) => (
-                <button
+                <div
                   key={notification.id}
-                  type="button"
                   onClick={() => markRead(notification.id)}
                   style={{
                     width: '100%',
@@ -362,6 +361,13 @@ const BuyerDashboard: React.FC = () => {
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     boxShadow: notification.isRead ? 'none' : '0 8px 24px rgba(230,57,70,0.06)',
+                    boxSizing: 'border-box',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = notification.isRead ? '#cbd5e1' : '#f87171';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = notification.isRead ? '#e2e8f0' : '#fecaca';
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
@@ -370,16 +376,48 @@ const BuyerDashboard: React.FC = () => {
                         <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: notification.isRead ? '#cbd5e1' : '#e63946', flexShrink: 0 }} />
                         <h4 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, color: '#0f172a' }}>{notification.title}</h4>
                         <span style={{ fontSize: '0.6875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#e63946', background: 'rgba(230,57,70,0.08)', padding: '2px 8px', borderRadius: '999px' }}>
-                          {notification.priority}
+                           {notification.priority}
                         </span>
                       </div>
                       <p style={{ margin: 0, color: '#475569', fontSize: '0.875rem', lineHeight: 1.6 }}>{notification.message}</p>
+                      
+                      {!notification.isRead && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markRead(notification.id);
+                          }}
+                          style={{
+                            marginTop: '10px',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid #fecaca',
+                            background: '#fff',
+                            color: '#e63946',
+                            fontWeight: 700,
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = '#e63946';
+                            e.currentTarget.style.color = '#fff';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = '#fff';
+                            e.currentTarget.style.color = '#e63946';
+                          }}
+                        >
+                          Mark as read
+                        </button>
+                      )}
                     </div>
                     <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {new Date(notification.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -1736,41 +1774,44 @@ const BuyerDashboard: React.FC = () => {
         <button
           onClick={() => { setTab('notifications'); if (isMobile) setSidebarOpen(false); }}
           style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          border: 'none',
-          background: 'transparent',
-          color: '#526071',
-          fontFamily: 'var(--font)',
-          fontWeight: 700,
-          fontSize: '0.875rem',
-          cursor: 'pointer',
-          textAlign: 'left',
-          transition: 'all 0.2s',
-          whiteSpace: 'nowrap'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Bell size={18} style={{ color: '#526071' }} />
-            <span>Notifications</span>
-          </div>
-          <span style={{
-            background: '#e63946',
-            color: '#fff',
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            fontSize: '0.75rem',
-            fontWeight: 800,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            {totalUnread}
-          </span>
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            border: 'none',
+            background: currentTab === 'notifications' ? '#fff0f1' : 'transparent',
+            color: currentTab === 'notifications' ? '#e63946' : '#526071',
+            fontFamily: 'var(--font)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Bell size={18} style={{ color: currentTab === 'notifications' ? '#e63946' : '#526071' }} />
+            <span>Notifications</span>
+          </div>
+          {totalUnread > 0 && (
+            <span style={{
+              background: '#e63946',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {totalUnread}
+            </span>
+          )}
         </button>
         
         <div style={{ height: '1px', background: '#f3f4f6', margin: '12px 0', minHeight: '1px' }} />

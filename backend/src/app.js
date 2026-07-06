@@ -16,6 +16,50 @@ import { db } from './db/index.js';
 import { seedCatalog } from './services/catalogSeeder.js';
 import { authenticate, requireRole, requireOwnership, adminAuth, signAdminToken, JWT_SECRET } from './middleware/auth.js';
 import nodemailer from 'nodemailer';
+import twilio from 'twilio';
+
+// ========== TWILIO SMS SETUP ==========
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
+
+async function sendOtpSms(phone, otp) {
+  if (!twilioClient) {
+    console.warn(`[DEV] SMS OTP for ${phone}: ${otp}`);
+    return;
+  }
+  try {
+    await twilioClient.messages.create({
+      body: `Your CarMatchr verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: phone,
+    });
+    console.log(`SMS OTP sent to ${phone}`);
+  } catch (err) {
+    console.error('Twilio SMS send error:', err.message);
+    console.warn(`
+[DEV FALLBACK] Twilio delivery failed (likely due to unverified trial number or region permissions).
+Use the following OTP code to proceed with testing:
+--------------------------------------------------
+OTP code for ${phone}: ${otp}
+--------------------------------------------------
+    `);
+  }
+}
+
+function parseTimestampAsUtc(dateVal) {
+  if (!dateVal) return new Date(0);
+  const d = new Date(dateVal);
+  return new Date(Date.UTC(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds(),
+    d.getMilliseconds()
+  ));
+}
 
 // ========== EMAIL VERIFICATION SETUP ==========
 let transporter = null;
@@ -68,7 +112,7 @@ async function sendOtpEmail(email, otp) {
     from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || testAccount?.user}>`,
     to: email,
     subject: 'CarMatchr - Login Verification Code',
-    text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 10 minutes.`,
+    text: `Your CarMatchr login verification code is: ${otp}. This code is valid for 5 minutes.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
         <h2 style="color: #E53935; text-align: center;">CarMatchr</h2>
@@ -78,7 +122,7 @@ async function sendOtpEmail(email, otp) {
         <div style="text-align: center; margin: 30px 0;">
           <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; background: #f1f5f9; padding: 12px 24px; border-radius: 6px; border: 1px dashed #cbd5e1;">${otp}</span>
         </div>
-        <p style="color: #64748b; font-size: 14px;">This code is valid for 10 minutes. If you did not request this login, you can safely ignore this email.</p>
+        <p style="color: #64748b; font-size: 14px;">This code is valid for <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
         <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 15px;" />
         <p style="font-size: 12px; color: #94a3b8; text-align: center;">&copy; ${new Date().getFullYear()} CarMatchr. All rights reserved.</p>
       </div>
@@ -312,6 +356,7 @@ const mapUser = (row) => ({
   name: row.name ?? undefined,
   businessName: row.business_name ?? undefined,
   phone: row.phone ?? undefined,
+  phoneVerified: !!row.phone_verified,
   license: row.license ?? undefined,
   city: row.city ?? undefined,
   dealerType: row.dealer_type ?? undefined,
@@ -465,12 +510,30 @@ app.post('/api/auth/google/register', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
-  const { email, businessName, license, city, phone, credential, dealerType } = result.data;
+  const { email, businessName, license, city, phone, credential, dealerType, phoneOtp } = result.data;
 
   try {
     const payload = await verifyGoogleToken(credential);
     if (!payload || !payload.email || payload.email.toLowerCase() !== email.toLowerCase()) {
       return res.status(400).json({ error: 'Invalid Google credential.' });
+    }
+
+    // Verify phone OTP if provided
+    let phoneVerified = false;
+    if (phone && phoneOtp) {
+      const otpRow = await db.get(
+        'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+        [phone]
+      );
+      if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
+        return res.status(400).json({ error: 'Invalid phone verification code.' });
+      }
+      if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+        return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
+      }
+      // Clean up used OTP
+      await db.run('DELETE FROM phone_verifications WHERE phone = $1', [phone]);
+      phoneVerified = true;
     }
 
     // Verify user doesn't already exist as a broker
@@ -487,8 +550,8 @@ app.post('/api/auth/google/register', async (req, res) => {
 
     const created = await db.get(
       `
-        INSERT INTO users (email, password, role, status, business_name, license, city, phone, dealer_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO users (email, password, role, status, business_name, license, city, phone, dealer_type, phone_verified)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
       `,
       [
@@ -501,6 +564,7 @@ app.post('/api/auth/google/register', async (req, res) => {
         city,
         phone,
         dealerType,
+        phoneVerified,
       ]
     );
     const token = signToken(created);
@@ -517,7 +581,29 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
   const user = result.data;
-  
+  const { phoneOtp } = req.body;
+
+  // For brokers, verify the phone OTP before creating the account
+  let phoneVerified = false;
+  if (user.role === 'broker' && user.phone) {
+    if (!phoneOtp) {
+      return res.status(400).json({ error: 'Phone verification is required for broker accounts. Please verify your phone number.' });
+    }
+    const otpRow = await db.get(
+      'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+      [user.phone]
+    );
+    if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
+      return res.status(400).json({ error: 'Invalid phone verification code.' });
+    }
+    if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
+    }
+    // Clean up used OTP
+    await db.run('DELETE FROM phone_verifications WHERE phone = $1', [user.phone]);
+    phoneVerified = true;
+  }
+
   const exists = await db.get(
     'SELECT 1 FROM users WHERE email = $1 AND role = $2 LIMIT 1',
     [user.email, user.role]
@@ -530,8 +616,8 @@ app.post('/api/auth/register', async (req, res) => {
 
   const created = await db.get(
     `
-      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, dealer_type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, dealer_type, phone_verified)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `,
     [
@@ -545,6 +631,7 @@ app.post('/api/auth/register', async (req, res) => {
       user.license ?? null,
       user.city ?? null,
       user.dealerType ?? null,
+      phoneVerified,
     ]
   );
   const token = signToken(created);
@@ -579,7 +666,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   // Generate 6-digit verification code
   const otp = String(100000 + Math.floor(Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
   await db.run(
     'UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3',
@@ -621,7 +708,7 @@ app.post('/api/auth/verify-login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid verification code.' });
   }
 
-  const expiresAt = new Date(found.otp_expires_at);
+  const expiresAt = parseTimestampAsUtc(found.otp_expires_at);
   if (expiresAt < new Date()) {
     return res.status(401).json({ error: 'Verification code has expired. Please log in again to request a new code.' });
   }
@@ -637,6 +724,56 @@ app.post('/api/auth/verify-login', async (req, res) => {
 });
 
 // ========== USERS (authenticated) ==========
+
+// ========== PHONE OTP (public) ==========
+
+// POST /api/auth/send-otp — Send a 6-digit SMS OTP to the given phone number
+app.post('/api/auth/send-otp', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone || !/^[\d\s+\-()]{7,20}$/.test(phone)) {
+    return res.status(400).json({ error: 'A valid phone number is required.' });
+  }
+  const normalizedPhone = phone.trim();
+  const otp = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  // Upsert OTP record (replace any existing for same phone)
+  await db.run(
+    `INSERT INTO phone_verifications (phone, otp_code, expires_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (phone) DO UPDATE SET otp_code = $2, expires_at = $3, created_at = CURRENT_TIMESTAMP`,
+    [normalizedPhone, otp, expiresAt]
+  );
+
+  try {
+    await sendOtpSms(normalizedPhone, otp);
+  } catch (err) {
+    console.error('SMS send error:', err.message);
+    return res.status(503).json({ error: 'Unable to send SMS. Please check the phone number and try again.' });
+  }
+
+  return res.json({ ok: true, message: 'OTP sent successfully.' });
+});
+
+// POST /api/auth/verify-otp — Verify an OTP for a phone number (returns ok without logging in)
+app.post('/api/auth/verify-otp', async (req, res) => {
+  const { phone, otp } = req.body;
+  if (!phone || !otp) {
+    return res.status(400).json({ error: 'Phone number and OTP are required.' });
+  }
+  const normalizedPhone = phone.trim();
+  const otpRow = await db.get(
+    'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+    [normalizedPhone]
+  );
+  if (!otpRow || otpRow.otp_code !== String(otp)) {
+    return res.status(400).json({ error: 'Invalid verification code.' });
+  }
+  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+  }
+  return res.json({ ok: true });
+});
 
 // Update own profile
 app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async (req, res) => {
@@ -657,10 +794,35 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
     language
   } = req.body;
 
+  const { phoneOtp } = req.body;
+
   const row = await db.get('SELECT * FROM users WHERE id = $1', [id]);
   if (!row) return res.status(404).json({ error: 'User not found.' });
 
-  const updatedPhone = phone !== undefined ? (phone || null) : row.phone;
+  // If phone number is changing, require OTP verification
+  const incomingPhone = phone !== undefined ? (phone || null) : row.phone;
+  const phoneChanged = incomingPhone && incomingPhone !== row.phone;
+  let updatedPhoneVerified = row.phone_verified;
+
+  if (phoneChanged) {
+    if (!phoneOtp) {
+      return res.status(400).json({ error: 'Phone verification is required when changing your phone number.' });
+    }
+    const otpRow = await db.get(
+      'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+      [incomingPhone]
+    );
+    if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
+      return res.status(400).json({ error: 'Invalid phone verification code.' });
+    }
+    if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
+    }
+    await db.run('DELETE FROM phone_verifications WHERE phone = $1', [incomingPhone]);
+    updatedPhoneVerified = true;
+  }
+
+  const updatedPhone = incomingPhone;
   const updatedCity = city !== undefined ? (city || null) : row.city;
   const updatedState = state !== undefined ? (state || null) : row.state;
   const updatedAddress = address !== undefined ? (address || null) : row.address;
@@ -677,20 +839,22 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
     await db.run(
       `UPDATE users SET 
         phone = $1, 
-        business_name = $2, 
-        city = $3, 
-        state = $4, 
-        address = $5, 
-        authorized_brands = $6, 
-        showroom_address = $7, 
-        business_type = $8, 
-        description = $9, 
-        website = $10, 
-        maps_link = $11, 
-        language = $12
-       WHERE id = $13`,
+        phone_verified = $2,
+        business_name = $3, 
+        city = $4, 
+        state = $5, 
+        address = $6, 
+        authorized_brands = $7, 
+        showroom_address = $8, 
+        business_type = $9, 
+        description = $10, 
+        website = $11, 
+        maps_link = $12, 
+        language = $13
+       WHERE id = $14`,
       [
         updatedPhone,
+        updatedPhoneVerified,
         updatedBusinessName,
         updatedCity,
         updatedState,
@@ -710,15 +874,17 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
     await db.run(
       `UPDATE users SET 
         phone = $1, 
-        name = $2, 
-        city = $3, 
-        state = $4, 
-        address = $5, 
-        description = $6, 
-        language = $7
-       WHERE id = $8`,
+        phone_verified = $2,
+        name = $3, 
+        city = $4, 
+        state = $5, 
+        address = $6, 
+        description = $7, 
+        language = $8
+       WHERE id = $9`,
       [
         updatedPhone,
+        updatedPhoneVerified,
         updatedName,
         updatedCity,
         updatedState,
@@ -1451,10 +1617,31 @@ app.post('/api/listings/:id/contact', async (req, res) => {
   const listing = await db.get('SELECT id FROM broker_listings WHERE id = $1', [listingId]);
   if (!listing) return res.status(404).json({ error: 'Listing not found.' });
 
-  const { buyerName, buyerEmail, buyerPhone } = req.body;
+  const { buyerName, buyerEmail, buyerPhone, phoneOtp } = req.body;
+
+  // Require verified phone for marketplace contact leads
+  if (!buyerPhone) {
+    return res.status(400).json({ error: 'A phone number is required to contact a dealer.' });
+  }
+  if (!phoneOtp) {
+    return res.status(400).json({ error: 'Phone verification is required to contact a dealer.' });
+  }
+  const otpRow = await db.get(
+    'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+    [buyerPhone.trim()]
+  );
+  if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
+    return res.status(400).json({ error: 'Invalid phone verification code.' });
+  }
+  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
+  }
+  // Clean up used OTP
+  await db.run('DELETE FROM phone_verifications WHERE phone = $1', [buyerPhone.trim()]);
+
   await db.run(
     'INSERT INTO contact_events (listing_id, buyer_name, buyer_email, buyer_phone, created_at) VALUES ($1, $2, $3, $4, $5)',
-    [listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone || '', new Date().toISOString()]
+    [listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone.trim(), new Date().toISOString()]
   );
 
   res.json({ ok: true });
