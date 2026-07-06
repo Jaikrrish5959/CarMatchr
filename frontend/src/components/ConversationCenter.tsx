@@ -114,9 +114,6 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   }, [activeThreadId, messages]);
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null;
-  const senderName = mode === 'buyer'
-    ? (user.name || 'Buyer')
-    : (user.businessName || user.name || 'Dealer');
 
   useEffect(() => {
     if (!activeThread) {
