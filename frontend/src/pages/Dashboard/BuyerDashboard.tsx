@@ -11,9 +11,7 @@ import {
   Menu, Lock, Unlock, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import tnLocations from '../../data/tn-locations.json';
 
-const districts = (tnLocations as any).districts || [];
 const YEAR_LIST = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
 const parsePriceToNumber = (priceStr: string | number) => {
@@ -115,6 +113,7 @@ const BuyerDashboard: React.FC = () => {
   const [budgetMax, setBudgetMax] = useState('');
   const [stateName, setStateName] = useState('Tamil Nadu');
   const [cityName, setCityName] = useState('');
+  const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
   
   // New Car Specs
   const [fuelType, setFuelType] = useState('Any');
@@ -130,26 +129,51 @@ const BuyerDashboard: React.FC = () => {
   const selectedBrand = brands.find((b) => b.name === make);
 
   useEffect(() => {
+    fetch('/api/locations/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCitiesList(data);
+        }
+      })
+      .catch((err) => console.error('Failed to load cities:', err));
+  }, []);
+
+  const availableStates = useMemo(() => {
+    const states = new Set(citiesList.map((c) => c.state));
+    if (states.size === 0) {
+      states.add('Tamil Nadu');
+    }
+    return Array.from(states).sort();
+  }, [citiesList]);
+
+  const filteredCities = useMemo(() => {
+    return citiesList.filter((c) => c.state === stateName);
+  }, [citiesList, stateName]);
+
+  useEffect(() => {
     const pending = sessionStorage.getItem('pending_requirement');
     if (pending && user?.role === 'buyer' && user.id) {
-      const { make, model, budget, yearRange, description } = JSON.parse(pending);
-      sessionStorage.removeItem('pending_requirement');
-      addRequirement({
-        buyerId: user.id,
-        make,
-        model,
-        yearRange: yearRange || '2020-2024',
-        budget,
-        preferredFeature: '',
-        description: description || 'Looking for a clean vehicle in good condition.',
-        vehicleType: 'new',
-        state: 'Tamil Nadu',
-        city: 'Chennai',
-      })
-        .then(() => toast.success('Your pending requirement has been posted successfully!'))
-        .catch(() => toast.error('Failed to post pending requirement.'));
+      try {
+        const parsed = JSON.parse(pending);
+        if (parsed.make) setMake(parsed.make);
+        if (parsed.model) setModel(parsed.model);
+        if (parsed.budget) {
+          setBudgetMax(parsed.budget);
+          setBudgetMin('');
+        }
+        if (parsed.vehicleType) setVehicleType(parsed.vehicleType);
+        if (parsed.state) setStateName(parsed.state);
+        if (parsed.city) setCityName(parsed.city);
+        setShowForm(true);
+        toast.success('Resumed posting your requirement! Review details and submit.');
+      } catch (err) {
+        console.error('Failed to load pending requirement:', err);
+      } finally {
+        sessionStorage.removeItem('pending_requirement');
+      }
     }
-  }, [user, addRequirement]);
+  }, [user]);
 
   const setTab = (tab: string) => {
     setSearchParams({ tab });
@@ -2168,7 +2192,7 @@ const BuyerDashboard: React.FC = () => {
                       <select
                         required
                         value={stateName}
-                        onChange={e => setStateName(e.target.value)}
+                        onChange={e => { setStateName(e.target.value); setCityName(''); }}
                         style={{
                           width: '100%', padding: '12px 14px',
                           borderRadius: '10px', border: '2px solid #e2e8f0',
@@ -2176,10 +2200,9 @@ const BuyerDashboard: React.FC = () => {
                           color: '#0f172a', background: '#fff', outline: 'none',
                         }}
                       >
-                        <option value="Tamil Nadu">Tamil Nadu</option>
-                        <option value="Karnataka">Karnataka</option>
-                        <option value="Kerala">Kerala</option>
-                        <option value="Andhra Pradesh">Andhra Pradesh</option>
+                        {availableStates.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -2191,16 +2214,20 @@ const BuyerDashboard: React.FC = () => {
                           required
                           value={cityName}
                           onChange={e => setCityName(e.target.value)}
+                          disabled={!stateName}
                           style={{
                             width: '100%', padding: '12px 36px 12px 14px',
                             borderRadius: '10px', border: '2px solid #e2e8f0',
                             fontFamily: 'var(--font)', fontSize: '0.9375rem',
                             color: cityName ? '#0f172a' : '#94a3b8', background: '#fff',
-                            appearance: 'none', cursor: 'pointer', outline: 'none',
+                            appearance: 'none', cursor: stateName ? 'pointer' : 'not-allowed', outline: 'none',
+                            opacity: stateName ? 1 : 0.6
                           }}
                         >
                           <option value="">Select District</option>
-                          {districts.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                          {filteredCities.map((c) => (
+                            <option key={c.id} value={c.name}>{c.name}</option>
+                          ))}
                         </select>
                         <ChevronDown size={15} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
                       </div>

@@ -769,7 +769,8 @@ const AdminDashboard: React.FC = () => {
             { id: 'brokers', label: 'Broker Validation' },
             { id: 'media', label: 'Catalog Media' },
             { id: 'features', label: 'Model Features' },
-            { id: 'master-data', label: 'Master Data' }
+            { id: 'master-data', label: 'Master Data' },
+            { id: 'catalog', label: 'Car Catalog' }
           ].map(t => (
             <button
               key={t.id}

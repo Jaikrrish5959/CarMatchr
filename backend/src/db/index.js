@@ -231,6 +231,28 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_contact_listing ON contact_events(listing_id);
     CREATE INDEX IF NOT EXISTS idx_listing_images_listing ON listing_images(listing_id);
     CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at);
+
+    CREATE TABLE IF NOT EXISTS cities (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL UNIQUE,
+      state VARCHAR(100) NOT NULL,
+      icon TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS fuel_types (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(50) NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS body_types (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(50) NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS transmissions (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(50) NOT NULL UNIQUE
+    );
   `);
 
 
@@ -405,12 +427,90 @@ async function seedAdmin() {
   }
 }
 
+async function seedMasterData() {
+  // Seed cities
+  const citiesExist = await db.get('SELECT 1 FROM cities LIMIT 1');
+  if (!citiesExist) {
+    const defaultCities = [
+      { name: 'Chennai', state: 'Tamil Nadu' },
+      { name: 'Coimbatore', state: 'Tamil Nadu' },
+      { name: 'Madurai', state: 'Tamil Nadu' },
+      { name: 'Tiruchirappalli', state: 'Tamil Nadu' },
+      { name: 'Salem', state: 'Tamil Nadu' },
+      { name: 'Thanjavur', state: 'Tamil Nadu' },
+      { name: 'Vellore', state: 'Tamil Nadu' },
+      { name: 'Tirunelveli', state: 'Tamil Nadu' },
+      { name: 'Erode', state: 'Tamil Nadu' },
+      { name: 'Dindigul', state: 'Tamil Nadu' },
+      { name: 'Kanchipuram', state: 'Tamil Nadu' },
+      { name: 'Tiruppur', state: 'Tamil Nadu' },
+      { name: 'Krishnagiri', state: 'Tamil Nadu' },
+      { name: 'Dharmapuri', state: 'Tamil Nadu' },
+      { name: 'Villupuram', state: 'Tamil Nadu' },
+      { name: 'Ariyalur', state: 'Tamil Nadu' },
+      { name: 'Chengalpattu', state: 'Tamil Nadu' },
+      { name: 'Cuddalore', state: 'Tamil Nadu' },
+      { name: 'Kallakurichi', state: 'Tamil Nadu' },
+      { name: 'Kanyakumari', state: 'Tamil Nadu' },
+      { name: 'Karur', state: 'Tamil Nadu' },
+      { name: 'Mayiladuthurai', state: 'Tamil Nadu' },
+      { name: 'Nagapattinam', state: 'Tamil Nadu' },
+      { name: 'Namakkal', state: 'Tamil Nadu' },
+      { name: 'Nilgiris', state: 'Tamil Nadu' },
+      { name: 'Perambalur', state: 'Tamil Nadu' },
+      { name: 'Pudukkottai', state: 'Tamil Nadu' },
+      { name: 'Ramanathapuram', state: 'Tamil Nadu' },
+      { name: 'Ranipet', state: 'Tamil Nadu' },
+      { name: 'Sivaganga', state: 'Tamil Nadu' },
+      { name: 'Tenkasi', state: 'Tamil Nadu' },
+      { name: 'Theni', state: 'Tamil Nadu' },
+      { name: 'Thoothukudi', state: 'Tamil Nadu' },
+      { name: 'Tirupattur', state: 'Tamil Nadu' },
+      { name: 'Tiruvallur', state: 'Tamil Nadu' },
+      { name: 'Tiruvannamalai', state: 'Tamil Nadu' },
+      { name: 'Virudhunagar', state: 'Tamil Nadu' }
+    ];
+    for (const c of defaultCities) {
+      await db.run('INSERT INTO cities (name, state) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [c.name, c.state]);
+    }
+  }
+
+  // Seed fuel types
+  const fuelExist = await db.get('SELECT 1 FROM fuel_types LIMIT 1');
+  if (!fuelExist) {
+    const defaultFuels = ['Petrol', 'Diesel', 'Hybrid', 'Electric', 'CNG', 'LPG'];
+    for (const f of defaultFuels) {
+      await db.run('INSERT INTO fuel_types (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [f]);
+    }
+  }
+
+  // Seed body types
+  const bodyExist = await db.get('SELECT 1 FROM body_types LIMIT 1');
+  if (!bodyExist) {
+    const defaultBodies = ['Sedan', 'SUV', 'Hatchback', 'MUV', 'Coupe', 'Convertible', 'Luxury'];
+    for (const b of defaultBodies) {
+      await db.run('INSERT INTO body_types (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [b]);
+    }
+  }
+
+  // Seed transmissions
+  const transExist = await db.get('SELECT 1 FROM transmissions LIMIT 1');
+  if (!transExist) {
+    const defaultTrans = ['Manual', 'Automatic', 'Any'];
+    for (const t of defaultTrans) {
+      await db.run('INSERT INTO transmissions (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [t]);
+    }
+  }
+}
+
 console.log('Connecting to database...');
 try {
   await initDb();
   console.log('Database tables initialized/verified successfully.');
   await seedAdmin();
   console.log('Admin user seeded/verified successfully.');
+  await seedMasterData();
+  console.log('Master lookup data seeded successfully.');
 } catch (err) {
   console.error('CRITICAL DATABASE ERROR:', err);
   process.exit(1);

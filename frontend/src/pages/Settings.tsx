@@ -145,13 +145,6 @@ const inputDisabled = {
   cursor: 'not-allowed',
 };
 
-// ─── States listing ───────────────────────────────────────────────────────────
-
-const STATES = [
-  'Tamil Nadu', 'Maharashtra', 'Karnataka', 'Delhi', 'Telangana',
-  'Gujarat', 'Rajasthan', 'West Bengal', 'Uttar Pradesh', 'Kerala',
-];
-
 const LANGUAGES = ['English', 'Tamil', 'Hindi', 'Telugu', 'Malayalam', 'Kannada'];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -203,7 +196,51 @@ const ProfileSettings: React.FC = () => {
   // ── Delete account modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
+
+  React.useEffect(() => {
+    fetch('/api/locations/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCitiesList(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load cities:', err);
+        setCitiesList([
+          { id: 1, name: 'Chennai', state: 'Tamil Nadu' },
+          { id: 2, name: 'Coimbatore', state: 'Tamil Nadu' },
+          { id: 3, name: 'Madurai', state: 'Tamil Nadu' },
+          { id: 4, name: 'Tiruchirappalli', state: 'Tamil Nadu' },
+          { id: 5, name: 'Salem', state: 'Tamil Nadu' },
+          { id: 6, name: 'Thanjavur', state: 'Tamil Nadu' },
+          { id: 7, name: 'Vellore', state: 'Tamil Nadu' },
+          { id: 8, name: 'Tirunelveli', state: 'Tamil Nadu' },
+          { id: 9, name: 'Erode', state: 'Tamil Nadu' },
+          { id: 10, name: 'Dindigul', state: 'Tamil Nadu' },
+          { id: 11, name: 'Kanchipuram', state: 'Tamil Nadu' },
+          { id: 12, name: 'Tiruppur', state: 'Tamil Nadu' },
+          { id: 13, name: 'Krishnagiri', state: 'Tamil Nadu' },
+          { id: 14, name: 'Dharmapuri', state: 'Tamil Nadu' },
+          { id: 15, name: 'Villupuram', state: 'Tamil Nadu' }
+        ]);
+      });
+  }, []);
+
+  const availableStates = React.useMemo(() => {
+    const states = new Set(citiesList.map((c) => c.state));
+    if (form.state) states.add(form.state);
+    if (states.size === 0) states.add('Tamil Nadu');
+    return Array.from(states).sort();
+  }, [citiesList, form.state]);
+
+  const filteredCities = React.useMemo(() => {
+    return citiesList.filter((c) => c.state === form.state);
+  }, [citiesList, form.state]);
+
   const handleChange = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const handleStateChange = (stateVal: string) => setForm(f => ({ ...f, state: stateVal, city: '' }));
 
   const handleNotifChange = (k: keyof NotifPrefs, v: boolean) => {
     const updated = { ...notifPrefs, [k]: v };
@@ -370,13 +407,25 @@ const ProfileSettings: React.FC = () => {
       </FormField>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
         <FormField label="State" icon={<MapPin size={13} />}>
-          <select style={input} value={form.state} onChange={e => handleChange('state', e.target.value)}>
+          <select style={input} value={form.state} onChange={e => handleStateChange(e.target.value)}>
             <option value="">Select state</option>
-            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            {availableStates.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </FormField>
         <FormField label="City">
-          <input style={input} value={form.city} onChange={e => handleChange('city', e.target.value)} placeholder="Your city" />
+          <select
+            style={{
+              ...input,
+              cursor: form.state ? 'pointer' : 'not-allowed',
+              opacity: form.state ? 1 : 0.6
+            }}
+            value={form.city}
+            onChange={e => handleChange('city', e.target.value)}
+            disabled={!form.state}
+          >
+            <option value="">Select city</option>
+            {filteredCities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
         </FormField>
       </div>
       <button
@@ -538,13 +587,25 @@ const ProfileSettings: React.FC = () => {
           <input style={inputDisabled} value={form.email} readOnly />
         </FormField>
         <FormField label="State" icon={<MapPin size={13} />}>
-          <select style={input} value={form.state} onChange={e => handleChange('state', e.target.value)}>
+          <select style={input} value={form.state} onChange={e => handleStateChange(e.target.value)}>
             <option value="">Select state</option>
-            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            {availableStates.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </FormField>
         <FormField label="City">
-          <input style={input} value={form.city} onChange={e => handleChange('city', e.target.value)} placeholder="City" />
+          <select
+            style={{
+              ...input,
+              cursor: form.state ? 'pointer' : 'not-allowed',
+              opacity: form.state ? 1 : 0.6
+            }}
+            value={form.city}
+            onChange={e => handleChange('city', e.target.value)}
+            disabled={!form.state}
+          >
+            <option value="">Select city</option>
+            {filteredCities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
         </FormField>
       </div>
       <FormField label="Business Address" icon={<MapPin size={13} />}>

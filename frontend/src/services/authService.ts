@@ -216,6 +216,7 @@ export async function registerBrokerWithGoogle(data: {
   businessName: string;
   license: string;
   city: string;
+  state: string;
   phone: string;
   credential: string;
   dealerType: 'new' | 'used' | 'both';

@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Zap, Award, ArrowRight, Star,
-  MapPin, Fuel,
+  MapPin,
   Shield, Clock, BadgeDollarSign, Lock, Send,
-  Car, Wrench, Cpu, Settings, Users, ClipboardList, Leaf,
+  Car, Users, ClipboardList,
   Building2, BadgeCheck, Phone, X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
 import { useCatalog } from '../hooks/useCatalog';
 import { tamilNaduDealers } from '../data/tamilNaduDealers';
@@ -16,19 +15,8 @@ import { useLocation } from '../contexts/LocationContext';
 import toast from 'react-hot-toast';
 
 
-const FUEL_TYPES = ['Petrol', 'Diesel', 'Hybrid', 'Electric'] as const;
-const TRANSMISSION_TYPES = ['Manual', 'Automatic', 'Any'] as const;
-
-const FUEL_ICONS: Record<string, React.ReactNode> = {
-  Petrol: <Fuel size={14} />, Diesel: <Fuel size={14} />, Hybrid: <Leaf size={14} />, Electric: <Zap size={14} />,
-};
-const TRANS_ICONS: Record<string, React.ReactNode> = {
-  Manual: <Wrench size={14} />, Automatic: <Cpu size={14} />, Any: <Settings size={14} />,
-};
-
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { addRequirement } = useData();
   const { t } = useLanguage();
   const { brands } = useCatalog();
   const { user } = useAuth();
@@ -36,14 +24,43 @@ const Home: React.FC = () => {
   const [heroMake, setHeroMake] = useState('');
   const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
-  const [heroMinYear] = useState('');
-  const [heroMaxYear] = useState('');
-  const [heroDescription] = useState('');
-  const [heroFuel, setHeroFuel] = useState('');
-  const [heroTransmission, setHeroTransmission] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [heroVehicleType, setHeroVehicleType] = useState<'new' | 'used'>('new');
+  const [heroState, setHeroState] = useState('Tamil Nadu');
+  const [heroCity, setHeroCity] = useState('');
+  const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
 
   const selectedBrand = brands.find((b) => b.name === heroMake);
+  const submitting = false;
+
+  React.useEffect(() => {
+    fetch('/api/locations/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCitiesList(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load cities:', err);
+        setCitiesList([
+          { id: 1, name: 'Chennai', state: 'Tamil Nadu' },
+          { id: 2, name: 'Coimbatore', state: 'Tamil Nadu' },
+          { id: 3, name: 'Madurai', state: 'Tamil Nadu' },
+          { id: 4, name: 'Tiruchirappalli', state: 'Tamil Nadu' },
+          { id: 5, name: 'Salem', state: 'Tamil Nadu' },
+          { id: 6, name: 'Thanjavur', state: 'Tamil Nadu' },
+          { id: 7, name: 'Vellore', state: 'Tamil Nadu' },
+          { id: 8, name: 'Tirunelveli', state: 'Tamil Nadu' },
+          { id: 9, name: 'Erode', state: 'Tamil Nadu' },
+          { id: 10, name: 'Dindigul', state: 'Tamil Nadu' },
+          { id: 11, name: 'Kanchipuram', state: 'Tamil Nadu' },
+          { id: 12, name: 'Tiruppur', state: 'Tamil Nadu' },
+          { id: 13, name: 'Krishnagiri', state: 'Tamil Nadu' },
+          { id: 14, name: 'Dharmapuri', state: 'Tamil Nadu' },
+          { id: 15, name: 'Villupuram', state: 'Tamil Nadu' }
+        ]);
+      });
+  }, []);
 
   // Derived filtered dealer lists
   const isFiltered = selectedLocation !== 'Tamil Nadu';
@@ -58,50 +75,29 @@ const Home: React.FC = () => {
 
   const handlePostRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!heroVehicleType) { toast.error('Please select vehicle condition (New or Used).'); return; }
     if (!heroMake) { toast.error('Please select a car brand.'); return; }
     if (!heroModel) { toast.error('Please select a car model.'); return; }
     if (!heroBudget.trim()) { toast.error('Please specify your budget.'); return; }
+    if (!heroState) { toast.error('Please select a state.'); return; }
+    if (!heroCity) { toast.error('Please select a city.'); return; }
 
-    const yearRange = heroMinYear && heroMaxYear ? `${heroMinYear}-${heroMaxYear}` : heroMinYear || heroMaxYear;
-    const descParts: string[] = [];
-    if (heroFuel) descParts.push(`Fuel: ${heroFuel}`);
-    if (heroTransmission && heroTransmission !== 'Any') descParts.push(`Transmission: ${heroTransmission}`);
-    if (heroDescription) descParts.push(heroDescription);
-    const fullDesc = descParts.join('. ') || 'Looking for a clean vehicle in good condition.';
+    const pendingData = {
+      make: heroMake,
+      model: heroModel,
+      budget: heroBudget,
+      vehicleType: heroVehicleType,
+      state: heroState,
+      city: heroCity,
+    };
 
     if (user) {
       if (user.role !== 'buyer') { toast.error('Only buyers can post requirements.'); return; }
-      setSubmitting(true);
-      try {
-        await addRequirement({
-          buyerId: user.id,
-          make: heroMake,
-          model: heroModel,
-          yearRange: yearRange || '2020-2024',
-          budget: heroBudget,
-          preferredFeature: '',
-          description: fullDesc,
-          vehicleType: yearRange ? 'used' : 'new',
-          state: 'Tamil Nadu',
-          city: 'Chennai',
-          budgetMin: '0',
-          budgetMax: heroBudget.replace(/[^\d.]/g, ''),
-          fuelType: heroFuel || 'Any',
-          transmission: heroTransmission || 'Any',
-        });
-        toast.success('Requirement posted successfully!');
-        navigate('/buyer-dashboard');
-      } catch {
-        toast.error('Failed to post requirement.');
-      } finally {
-        setSubmitting(false);
-      }
+      sessionStorage.setItem('pending_requirement', JSON.stringify(pendingData));
+      navigate('/buyer-dashboard');
     } else {
-      sessionStorage.setItem('pending_requirement', JSON.stringify({
-        make: heroMake, model: heroModel, budget: heroBudget,
-        yearRange: yearRange || '2020-2024', description: fullDesc,
-      }));
-      toast.success('Please log in to complete posting!');
+      sessionStorage.setItem('pending_requirement', JSON.stringify(pendingData));
+      toast.success('Please log in or register to complete your requirement!');
       navigate('/login');
     }
   };
@@ -409,47 +405,55 @@ const Home: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Fuel Type Pills */}
+                {/* Vehicle Condition */}
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#444', marginBottom: '6px' }}>Fuel Type</label>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
-                    {FUEL_TYPES.map(f => (
-                      <button key={f} type="button"
-                        onClick={() => setHeroFuel(heroFuel === f ? '' : f)}
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#444', marginBottom: '6px' }}>Vehicle Condition *</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['new', 'used'] as const).map(type => (
+                      <button key={type} type="button"
+                        onClick={() => setHeroVehicleType(type)}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '4px',
-                          padding: '5px 12px', borderRadius: '6px',
-                          border: `1px solid ${heroFuel === f ? '#E53935' : '#DDD'}`,
-                          background: heroFuel === f ? 'rgba(229,57,53,0.08)' : '#fff',
-                          color: heroFuel === f ? '#E53935' : '#555',
-                          fontFamily: 'var(--font)', fontWeight: 500, fontSize: '12px',
-                          cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: `1px solid ${heroVehicleType === type ? '#E53935' : '#DDD'}`,
+                          background: heroVehicleType === type ? 'rgba(229,57,53,0.08)' : '#fff',
+                          color: heroVehicleType === type ? '#E53935' : '#555',
+                          fontFamily: 'var(--font)', fontWeight: 600, fontSize: '13px',
+                          cursor: 'pointer', transition: 'all 0.15s', textTransform: 'capitalize',
                         }}>
-                        <span style={{ display: 'flex' }}>{FUEL_ICONS[f]}</span> {f}
+                        <Car size={14} /> {type === 'new' ? 'New Car' : 'Used Car'}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Transmission Pills */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#444', marginBottom: '6px' }}>Transmission</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {TRANSMISSION_TYPES.map(tr => (
-                      <button key={tr} type="button"
-                        onClick={() => setHeroTransmission(heroTransmission === tr ? '' : tr)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '4px',
-                          padding: '5px 12px', borderRadius: '6px',
-                          border: `1px solid ${heroTransmission === tr ? '#E53935' : '#DDD'}`,
-                          background: heroTransmission === tr ? 'rgba(229,57,53,0.08)' : '#fff',
-                          color: heroTransmission === tr ? '#E53935' : '#555',
-                          fontFamily: 'var(--font)', fontWeight: 500, fontSize: '12px',
-                          cursor: 'pointer', transition: 'all 0.15s',
-                        }}>
-                        <span style={{ display: 'flex' }}>{TRANS_ICONS[tr]}</span> {tr}
-                      </button>
-                    ))}
+                {/* State + City */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#444', marginBottom: '6px' }}>State *</label>
+                    <select required value={heroState}
+                      onChange={e => setHeroState(e.target.value)}
+                      style={{ width: '100%', height: '38px', padding: '0 10px', borderRadius: '6px', border: '1px solid #DDD', fontFamily: 'var(--font)', fontSize: '13px', color: '#333', background: '#fff', outline: 'none', appearance: 'none', cursor: 'pointer' }}
+                      onFocus={e => { e.target.style.borderColor = '#E53935'; e.target.style.boxShadow = '0 0 0 2px rgba(229,57,53,0.12)'; }}
+                      onBlur={e => { e.target.style.borderColor = '#DDD'; e.target.style.boxShadow = 'none'; }}>
+                      <option value="Tamil Nadu">Tamil Nadu</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#444', marginBottom: '6px' }}>City *</label>
+                    <select required value={heroCity}
+                      onChange={e => setHeroCity(e.target.value)}
+                      style={{ width: '100%', height: '38px', padding: '0 10px', borderRadius: '6px', border: '1px solid #DDD', fontFamily: 'var(--font)', fontSize: '13px', color: '#333', background: '#fff', outline: 'none', appearance: 'none', cursor: 'pointer' }}
+                      onFocus={e => { e.target.style.borderColor = '#E53935'; e.target.style.boxShadow = '0 0 0 2px rgba(229,57,53,0.12)'; }}
+                      onBlur={e => { e.target.style.borderColor = '#DDD'; e.target.style.boxShadow = 'none'; }}>
+                      <option value="">Select City</option>
+                      {citiesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
                   </div>
                 </div>
 

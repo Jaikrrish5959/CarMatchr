@@ -40,6 +40,7 @@ interface AuthContextType {
     businessName: string;
     license: string;
     city: string;
+    state: string;
     phone: string;
     credential: string;
     dealerType: 'new' | 'used' | 'both';
@@ -166,6 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       businessName: string;
       license: string;
       city: string;
+      state: string;
       phone: string;
       credential: string;
       dealerType: 'new' | 'used' | 'both';

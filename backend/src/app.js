@@ -155,6 +155,7 @@ const registerSchema = z.object({
   phone: z.string().min(7, 'Phone number is required.'),
   license: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
   dealerType: z.enum(['new', 'used', 'both']).optional().nullable(),
 });
 
@@ -169,6 +170,7 @@ const googleBrokerRegisterSchema = z.object({
   businessName: z.string().min(1, 'Dealership name is required.'),
   license: z.string().min(1, 'License number is required.'),
   city: z.string().min(1, 'City is required.'),
+  state: z.string().min(1, 'State is required.'),
   phone: z.string().min(1, 'Phone number is required.'),
   credential: z.string().min(1, 'Google credential is required.'),
   dealerType: z.enum(['new', 'used', 'both'], { required_error: 'Dealer Type is required.' }),
@@ -443,6 +445,16 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+// ========== PUBLIC LOCATIONS API ==========
+app.get('/api/locations/cities', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM cities ORDER BY name ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve cities.' });
+  }
+});
+
 // ========== AUTH (public) ==========
 
 app.post('/api/auth/google', async (req, res) => {
@@ -514,7 +526,7 @@ app.post('/api/auth/google/register', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
-  const { email, businessName, license, city, phone, credential, dealerType, phoneOtp } = result.data;
+  const { email, businessName, license, city, state, phone, credential, dealerType, phoneOtp } = result.data;
 
   try {
     const payload = await verifyGoogleToken(credential);
@@ -554,8 +566,8 @@ app.post('/api/auth/google/register', async (req, res) => {
 
     const created = await db.get(
       `
-        INSERT INTO users (email, password, role, status, business_name, license, city, phone, dealer_type, phone_verified)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO users (email, password, role, status, business_name, license, city, state, phone, dealer_type, phone_verified)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
       `,
       [
@@ -566,6 +578,7 @@ app.post('/api/auth/google/register', async (req, res) => {
         businessName,
         license,
         city,
+        state,
         phone,
         dealerType,
         phoneVerified,
@@ -608,6 +621,15 @@ app.post('/api/auth/register', async (req, res) => {
     phoneVerified = true;
   }
 
+  if (user.role === 'broker') {
+    if (!user.city || !user.city.trim()) {
+      return res.status(400).json({ error: 'City is required for brokers.' });
+    }
+    if (!user.state || !user.state.trim()) {
+      return res.status(400).json({ error: 'State is required for brokers.' });
+    }
+  }
+
   const exists = await db.get(
     'SELECT 1 FROM users WHERE email = $1 AND role = $2 LIMIT 1',
     [user.email, user.role]
@@ -620,8 +642,8 @@ app.post('/api/auth/register', async (req, res) => {
 
   const created = await db.get(
     `
-      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, dealer_type, phone_verified)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, state, dealer_type, phone_verified)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `,
     [
@@ -634,6 +656,7 @@ app.post('/api/auth/register', async (req, res) => {
       user.phone ?? null,
       user.license ?? null,
       user.city ?? null,
+      user.state ?? null,
       user.dealerType ?? null,
       phoneVerified,
     ]
@@ -839,6 +862,12 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
   const updatedLanguage = language !== undefined ? (language || null) : row.language;
 
   if (row.role === 'broker') {
+    if (!updatedCity || !updatedCity.trim()) {
+      return res.status(400).json({ error: 'City is required for brokers.' });
+    }
+    if (!updatedState || !updatedState.trim()) {
+      return res.status(400).json({ error: 'State is required for brokers.' });
+    }
     const updatedBusinessName = business_name !== undefined ? (business_name || null) : (row.business_name || name || null);
     await db.run(
       `UPDATE users SET 

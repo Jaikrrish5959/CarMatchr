@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
 import { UserPlus, Loader2, AlertCircle, Phone, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { cities } from '../data/carDatabase';
 import OtpModal from '../components/OtpModal';
 
 const Register: React.FC = () => {
@@ -16,7 +15,7 @@ const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState<{name: string, businessName: string, license: string, phone: string, city: string, email: string, password: string, dealerType: 'new' | 'used' | 'both' | ''}>({ name: '', businessName: '', license: '', phone: '', city: '', email: '', password: '', dealerType: '' });
+  const [form, setForm] = useState<{name: string, businessName: string, license: string, phone: string, state: string, city: string, email: string, password: string, dealerType: 'new' | 'used' | 'both' | ''}>({ name: '', businessName: '', license: '', phone: '', state: 'Tamil Nadu', city: '', email: '', password: '', dealerType: '' });
 
   // Phone OTP verification states
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -31,13 +30,66 @@ const Register: React.FC = () => {
     credential: string;
   } | null>(null);
 
-  const [brokerForm, setBrokerForm] = useState<{businessName: string, license: string, city: string, phone: string, dealerType: 'new' | 'used' | 'both' | ''}>({
+  const [brokerForm, setBrokerForm] = useState<{businessName: string, license: string, state: string, city: string, phone: string, dealerType: 'new' | 'used' | 'both' | ''}>({
     businessName: '',
     license: '',
+    state: 'Tamil Nadu',
     city: '',
     phone: '',
     dealerType: '',
   });
+
+  const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/locations/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCitiesList(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load cities:', err);
+        setCitiesList([
+          { id: 1, name: 'Chennai', state: 'Tamil Nadu' },
+          { id: 2, name: 'Coimbatore', state: 'Tamil Nadu' },
+          { id: 3, name: 'Madurai', state: 'Tamil Nadu' },
+          { id: 4, name: 'Tiruchirappalli', state: 'Tamil Nadu' },
+          { id: 5, name: 'Salem', state: 'Tamil Nadu' },
+          { id: 6, name: 'Thanjavur', state: 'Tamil Nadu' },
+          { id: 7, name: 'Vellore', state: 'Tamil Nadu' },
+          { id: 8, name: 'Tirunelveli', state: 'Tamil Nadu' },
+          { id: 9, name: 'Erode', state: 'Tamil Nadu' },
+          { id: 10, name: 'Dindigul', state: 'Tamil Nadu' },
+          { id: 11, name: 'Kanchipuram', state: 'Tamil Nadu' },
+          { id: 12, name: 'Tiruppur', state: 'Tamil Nadu' },
+          { id: 13, name: 'Krishnagiri', state: 'Tamil Nadu' },
+          { id: 14, name: 'Dharmapuri', state: 'Tamil Nadu' },
+          { id: 15, name: 'Villupuram', state: 'Tamil Nadu' }
+        ]);
+      });
+  }, []);
+
+  const googleAvailableStates = React.useMemo(() => {
+    const states = new Set(citiesList.map((c) => c.state));
+    if (states.size === 0) states.add('Tamil Nadu');
+    return Array.from(states).sort();
+  }, [citiesList]);
+
+  const googleFilteredCities = React.useMemo(() => {
+    return citiesList.filter((c) => c.state === brokerForm.state);
+  }, [citiesList, brokerForm.state]);
+
+  const standardAvailableStates = React.useMemo(() => {
+    const states = new Set(citiesList.map((c) => c.state));
+    if (states.size === 0) states.add('Tamil Nadu');
+    return Array.from(states).sort();
+  }, [citiesList]);
+
+  const standardFilteredCities = React.useMemo(() => {
+    return citiesList.filter((c) => c.state === form.state);
+  }, [citiesList, form.state]);
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -131,6 +183,10 @@ const Register: React.FC = () => {
       toast.error('License Number is required.');
       return;
     }
+    if (!brokerForm.state) {
+      toast.error('Please select your state.');
+      return;
+    }
     if (!brokerForm.city) {
       toast.error('Please select your city.');
       return;
@@ -160,6 +216,7 @@ const Register: React.FC = () => {
         businessName: brokerForm.businessName.trim(),
         license: brokerForm.license.trim(),
         city: brokerForm.city,
+        state: brokerForm.state,
         phone: `+91${brokerForm.phone.trim()}`,
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType as 'new' | 'used' | 'both',
@@ -192,6 +249,7 @@ const Register: React.FC = () => {
     if (role === 'broker') {
       if (!form.businessName.trim()) return 'Please enter your dealership name.';
       if (!form.license.trim()) return 'Please enter your license number.';
+      if (!form.state) return 'Please select your state.';
       if (!form.city) return 'Please select your city.';
       if (!form.dealerType) return 'Please select your Dealer Type.';
     }
@@ -227,6 +285,7 @@ const Register: React.FC = () => {
         phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
         license: role === 'broker' ? form.license.trim() : undefined,
         city: form.city || undefined,
+        state: form.state || undefined,
         dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
         // @ts-ignore — phoneOtp passed to backend
         phoneOtp: phoneVerifiedOtp || undefined,
@@ -300,30 +359,44 @@ const Register: React.FC = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">City *</label>
+                    <label className="form-label">Dealer Type *</label>
                     <select
                       className="form-control" required
-                      value={brokerForm.city}
-                      onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
+                      value={brokerForm.dealerType}
+                      onChange={e => setBrokerForm({ ...brokerForm, dealerType: e.target.value as any })}
                     >
-                      <option value="">Select city</option>
-                      {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                      <option value="">Select dealer type</option>
+                      <option value="new">New Car Dealer</option>
+                      <option value="used">Used Car Dealer</option>
+                      <option value="both">Both (New & Used)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Dealer Type *</label>
-                  <select
-                    className="form-control" required
-                    value={brokerForm.dealerType}
-                    onChange={e => setBrokerForm({ ...brokerForm, dealerType: e.target.value as any })}
-                  >
-                    <option value="">Select dealer type</option>
-                    <option value="new">New Car Dealer</option>
-                    <option value="used">Used Car Dealer</option>
-                    <option value="both">Both (New & Used)</option>
-                  </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">State *</label>
+                    <select
+                      className="form-control" required
+                      value={brokerForm.state}
+                      onChange={e => setBrokerForm({ ...brokerForm, state: e.target.value, city: '' })}
+                    >
+                      {googleAvailableStates.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">City *</label>
+                    <select
+                      className="form-control" required
+                      disabled={!brokerForm.state}
+                      value={brokerForm.city}
+                      onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
+                      style={{ opacity: brokerForm.state ? 1 : 0.6, cursor: brokerForm.state ? 'pointer' : 'not-allowed' }}
+                    >
+                      <option value="">Select city</option>
+                      {googleFilteredCities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -437,21 +510,46 @@ const Register: React.FC = () => {
                         <input type="text" name="license" className="form-control" placeholder="DL-12345" value={form.license} onChange={handleChange} required />
                       </div>
                       <div className="form-group">
-                        <label className="form-label">City *</label>
-                        <select name="city" className="form-control" value={form.city} onChange={handleChange} required>
-                          <option value="">Select your city</option>
-                          {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                        <label className="form-label">Dealer Type *</label>
+                        <select name="dealerType" className="form-control" value={form.dealerType} onChange={handleChange} required>
+                          <option value="">Select dealer type</option>
+                          <option value="new">New Car Dealer</option>
+                          <option value="used">Used Car Dealer</option>
+                          <option value="both">Both (New & Used)</option>
                         </select>
                       </div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Dealer Type *</label>
-                      <select name="dealerType" className="form-control" value={form.dealerType} onChange={handleChange} required>
-                        <option value="">Select dealer type</option>
-                        <option value="new">New Car Dealer</option>
-                        <option value="used">Used Car Dealer</option>
-                        <option value="both">Both (New & Used)</option>
-                      </select>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div className="form-group">
+                        <label className="form-label">State *</label>
+                        <select
+                          name="state"
+                          className="form-control"
+                          value={form.state}
+                          onChange={e => {
+                            setForm({ ...form, state: e.target.value, city: '' });
+                          }}
+                          required
+                        >
+                          {standardAvailableStates.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">City *</label>
+                        <select
+                          name="city"
+                          className="form-control"
+                          value={form.city}
+                          onChange={handleChange}
+                          disabled={!form.state}
+                          style={{ opacity: form.state ? 1 : 0.6, cursor: form.state ? 'pointer' : 'not-allowed' }}
+                          required
+                        >
+                          <option value="">Select city</option>
+                          {standardFilteredCities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                      </div>
                     </div>
                   </>
                 )}

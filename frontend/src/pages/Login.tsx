@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { cities } from '../data/carDatabase';
 import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
@@ -32,10 +31,53 @@ const Login: React.FC = () => {
   const [brokerForm, setBrokerForm] = useState({
     businessName: '',
     license: '',
+    state: 'Tamil Nadu',
     city: '',
     phone: '',
     dealerType: 'new' as 'new' | 'used' | 'both',
   });
+
+  const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/locations/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCitiesList(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load cities:', err);
+        setCitiesList([
+          { id: 1, name: 'Chennai', state: 'Tamil Nadu' },
+          { id: 2, name: 'Coimbatore', state: 'Tamil Nadu' },
+          { id: 3, name: 'Madurai', state: 'Tamil Nadu' },
+          { id: 4, name: 'Tiruchirappalli', state: 'Tamil Nadu' },
+          { id: 5, name: 'Salem', state: 'Tamil Nadu' },
+          { id: 6, name: 'Thanjavur', state: 'Tamil Nadu' },
+          { id: 7, name: 'Vellore', state: 'Tamil Nadu' },
+          { id: 8, name: 'Tirunelveli', state: 'Tamil Nadu' },
+          { id: 9, name: 'Erode', state: 'Tamil Nadu' },
+          { id: 10, name: 'Dindigul', state: 'Tamil Nadu' },
+          { id: 11, name: 'Kanchipuram', state: 'Tamil Nadu' },
+          { id: 12, name: 'Tiruppur', state: 'Tamil Nadu' },
+          { id: 13, name: 'Krishnagiri', state: 'Tamil Nadu' },
+          { id: 14, name: 'Dharmapuri', state: 'Tamil Nadu' },
+          { id: 15, name: 'Villupuram', state: 'Tamil Nadu' }
+        ]);
+      });
+  }, []);
+
+  const googleAvailableStates = React.useMemo(() => {
+    const states = new Set(citiesList.map((c) => c.state));
+    if (states.size === 0) states.add('Tamil Nadu');
+    return Array.from(states).sort();
+  }, [citiesList]);
+
+  const googleFilteredCities = React.useMemo(() => {
+    return citiesList.filter((c) => c.state === brokerForm.state);
+  }, [citiesList, brokerForm.state]);
 
   const { login, verifyLogin, loginWithGoogle, registerBrokerWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -140,6 +182,10 @@ const Login: React.FC = () => {
       toast.error('License Number is required.');
       return;
     }
+    if (!brokerForm.state) {
+      toast.error('Please select your state.');
+      return;
+    }
     if (!brokerForm.city) {
       toast.error('Please select your city.');
       return;
@@ -160,6 +206,7 @@ const Login: React.FC = () => {
         businessName: brokerForm.businessName.trim(),
         license: brokerForm.license.trim(),
         city: brokerForm.city,
+        state: brokerForm.state,
         phone: brokerForm.phone.trim(),
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType,
@@ -394,29 +441,6 @@ const Login: React.FC = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">City *</label>
-                    <select
-                      className="form-control" required
-                      value={brokerForm.city}
-                      onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
-                    >
-                      <option value="">Select city</option>
-                      {cities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Phone Number *</label>
-                    <input
-                      type="tel" className="form-control" required
-                      placeholder="+91 9876543210"
-                      value={brokerForm.phone}
-                      onChange={e => setBrokerForm({ ...brokerForm, phone: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
                     <label className="form-label">Dealer Type *</label>
                     <select
                       className="form-control" required
@@ -428,6 +452,42 @@ const Login: React.FC = () => {
                       <option value="both">Both</option>
                     </select>
                   </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">State *</label>
+                    <select
+                      className="form-control" required
+                      value={brokerForm.state}
+                      onChange={e => setBrokerForm({ ...brokerForm, state: e.target.value, city: '' })}
+                    >
+                      {googleAvailableStates.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">City *</label>
+                    <select
+                      className="form-control" required
+                      disabled={!brokerForm.state}
+                      value={brokerForm.city}
+                      onChange={e => setBrokerForm({ ...brokerForm, city: e.target.value })}
+                      style={{ opacity: brokerForm.state ? 1 : 0.6, cursor: brokerForm.state ? 'pointer' : 'not-allowed' }}
+                    >
+                      <option value="">Select city</option>
+                      {googleFilteredCities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Phone Number *</label>
+                  <input
+                    type="tel" className="form-control" required
+                    placeholder="+91 9876543210"
+                    value={brokerForm.phone}
+                    onChange={e => setBrokerForm({ ...brokerForm, phone: e.target.value })}
+                  />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
