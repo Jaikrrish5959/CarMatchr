@@ -98,24 +98,37 @@ A white card titled "Post Your Requirement" with the subtitle "It's quick, easy 
 
 | Field | Type | Rules |
 |-------|------|-------|
+| Vehicle Condition * | Pill selector | Toggle pills: "New" or "Used"; required |
 | Select Brand * | Dropdown | Populated from the product catalog; required |
 | Select Model * | Dropdown | Populated based on selected Brand; disabled until Brand is chosen; required |
-| Your Budget * | Number input (₹ prefix) | Numeric; required |
-| Fuel Type | Pill selector | Options: Petrol, Diesel, Hybrid, Electric; optional; tap a pill to select/deselect |
-| Transmission | Pill selector | Options: Manual, Automatic, Any; optional |
+| Your Budget * | Number input (₹ Lakh) | Numeric; positive; representing Max Budget; required |
+| State * | Dropdown | Select from Indian states; required |
+| City * | Dropdown | Populated based on selected State (from master-data dropdown); disabled until State is chosen; required |
 
 **Submit Button:** "Post Requirement" (with a send icon).
 - Shows a loading spinner ("Posting…") while submitting.
-- **Logged-in Buyer:** Posts the requirement immediately and redirects to the Buyer Dashboard.
-- **Non-buyer (Broker/Admin):** Shows error "Only buyers can post requirements."
-- **Logged-out user:** Saves the requirement to session storage, shows a toast "Please log in to complete posting!" and redirects to the Login page. After login, the requirement is automatically submitted.
+- **Logged-in Buyer:** Redirects the user to the Buyer Dashboard, and automatically opens the Post Requirement Form modal with these details pre-filled in a **Draft** state.
+- **Non-buyer (Broker/Admin):** Shows error toast "Only buyers can post requirements."
+- **Logged-out user:**
+  - Validates the home form fields.
+  - If valid, saves the incomplete requirement data to the browser's `sessionStorage` under the key `pending_requirement`.
+  - Shows a toast: "Please log in or register to complete your requirement!" and redirects the user to the Login page (`/login`).
+  - **Resuming Incomplete Submissions:** After successful login or registration, the application checks `sessionStorage` for `pending_requirement`. If found, the user is redirected to the Buyer Dashboard (`/buyer-dashboard`), and the Post Requirement Form modal is automatically opened and pre-filled with the saved data in a **Draft** state. The user can review it, add any optional/deferred fields, and click "Post Requirement" to finalize and publish it. The `pending_requirement` key is then cleared from `sessionStorage`.
+
+**Deferred Fields (Deferred to Dashboard):**
+- **Common:** Min Budget (pre-populated as 85% of "Your Budget", editable), Variant, Additional Notes.
+- **New Car Specific:** Fuel Type, Transmission, Color Preference, Purchase Timeline.
+- **Used Car Specific:** Min Year, Max Year, Max KM Driven, Ownership Preference, Accident History.
 
 **Privacy Note:** "🔒 Your details are secure and private."
 
 **Validation Errors (toast notifications):**
+- "Please select vehicle condition (New or Used)."
 - "Please select a car brand."
 - "Please select a car model."
 - "Please specify your budget."
+- "Please select a state."
+- "Please select a city."
 
 ### 2.2 Trusted Dealers Strip
 
@@ -537,8 +550,8 @@ The selected role card is highlighted. Selecting a role changes the form fields 
 | Password | Password | Required; min 6 characters |
 | Confirm Password | Password | Must match |
 | Mobile Number | +91 prefix (fixed) + 10-digit input | Required; 10 digits |
-| City | Text | Required |
-| State | Dropdown | Select from Indian states |
+| State * | Dropdown | Select from Indian states; required |
+| City * | Dropdown | Populated dynamically based on selected State (loaded from master-data dropdown); required |
 | Business Type | Radio/toggle | Dealer / Individual Seller |
 
 **Submit:** "Create Broker Account" button.
@@ -558,6 +571,8 @@ The selected role card is highlighted. Selecting a role changes the form fields 
 - "Please fill in all required fields."
 - "Passwords do not match."
 - "Password must be at least 6 characters."
+- "Please select a state."
+- "Please select a city."
 - "Please enter a valid 10-digit mobile number."
 
 ---
@@ -938,7 +953,8 @@ A simple inline profile form within the dashboard:
 | Display Name | Text |
 | Business Name | Text |
 | Phone | Text (with +91 prefix) |
-| City | Text |
+| State | Dropdown (master-data) |
+| City | Dropdown (based on State, master-data) |
 
 **"Save Profile" button** → Updates the profile immediately with a success toast.
 
@@ -982,6 +998,7 @@ Bottom: Settings gear icon + "AD" avatar circle.
 | media | Catalog Media |
 | features | Model Features |
 | master-data | Master Data |
+| catalog | Car Catalog |
 
 Active tab: black background, white text. Inactive: white background, gray text.
 
@@ -1066,6 +1083,30 @@ Manages lookup data used across the site.
 **Validation Errors:**
 - "Please provide [Field Name]." (if required field is empty)
 - "Please choose a CSV file."
+
+### 11.9.1 City Data Consistency & Integrity Rules
+
+To maintain high data quality and avoid orphaned or invalid records, the application enforces the following rules for location/city data:
+
+1. **Canonical City Source:**
+   - The `cities` master-data table in the backend database is the single source of truth for all locations in the application. Free-text inputs for cities are strictly prohibited across all customer, dealer, broker, and admin portals.
+
+2. **Admin-Controlled Cities:**
+   - Admins manage the active list of cities under the **Master Data** -> **Cities** tab. Each city record must be mapped to a valid state.
+
+3. **Registration & Profile Settings Behavior:**
+   - In both the registration wizard and profile settings forms, selecting a **State** is required before the **City** dropdown is enabled.
+   - The City dropdown is dynamically populated with active cities configured for that selected State in the Master Data.
+
+4. **Search and Filtering Compatibility:**
+   - All search queries, home dealer strips, marketplace listings, and the global Navbar City Picker operate directly against these canonical city records (using exact city IDs or normalized name matches).
+
+5. **Validation and Required States:**
+   - Forms requiring location inputs (Buyer requirements, Broker profile settings, Dealer settings) will fail validation and display error messages if a selected State/City pair does not exist in the active master list.
+
+6. **Handling of Removed (Deleted) Cities:**
+   - To prevent orphaned user accounts and active requirements, the system blocks the deletion of any city from the Master Data tab if there are active brokers, listings, or buyer requirements currently associated with it. The admin is shown the error: *"Cannot delete city. There are active requirements, listings, or brokers registered in this city."*
+   - Admins may instead flag cities as inactive (soft-delete). Inactive cities are hidden from new dropdown selections but remain intact on existing database records to maintain history.
 
 ### 11.10 Car Catalog Tab
 
