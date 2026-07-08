@@ -254,7 +254,14 @@ const app = express();
 app.set('trust proxy', 1);
 const isVercel = !!process.env.VERCEL;
 
-await seedCatalog();
+// Seed catalog in the background so we don't block server startup and port binding on hosted environments
+seedCatalog()
+  .then((rows) => {
+    console.log(`Catalog seeding completed. Rows processed: ${rows}`);
+  })
+  .catch((err) => {
+    console.error('Catalog seeding failed:', err);
+  });
 
 // ========== SECURITY MIDDLEWARE ==========
 
