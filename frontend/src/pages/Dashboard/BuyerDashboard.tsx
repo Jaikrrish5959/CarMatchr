@@ -80,12 +80,6 @@ const getExpiryInfo = (createdAt: string, expiresAt?: string | null): { text: st
   return { text: `${h}h ${m}m`, urgent: true, isExpired: false };
 };
 
-// Legacy compat shim used in a few places
-const expiresIn = (createdAt: string, expiresAt?: string | null) => {
-  const info = getExpiryInfo(createdAt, expiresAt);
-  if (info.isExpired) return null;
-  return { text: info.text, urgent: info.urgent };
-};
 
 const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
