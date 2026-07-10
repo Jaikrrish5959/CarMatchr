@@ -268,7 +268,8 @@ A responsive 4-column grid (fewer on smaller screens). Each **Car Card** contain
 - **"Contact Broker" button** (blue, full-width): Only visible on **Broker Listed** cards. Clicking opens the **Contact Broker Modal** (§13.3).
 
 #### 3.4.3 Card Interaction
-- Cards are static unless the listing is broker-listed (no click-through to a detail page from standard listings in current implementation).
+- **Standard (non-broker) listings:** Cards are intentionally non-clickable. There is no detail page for standard marketplace listings. Users who wish to contact the seller for a standard listing are directed via a "Find a Dealer" link (shown on hover) to the Dealer Directory (`/dealers` or `/dealers/used` depending on car type). This is by design — the marketplace is discovery-only for standard listings; deal-making happens through the reverse-requirement flow.
+- **Broker Listed cards:** Clicking any non-button area of the card opens the **Contact Broker Modal** (§13.3) for the listed car.
 
 ### 3.5 Empty State
 
@@ -311,6 +312,13 @@ A horizontal row of toggle-pill buttons for quick brand filtering:
 - Maruti Suzuki 🚗, Hyundai 🚙, Tata Motors 🚐, Mahindra 🛻, Toyota 🚕, Honda 🏎️, Kia 🚘, MG 🚖.
 - **Active pill:** shows brand color, border, and an × icon.
 - Clicking an active pill deselects the filter.
+
+**Brand Filter Synchronization (Pills ↔ Dropdown):**
+The brand pills (§4.3) and the "All Brands" dropdown in the Filter Controls Bar (§4.5.4) are **synchronized to the same single brand filter state**. They do not override or combine with each other — they represent two UI controls for the same value:
+- Selecting a pill sets the brand filter to that brand; the dropdown simultaneously updates to show that brand.
+- Selecting a brand from the dropdown simultaneously highlights the matching pill (if visible in the row).
+- Deselecting via either control (pill × or dropdown reset to "All Brands") clears the filter for both.
+- **Only one brand can be active at a time.** Selecting a second pill deselects the first.
 
 ### 4.4 Featured Dealerships
 
@@ -432,12 +440,12 @@ A glassmorphic chip showing:
 #### 6.1.4 Stats Strip (below banner)
 
 Four stat tiles separated by vertical dividers:
-| Stat | Value |
-|------|-------|
-| Listings | Count of active inventory |
-| Years Active | Years in business |
-| Member Since | Year joined (from `createdAt`) |
-| Reviews | Total review count |
+| Stat | Value | Calculation |
+|------|-------|-------------|
+| Listings | Count of active inventory | Live count of active marketplace listings |
+| Years Active | Years in business | **Derived from the `Founding Year` field** (set in §12.6). Displayed as `current_year − founding_year`. If `Founding Year` is not set, falls back to `current_year − year(createdAt)` and is labeled "Member for X yr" instead. |
+| Member Since | Year joined | Year extracted from `createdAt` timestamp (the account registration date) |
+| Reviews | Total review count | Count of all reviews submitted for this dealer |
 
 ### 6.2 Main Body (2-Column Layout)
 
@@ -673,6 +681,26 @@ Appears as an expanded form panel when the "Post New Requirement" button is clic
 | Additional Notes | Textarea | Optional |
 | Requirement Active Duration * | Dropdown | 3 Days, 7 Days, 14 Days |
 
+**Requirement Expiry Lifecycle:**
+
+The duration selected determines the requirement's `expires_at` timestamp, calculated as `posted_at + duration_days`. The system enforces the following lifecycle when a requirement expires:
+
+| State | Trigger | Behavior |
+|-------|---------|----------|
+| **Active** | Immediately after posting | Visible to all brokers; accepting offers and counters are allowed |
+| **Expiring Soon** | `expires_at − 6 hours` | The countdown label turns red on broker cards ("Expires in Xh Ym"); a push notification is sent to the buyer |
+| **Expired** | `expires_at` timestamp reached | Requirement is automatically moved to **Archived** status. No new offers can be submitted. Existing pending offers are auto-rejected with notification to each broker |
+| **Archived** | On expiry or manual close | Visible under the **All Requirements** tab with an "Expired" gray badge. Not shown to brokers. The requirement record is retained permanently for deal history |
+
+**"Expires in Xh Ym" Calculation:** Computed as `expires_at − now()` in real-time on the frontend. Displayed as `Xh Ym` when > 1 hour remaining; displayed as `Xm` when < 1 hour; displayed as `Expired` when `now() ≥ expires_at`.
+
+**Buyer Extension:** A buyer may extend an active requirement once by 3 days using the **"Extend by 3 Days"** button visible on the requirement card in the Active Requirements tab. Extension is only available while the requirement is still **Active** (not yet expired). The `expires_at` is updated server-side and the new countdown is reflected immediately. Only one extension per requirement is permitted.
+
+**Expiry Notifications:**
+- Buyer receives a push + email notification: "Your requirement for [Make] [Model] expires in 6 hours. Extend it to keep receiving offers."
+- On expiry: Buyer receives "Your [Make] [Model] requirement has expired. View your offers or post again."
+- Brokers with a pending offer on that requirement receive: "The buyer's requirement for [Make] [Model] has expired. Your offer has been closed."
+
 **Validation errors (toast):**
 - "Please select a car brand."
 - "Please select a car model."
@@ -728,16 +756,42 @@ For each offer received:
 - **Action buttons** (context-dependent on current status):
   | Button | Action |
   |--------|--------|
-  | ✓ Accept | Marks offer as Accepted; closes requirement |
-  | ✗ Reject | Marks offer as Rejected |
-  | ★ Shortlist | Marks offer as Shortlisted |
-  | 💬 Counter | Opens counter price input to negotiate |
+  | ✓ Accept | Marks this offer as **Accepted**. All other **pending or shortlisted** offers on the same requirement are simultaneously auto-rejected. Each affected broker receives a notification: "Another offer was accepted for this requirement. Your offer has been closed." The requirement status is set to **Closed** and is removed from the broker marketplace feed. |
+  | ✗ Reject | Marks offer as **Rejected**. Broker receives notification: "Your offer was rejected by the buyer." |
+  | ★ Shortlist | Marks offer as **Shortlisted**. Broker receives notification: "Your offer has been shortlisted!" |
+  | 💬 Counter | Opens counter price input to negotiate (see §9.4.3 and negotiation lifecycle below) |
   | 🗨️ Message | Opens message thread with this broker |
 
 #### 9.4.3 Counter Offer Inline Form
 - Text input: "Enter your counter price (₹ Lakh)"
 - "Submit Counter" button
 - "Cancel" button
+
+#### 9.4.4 Negotiation Lifecycle
+
+Negotiation between a buyer and broker follows a strictly defined state machine. Each counter resets the action ball to the other party.
+
+```
+Pending
+  └─► Buyer Counter          (buyer submits a counter price)
+        └─► Broker Counter   (broker submits a revised price)
+              └─► Buyer Counter  (buyer counters again)
+                    └─► ... (up to 5 total rounds combined)
+                          └─► Accepted  ─► [closes all other offers]
+                          └─► Rejected  ─► [broker notified]
+                          └─► Expired   ─► [auto-rejected on requirement expiry]
+```
+
+**Rules:**
+
+| Rule | Detail |
+|------|--------|
+| **Max Rounds** | A maximum of **5 counter rounds** are allowed per offer (combined buyer + broker counters). After 5 rounds, the Counter button is hidden and the buyer must Accept or Reject. |
+| **Turn Locking** | Only the party whose turn it is can act. If it is the broker's turn to counter, the buyer's Counter button is disabled (grayed, tooltip: "Waiting for broker counter"). If it is the buyer's turn, the broker's Edit form shows "Buyer is reviewing — waiting for their response." |
+| **Offer States** | `Pending` → `Counter Offer Received` (broker's perspective when buyer counters) → `Buyer Counter Pending` (buyer's perspective after broker counters) → `Accepted` / `Rejected` / `Expired` |
+| **Final State** | Once an offer reaches **Accepted**, **Rejected**, or **Expired**, it is permanently locked and no further counters can be submitted. |
+| **Counter Price Validation** | Counter price must be a positive number in ₹ Lakh. Empty or zero values are rejected with toast: "Please enter a valid counter price." |
+| **Round Counter Display** | Each offer card shows the current round: "Round 2 of 5" in small gray text below the offered price. |
 
 **Empty state (no active requirements):** Car icon + "No active requirements" + "Post your first requirement to get broker offers."
 
@@ -1274,7 +1328,14 @@ Three **Toggle Rows** (each with icon, title, subtitle, and a toggle switch):
 2. **Email Notifications** — "Send updates to your email address"
 3. **SMS Notifications** — "Get text alerts for accepted offers"
 
-Each toggle is a 44×24px pill switch (red when on, gray when off). Toggling saves immediately to localStorage.
+Each toggle is a 44×24px pill switch (red when on, gray when off).
+
+**Persistence behavior:**
+- **On toggle:** The new preference is **immediately saved to the database** via an authenticated API call (`PATCH /api/user/preferences`). A loading micro-animation is shown on the toggle during the in-flight request.
+- **Local cache:** On a successful API response, the updated preferences are also written to `localStorage` (`carmatchr_prefs`) as an offline UX cache, so the last known state is shown instantly on next page load before the API responds.
+- **Cross-device sync:** When the user logs in on a new device, preferences are fetched from the database (not localStorage) and loaded as the authoritative state.
+- **Server enforcement:** The Email and SMS channels configured here are read by the server before sending any outbound Email or SMS notification. If the user has toggled Email Notifications off, the server will not send email alerts regardless of the event type.
+- **Failure handling:** If the API call fails, the toggle reverts to its previous state and shows a toast: "Failed to save preference. Please try again."
 
 ### 12.5 Buyer — Security Tab
 
@@ -1354,7 +1415,12 @@ A 2-column grid of fields:
 1. **Email Notifications**
 2. **SMS Notifications**
 
-All toggles are saved to localStorage immediately.
+**Persistence behavior (identical to §12.4 buyer preferences):**
+- **On toggle:** The new preference is **immediately saved to the database** via an authenticated API call (`PATCH /api/broker/preferences`). A loading micro-animation is shown on the toggle during the in-flight request.
+- **Local cache:** On a successful API response, the updated value is also written to `localStorage` (`carmatchr_prefs`) as an offline UX cache. This allows the toggle to render at the last known state instantly on page load, before the API response arrives.
+- **Cross-device sync:** On login from a new device, notification preferences are fetched from the database and used as the authoritative state. `localStorage` is treated as a display cache only.
+- **Server enforcement:** The Email and SMS channel toggles are read by the server before dispatching any outbound Email or SMS notification. A disabled channel will not receive messages regardless of the event type (new requirements, offer updates, etc.).
+- **Failure handling:** If the API call fails, the toggle reverts to its previous visual state and shows a toast: "Failed to save preference. Please try again."
 
 ### 12.9 Dealer — Verification Tab
 

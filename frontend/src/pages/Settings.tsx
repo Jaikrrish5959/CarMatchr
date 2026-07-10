@@ -253,15 +253,12 @@ const ProfileSettings: React.FC = () => {
   const handleNotifChange = async (k: keyof NotifPrefs, v: boolean) => {
     const updated = { ...notifPrefs, [k]: v };
     setNotifPrefs(updated);
-    try {
-      localStorage.setItem(`notif_prefs_${user?.id}`, JSON.stringify(updated));
-    } catch {}
 
     if (!user) return;
     try {
       const token = getToken();
       const apiField = k.replace(/([A-Z])/g, "_$1").toLowerCase();
-      await fetch(`${API_BASE}/api/users/${user.id}/profile`, {
+      const res = await fetch(`${API_BASE}/api/users/${user.id}/profile`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -269,8 +266,20 @@ const ProfileSettings: React.FC = () => {
         },
         body: JSON.stringify({ [apiField]: v }),
       });
-      updateUser({ [k]: v });
+      if (res.ok) {
+        // Update in-memory user state and write to localStorage as offline cache
+        updateUser({ [k]: v });
+        try {
+          localStorage.setItem(`notif_prefs_${user.id}`, JSON.stringify(updated));
+        } catch {}
+      } else {
+        // Revert optimistic UI update if server rejected it
+        setNotifPrefs(prev => ({ ...prev, [k]: !v }));
+        console.error("Failed to sync notification preference: server error");
+      }
     } catch (err) {
+      // Network error — revert to previous state, keep localStorage as stale fallback
+      setNotifPrefs(prev => ({ ...prev, [k]: !v }));
       console.error("Failed to sync notification preference:", err);
     }
   };

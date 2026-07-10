@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE } from '../../services/api';
+import { getToken } from '../../services/authService';
 
 const YEAR_LIST = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
@@ -66,17 +67,24 @@ const getDealerRating = (brokerId: number) => {
   return (4.5 + (brokerId % 5) * 0.1).toFixed(1);
 };
 
-const expiresIn = (createdAt: string, expiresAt?: string | null): { text: string; urgent: boolean } | null => {
+const getExpiryInfo = (createdAt: string, expiresAt?: string | null): { text: string; urgent: boolean; isExpired: boolean } => {
   const expiry = expiresAt ? new Date(expiresAt).getTime() : new Date(createdAt).getTime() + 24 * 60 * 60 * 1000;
   const secs = Math.floor((expiry - Date.now()) / 1000);
-  if (secs <= 0) return null;
+  if (secs <= 0) return { text: 'Expired', urgent: true, isExpired: true };
   const days = Math.floor(secs / 86400);
   if (days >= 1) {
-    return { text: `${days}d ${Math.floor((secs % 86400) / 3600)}h`, urgent: days < 2 };
+    return { text: `${days}d ${Math.floor((secs % 86400) / 3600)}h`, urgent: days < 2, isExpired: false };
   }
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  return { text: `${h}h ${m}m`, urgent: true };
+  return { text: `${h}h ${m}m`, urgent: true, isExpired: false };
+};
+
+// Legacy compat shim used in a few places
+const expiresIn = (createdAt: string, expiresAt?: string | null) => {
+  const info = getExpiryInfo(createdAt, expiresAt);
+  if (info.isExpired) return null;
+  return { text: info.text, urgent: info.urgent };
 };
 
 const BuyerDashboard: React.FC = () => {
@@ -146,7 +154,7 @@ const BuyerDashboard: React.FC = () => {
 
   const handleExtendRequirement = async (reqId: number) => {
     try {
-      const token = localStorage.getItem('carmatchr_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/api/requirements/${reqId}/extend`, {
         method: 'POST',
         headers: {
@@ -154,7 +162,9 @@ const BuyerDashboard: React.FC = () => {
         },
       });
       if (res.ok) {
-        toast.success('Requirement extended by 3 days!');
+        const data = await res.json();
+        const newLabel = data.expiresAt ? 'Requirement reactivated! New expiry: 3 days added.' : 'Requirement extended by 3 days!';
+        toast.success(newLabel);
         refreshData();
       } else {
         const errData = await res.json();
@@ -865,17 +875,30 @@ const BuyerDashboard: React.FC = () => {
                         {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
                       {(() => {
-                        const expires = expiresIn(req.createdAt, req.expiresAt);
-                        if (!expires) return null;
+                        const expInfo = getExpiryInfo(req.createdAt, req.expiresAt);
+                        if (expInfo.isExpired) {
+                          return (
+                            <span style={{
+                              fontSize: '0.75rem', color: '#ef4444',
+                              display: 'flex', alignItems: 'center', gap: '4px',
+                              background: 'rgba(239,68,68,0.1)',
+                              padding: '2px 8px', borderRadius: '6px', fontWeight: 700,
+                              border: '1px solid rgba(239,68,68,0.2)'
+                            }}>
+                              <Clock size={12} style={{ flexShrink: 0 }} />
+                              Expired
+                            </span>
+                          );
+                        }
                         return (
                           <span style={{
-                            fontSize: '0.75rem', color: expires.urgent ? '#e63946' : '#d97706',
+                            fontSize: '0.75rem', color: expInfo.urgent ? '#e63946' : '#d97706',
                             display: 'flex', alignItems: 'center', gap: '4px',
-                            background: expires.urgent ? 'rgba(230,57,70,0.08)' : 'rgba(217,119,6,0.08)',
+                            background: expInfo.urgent ? 'rgba(230,57,70,0.08)' : 'rgba(217,119,6,0.08)',
                             padding: '2px 8px', borderRadius: '6px', fontWeight: 700
                           }}>
                             <Clock size={12} style={{ flexShrink: 0 }} />
-                            {expires.text} left
+                            {expInfo.text} left
                           </span>
                         );
                       })()}
@@ -918,20 +941,26 @@ const BuyerDashboard: React.FC = () => {
                 
                 {/* Right section: Best Offer Info & Action */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', minWidth: '220px', textAlign: 'right' }}>
-                  <span style={{
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '0.75rem',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    background: req.status === 'open' ? '#ecfdf5' : '#f1f5f9',
-                    color: req.status === 'open' ? '#059669' : '#64748b',
-                    border: req.status === 'open' ? '1px solid #a7f3d0' : '1px solid #cbd5e1',
-                    marginBottom: '4px'
-                  }}>
-                    {req.status === 'open' ? 'Active' : 'Completed'}
-                  </span>
+                  {(() => {
+                    const expInfo = getExpiryInfo(req.createdAt, req.expiresAt);
+                    const isExpired = req.status === 'open' && expInfo.isExpired;
+                    return (
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        background: isExpired ? '#fef2f2' : req.status === 'open' ? '#ecfdf5' : '#f1f5f9',
+                        color: isExpired ? '#ef4444' : req.status === 'open' ? '#059669' : '#64748b',
+                        border: isExpired ? '1px solid #fecaca' : req.status === 'open' ? '1px solid #a7f3d0' : '1px solid #cbd5e1',
+                        marginBottom: '4px'
+                      }}>
+                        {isExpired ? 'Expired' : req.status === 'open' ? 'Active' : 'Completed'}
+                      </span>
+                    );
+                  })()}
                   
                   {req.status === 'open' && !req.extended && (
                     <button
@@ -941,9 +970,11 @@ const BuyerDashboard: React.FC = () => {
                       }}
                       style={{
                         padding: '4px 10px',
-                        background: 'rgba(37,99,235,0.08)',
-                        color: '#2563eb',
-                        border: '1px solid rgba(37,99,235,0.2)',
+                        background: getExpiryInfo(req.createdAt, req.expiresAt).isExpired
+                          ? 'rgba(239,68,68,0.08)'
+                          : 'rgba(37,99,235,0.08)',
+                        color: getExpiryInfo(req.createdAt, req.expiresAt).isExpired ? '#ef4444' : '#2563eb',
+                        border: `1px solid ${getExpiryInfo(req.createdAt, req.expiresAt).isExpired ? 'rgba(239,68,68,0.2)' : 'rgba(37,99,235,0.2)'}`,
                         borderRadius: '6px',
                         fontSize: '0.6875rem',
                         fontWeight: 700,
@@ -954,7 +985,7 @@ const BuyerDashboard: React.FC = () => {
                         alignSelf: 'flex-end'
                       }}
                     >
-                      Extend +3 Days
+                      {getExpiryInfo(req.createdAt, req.expiresAt).isExpired ? '🔄 Reactivate (+3 Days)' : 'Extend +3 Days'}
                     </button>
                   )}
                   
@@ -1393,7 +1424,7 @@ const BuyerDashboard: React.FC = () => {
                              })()}
 
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
-                                {offer.status === 'pending' && req.status === 'open' && offer.negotiationAwaitingFrom !== 'broker' && (
+                                {offer.status === 'pending' && req.status === 'open' && !getExpiryInfo(req.createdAt, req.expiresAt).isExpired && offer.negotiationAwaitingFrom !== 'broker' && (
                                   <>
                                     {negotiateOfferId === offer.id ? (
                                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '4px', flexWrap: 'wrap' }}>

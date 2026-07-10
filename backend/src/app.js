@@ -1549,6 +1549,22 @@ app.post('/api/offers', authenticate, requireRole('broker'), async (req, res) =>
   const o = result.data;
   // Use authenticated user's ID, not client-supplied
   const brokerId = Number(req.user.sub);
+
+  // Validate that the requirement is still open and not expired
+  const requirement = await db.get('SELECT status, expires_at FROM requirements WHERE id = $1', [o.requirementId]);
+  if (!requirement) {
+    return res.status(404).json({ error: 'Requirement not found.' });
+  }
+  if (requirement.status !== 'open') {
+    return res.status(400).json({ error: 'This requirement is closed and no longer accepting offers.' });
+  }
+  if (requirement.expires_at) {
+    const expiryDate = parseTimestampAsUtc(requirement.expires_at);
+    if (expiryDate < new Date()) {
+      return res.status(400).json({ error: 'This requirement has expired and is no longer accepting offers. The buyer may choose to extend it.' });
+    }
+  }
+
   const priceValue = parseBudgetNumber(o.price);
   const created = await db.get(
     `
