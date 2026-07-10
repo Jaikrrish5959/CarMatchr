@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X, ChevronDown } from 'lucide-react';
+import { LogOut, User as UserIcon, Globe, MapPin, Bell, Menu, X, ChevronDown, BadgeCheck } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
 import NotificationDropdown from './NotificationDropdown';
 import { useAuth } from '../hooks/useAuth';
@@ -345,7 +345,14 @@ const Navbar: React.FC = () => {
                 )}
                 <div className="navbar-user">
                   <UserIcon size={14} color="var(--color-gray-500)" />
-                  <span className="navbar-user-name">{user.name || user.businessName}</span>
+                  <span className="navbar-user-name" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {user.name || user.businessName}
+                    {user.phoneVerified && (
+                      <span title="Verified Account" style={{ display: 'inline-flex' }}>
+                        <BadgeCheck size={14} color="#16a34a" />
+                      </span>
+                    )}
+                  </span>
                   <span className={`badge ${user.status === 'active' ? 'badge-active' : 'badge-pending'}`}>{user.status}</span>
                 </div>
                 <Link to={user.role === 'buyer' ? '/buyer-dashboard' : user.role === 'broker' ? '/broker-dashboard' : '/admin'} className="btn btn-primary btn-sm">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MapPin, Star, Car, BadgeCheck, LayoutGrid, List,
   Phone, Shield, Zap, Clock, Search, ChevronRight,
@@ -70,7 +70,16 @@ const NewCarDealers = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('');
-  const [brandFilter, setBrandFilter] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const brandFilter = searchParams.get('brand') || '';
+  const setBrandFilter = (val: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (val) next.set('brand', val);
+      else next.delete('brand');
+      return next;
+    });
+  };
   const [ratingFilter, setRatingFilter] = useState('');
   const [verifiedFilter, setVerifiedFilter] = useState(false);
   const [sortOrder, setSortOrder] = useState('rating');
@@ -153,7 +162,17 @@ const NewCarDealers = () => {
   );
 
   const hasFilters = search || cityFilter || brandFilter || ratingFilter || verifiedFilter;
-  const clearAll = () => { setSearch(''); setCityFilter(''); setBrandFilter(''); setRatingFilter(''); setVerifiedFilter(false); };
+  const clearAll = () => {
+    setSearch('');
+    setCityFilter('');
+    setRatingFilter('');
+    setVerifiedFilter(false);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('brand');
+      return next;
+    });
+  };
 
   return (
     <div style={{ background: '#f8fafc', minHeight: '100vh' }}>

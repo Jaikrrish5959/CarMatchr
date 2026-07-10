@@ -39,6 +39,11 @@ const Register: React.FC = () => {
     dealerType: '',
   });
 
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [googleTermsAccepted, setGoogleTermsAccepted] = useState(false);
+  const [googleMarketingConsent, setGoogleMarketingConsent] = useState(false);
+
   const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
 
   useEffect(() => {
@@ -208,6 +213,10 @@ const Register: React.FC = () => {
       setShowBrokerOtpModal(true);
       return;
     }
+    if (!googleTermsAccepted) {
+      toast.error('You must accept the Terms of Service & Privacy Policy.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -220,7 +229,10 @@ const Register: React.FC = () => {
         phone: `+91${brokerForm.phone.trim()}`,
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType as 'new' | 'used' | 'both',
-        phoneOtp: brokerPhoneVerifiedOtp,
+        phoneOtp: brokerPhoneVerifiedOtp ?? undefined,
+        termsAccepted: googleTermsAccepted,
+        privacyAccepted: googleTermsAccepted,
+        marketingConsent: googleMarketingConsent,
       });
 
       if (!result.ok) {
@@ -261,6 +273,7 @@ const Register: React.FC = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
     if (!form.password) return 'Please enter a password.';
     if (form.password.length < 6) return 'Password must be at least 6 characters.';
+    if (!termsAccepted) return 'You must accept the Terms of Service & Privacy Policy to register.';
     return null;
   };
 
@@ -289,6 +302,9 @@ const Register: React.FC = () => {
         dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
         // @ts-ignore — phoneOtp passed to backend
         phoneOtp: phoneVerifiedOtp || undefined,
+        termsAccepted: termsAccepted,
+        privacyAccepted: termsAccepted,
+        marketingConsent: marketingConsent,
       });
       if (!result.ok) {
         const message = result.error ?? 'Unable to create account.';
@@ -450,6 +466,27 @@ const Register: React.FC = () => {
                       )
                     )}
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px', marginTop: '14px' }}>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={googleTermsAccepted}
+                      onChange={e => { setGoogleTermsAccepted(e.target.checked); setError(''); }}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I agree to the <a href="/terms" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Terms of Service</a> & <a href="/privacy" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Privacy Policy</a> *</span>
+                  </label>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={googleMarketingConsent}
+                      onChange={e => setGoogleMarketingConsent(e.target.checked)}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I consent to receive marketing updates & promotions (optional)</span>
+                  </label>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
@@ -623,7 +660,28 @@ const Register: React.FC = () => {
                   <input type="password" name="password" className="form-control" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} required />
                 </div>
 
-                <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px', marginTop: '14px' }}>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={e => { setTermsAccepted(e.target.checked); setError(''); }}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I agree to the <a href="/terms" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Terms of Service</a> & <a href="/privacy" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Privacy Policy</a> *</span>
+                  </label>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={marketingConsent}
+                      onChange={e => setMarketingConsent(e.target.checked)}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I consent to receive marketing updates & promotions (optional)</span>
+                  </label>
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
                   {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Creating Account…</> : 'Create Account'}
                 </button>
                 {error && (

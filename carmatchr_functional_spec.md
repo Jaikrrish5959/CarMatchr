@@ -61,9 +61,11 @@ Same as Buyer, with "Dashboard" pointing to `/broker-dashboard`.
 Dashboard points to `/admin`.
 
 ### 1.7 Language Selector
-- **Element:** A small language chip (e.g., "EN") in the navbar.
+- **Single Source of Truth:** Controlled dynamically by the frontend `LanguageContext`.
 - **Options:** English, Tamil, Hindi, Telugu, Malayalam, Kannada.
-- **Behavior:** Changes UI text across all pages. Selection persists in user preferences.
+- **Immediate Sync:** Changing the selection in either the navbar chip or the buyer settings preference immediately updates the active language on all page headers and body components.
+- **Guest behavior:** Stores the preference in browser `localStorage` (`carmatchr_lang`), defaulting to `'en'`.
+- **Logged-in behavior:** On login, the user's stored database language preference is fetched and loaded into the `LanguageContext`. Changing the selection updates both the database profile settings and `localStorage` fallback.
 
 ### 1.8 Mobile Behaviour
 - On mobile viewports, primary links collapse behind a hamburger menu (☰).
@@ -251,7 +253,6 @@ A responsive 4-column grid (fewer on smaller screens). Each **Car Card** contain
   - Dot indicators at the bottom showing current index.
 - **Featured badge** (top-left): "Featured" — dark translucent pill (shown for featured listings).
 - **Broker Listed badge** (top-left): "🏪 Broker Listed" — red translucent pill (shown for broker-listed cars; mutually exclusive with Featured badge).
-- **Wishlist heart button** (top-right): Filled red heart (♥) if wishlisted; outline heart (♡) if not. Toggling adds/removes from wishlist (persisted in state).
 
 #### 3.4.2 Car Card — Details Area
 - **Year / Make / Model** (H3, bold)
@@ -484,33 +485,41 @@ Then: ⭐ X.X rating · X reviews (amber text).
 
 ### 7.1 Layout
 
-Two-column or centered card, depending on viewport. Left side may show a brand illustration or feature list.
+Two-column or centered card, depending on viewport. Supports toggling between Email Login, Phone Login, and Account Recovery modes.
 
-### 7.2 Login Form
+### 7.2 Authentication Modes
 
-**Fields:**
+#### 7.2.1 Email Login (Standard)
+- **Fields:** Email Address, Password.
+- **Verification:** Authenticates directly with username/password match (does not prompt or require OTP code check).
+- **Validation:** Both fields required; valid email format required.
+- **Submit Button:** "Sign In" — shows loading spinner and disables during flight.
 
-| Field | Type | Validation |
-|-------|------|------------|
-| Email Address | Email input | Required; valid email format |
-| Password | Password input | Required; show/hide toggle (👁 icon) |
+#### 7.2.2 Phone OTP Login
+- **Fields:** Phone Number (10 digits).
+- **Verification:** Checks database for account matching phone and role. If found, triggers SMS verification code. Verifying the 6-digit code logs the user in.
+- **Submit Button:** "Send OTP" -> "Verify & Sign In".
 
-**Submit Button:** "Sign In" — disabled while submitting; shows spinner on load.
+#### 7.2.3 Google Login
+- **Element:** "Continue with Google" button.
+- **Behavior:** Standard OAuth popup. On success, maps Google user context to DB account and logs the user in.
 
-**Forgot Password link:** Opens a password-reset flow (email input).
+#### 7.2.4 Forgot Password & Account Recovery
+- **Trigger:** "Forgot Password" link on the email form.
+- **Flow:**
+  1. User enters Email Address.
+  2. Clicking "Send Reset Code" generates an OTP reset code and emails it to the user.
+  3. Form displays OTP input, New Password, and Confirm Password fields.
+  4. Validating the OTP code resets the password, updates the DB credentials, and returns the user to the Email Login screen.
 
-### 7.3 Google OAuth Button
-
-"Continue with Google" button — triggers Google sign-in. On success, the user is authenticated and redirected to the appropriate dashboard.
+### 7.3 Verified Status Display
+- Once a user has successfully verified their phone number (either at registration or settings profile update), a green verification checkmark badge (`BadgeCheck`) is shown next to their name in the main navigation header and dashboards.
 
 ### 7.4 Register Link
-
-"Don't have an account? **Register**" — navigates to `/register`.
+- "Don't have an account? **Register**" — navigates to `/register`.
 
 ### 7.5 Error Handling
-
-- Invalid credentials: Toast error message.
-- Server errors: Toast error message.
+- Invalid credentials, expired reset codes, or incorrect OTP values trigger clear and helpful toast notifications. Server errors are gracefully reported.
 
 ---
 
@@ -534,7 +543,9 @@ The selected role card is highlighted. Selecting a role changes the form fields 
 | Confirm Password | Password | Must match Password |
 | Mobile Number | +91 prefix (fixed) + 10-digit input | Required; exactly 10 digits; digits only |
 
-**Terms & Conditions checkbox:** Must be checked to submit.
+**Onboarding Consents (Required & Optional):**
+- **Terms of Service & Privacy Policy Agreement *:** Checkbox. "I agree to the Terms of Service & Privacy Policy". **Must be checked to submit.**
+- **Marketing Consent:** Checkbox. "I consent to receive marketing updates & promotions". **Optional.**
 
 **Submit:** "Create Buyer Account" button.
 
@@ -554,13 +565,21 @@ The selected role card is highlighted. Selecting a role changes the form fields 
 | City * | Dropdown | Populated dynamically based on selected State (loaded from master-data dropdown); required |
 | Business Type | Radio/toggle | Dealer / Individual Seller |
 
+**Onboarding Consents (Required & Optional):**
+- **Terms of Service & Privacy Policy Agreement *:** Checkbox. "I agree to the Terms of Service & Privacy Policy". **Must be checked to submit.**
+- **Marketing Consent:** Checkbox. "I consent to receive marketing updates & promotions". **Optional.**
+
 **Submit:** "Create Broker Account" button.
 
 **On success:** Phone OTP verification step is triggered. After phone is verified, the account enters a **Pending Approval** state until an admin approves it.
 
 ### 8.4 Google OAuth
 
-"Continue with Google" — available for both buyer and broker registration. For broker role selected via Google, additional business fields are prompted after Google sign-in.
+- **Availability:** "Continue with Google" — available for both buyer and broker registration.
+- **Broker Details Completion Form:** For the broker role selected via Google, additional business fields (Business Name, License, State, City, Mobile Number, Dealer Type) are prompted after Google sign-in.
+- **Onboarding Consents (Required & Optional):**
+  - **Terms of Service & Privacy Policy Agreement *:** Checkbox. "I agree to the Terms of Service & Privacy Policy". **Must be checked to submit.**
+  - **Marketing Consent:** Checkbox. "I consent to receive marketing updates & promotions". **Optional.**
 
 ### 8.5 Login Link
 
@@ -574,6 +593,27 @@ The selected role card is highlighted. Selecting a role changes the form fields 
 - "Please select a state."
 - "Please select a city."
 - "Please enter a valid 10-digit mobile number."
+- "You must accept the Terms of Service & Privacy Policy to register." (for standard registration validation error)
+- "You must accept the Terms of Service & Privacy Policy." (for Google OAuth registration validation error)
+
+### 8.7 Standardized Onboarding & Consent Policies
+
+To ensure legal compliance and standardize onboarding across all roles (Buyers and Brokers), the registration flows enforce a unified consent and validation system:
+
+#### 8.7.1 Consent Checkboxes
+1. **Terms of Service & Privacy Policy Agreement * (Mandatory):**
+   - **Label:** "I agree to the Terms of Service & Privacy Policy"
+   - **Hyperlinks:** Includes direct links pointing to the Terms of Service page (`/terms`) and Privacy Policy page (`/privacy`). Both links must open in new browser tabs.
+   - **Behavior:** This checkbox is mandatory. The registration button remains blocked or will show a validation toast error if the user attempts to submit the form without checking this box.
+2. **Marketing Consent (Optional):**
+   - **Label:** "I consent to receive marketing updates & promotions"
+   - **Behavior:** This checkbox is optional and does not affect form submission. Users are free to leave it unchecked. If checked, their marketing preference is captured.
+
+#### 8.7.2 Unified Validation Flow
+Before any registration request is processed:
+1. **Consents Validation:** The client checks the status of the Terms & Privacy checkbox. If unchecked, validation fails immediately, showing the appropriate role-specific or flow-specific error toast (see §8.6).
+2. **Standard Fields Validation:** Validates required text inputs, password constraints (minimum 6 characters, matching confirmation), and mobile number validation (must be exactly 10 digits and fully verified via OTP).
+3. **Registration Submission:** Registration is only submitted to the server once all validation checks, including the mandatory Terms/Privacy consent, are successfully passed.
 
 ---
 
@@ -631,6 +671,7 @@ Appears as an expanded form panel when the "Post New Requirement" button is clic
 | State * | Dropdown | Required |
 | City * | Dropdown (based on state) | Required |
 | Additional Notes | Textarea | Optional |
+| Requirement Active Duration * | Dropdown | 3 Days, 7 Days, 14 Days |
 
 **Validation errors (toast):**
 - "Please select a car brand."
@@ -791,8 +832,10 @@ Similar to Buyer Dashboard: collapsible left sidebar + URL-driven main content.
 |-----|-------|
 | `dashboard` | Dashboard |
 | `requirements` | Open Requirements |
-| `my-offers` | My Offers |
+| `saved` | Saved Requirements |
+| `offers` | My Offers |
 | `accepted` | Accepted Deals |
+| `closed` | Closed Deals |
 | `listings` | My Listings |
 | `messages` | Messages |
 | `notifications` | Notifications |
@@ -888,7 +931,12 @@ Inline form that expands below the requirement card (or in a modal).
 
 **Inventory Picker:** A secondary button "Pick from My Inventory" pre-fills the proposal from one of the broker's existing listings.
 
-### 10.5 My Offers Tab (`?tab=my-offers`)
+### 10.4b Saved Requirements Tab (`?tab=saved`)
+
+Lists requirements bookmarked by the broker. Similar to the Open Requirements tab, it shows requirement details, price suggestions, and allows sending offers directly.
+- **Empty State:** Bookmark icon + "No Saved Requirements" + "Bookmarked requirements from your available search feed will show up here."
+
+### 10.5 My Offers Tab (`?tab=offers`)
 
 Lists all offers submitted by this broker.
 
@@ -1276,6 +1324,9 @@ A 2-column grid of fields:
 *For Used Car / Individual dealers:*
 - **Business Type** — Toggle: "Dealer" | "Individual Seller"
 
+**Founding Year:**
+- **Founding Year** — Number input (e.g., "2018"). Min 1900, Max current year.
+
 **"Save Changes" button** (same behavior as buyer; triggers OTP if phone changed).
 
 ### 12.7 Dealer — Public Profile Tab
@@ -1386,11 +1437,17 @@ A centered dialog card with a close (✕) button.
 | Your Email | Email | Optional |
 | Your Mobile Number * | +91 prefix (fixed) + 10-digit input | Required; 10 digits only |
 
-**"Verify Phone & Request Contact" button** — Validates fields. If valid, triggers the **OTP Modal** (§13.4).
+**OTP Bypass Optimization:**
+To optimize UX and prevent repeating OTP verification for every contact request, the system checks for OTP bypass conditions:
+1. **Logged-in Verified Account:** If the active user has a verified phone matching the entered number, OTP is completely bypassed.
+2. **Session Trust Duration:** If the user has successfully verified the entered number within the last 24 hours (stored in client `sessionStorage` and database `verified_guest_sessions` table), OTP is bypassed.
+* If either condition is met, clicking the action button skips the OTP modal, immediately logs the contact request, and transitions to the success state.
 
-**Phase 2 — After OTP Verified:**
+**"Verify Phone & Request Contact" button** — Validates fields. If bypass is active, submits the request immediately; otherwise, triggers the **OTP Modal** (§13.4).
 
-The OTP Modal closes, the OTP is submitted along with the lead data to the server.
+**Phase 2 — After OTP Verified / Bypassed:**
+
+The OTP Modal closes (if opened), the request is submitted to the server (with the code or `BYPASS`), and a trust session duration is cached for the next 24 hours.
 
 **Phase 3 — Verified/Success State:**
 
@@ -1450,17 +1507,16 @@ Triggered from: Security tabs.
 
 A centered dialog with a red warning icon.
 
-**For Buyers:**
-- **Title:** "Delete Account?"
-- **Message:** "This will permanently delete your account and all your requirements. This cannot be undone."
-- **Button:** "Delete" (red) → Shows "Account deletion requires contacting support." toast (no immediate deletion; requires manual support process).
+**Title:** "Delete Account?"
+**Message:** "This will soft-delete your account and close/reject all active requirements or pending offers. Your data will be anonymized after a 30-day retention period."
 
-**For Dealers:**
-- **Title:** "Deactivate Account?"
-- **Message:** "Your dealer account will be deactivated. You can reactivate it by contacting support."
-- **Button:** "Deactivate" (red) → Same support-contact toast.
+**Verification step:**
+- **For standard accounts:** An input field asks for the user's current password to confirm deletion.
+- **For Google OAuth accounts:** An input field asks the user to type "DELETE" to confirm.
 
-**Cancel button:** Closes the modal without action.
+**Buttons:**
+- **"Delete Account"** (red) — Submits the deletion request, logs the user out, and redirects to the login page upon success.
+- **"Cancel"** (gray) — Closes the modal without action.
 
 ---
 

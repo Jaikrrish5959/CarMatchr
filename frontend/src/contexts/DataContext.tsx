@@ -39,6 +39,9 @@ export interface Requirement {
   visibility?: 'marketplace' | 'exclusive';
   exclusiveDealerId?: number | string | null;
   exclusiveDealerName?: string | null;
+  expiryDays?: number;
+  expiresAt?: string | null;
+  extended?: boolean;
 }
 
 export interface Offer {
@@ -82,6 +85,7 @@ export interface BrokerListing {
   id: number;
   brokerId: number;
   brokerName: string;
+  brokerPhone?: string;
   make: string;
   model: string;
   variant: string;

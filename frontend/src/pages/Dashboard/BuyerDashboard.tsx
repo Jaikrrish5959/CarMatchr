@@ -11,6 +11,7 @@ import {
   Menu, Lock, Unlock, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { API_BASE } from '../../services/api';
 
 const YEAR_LIST = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
@@ -65,9 +66,22 @@ const getDealerRating = (brokerId: number) => {
   return (4.5 + (brokerId % 5) * 0.1).toFixed(1);
 };
 
+const expiresIn = (createdAt: string, expiresAt?: string | null): { text: string; urgent: boolean } | null => {
+  const expiry = expiresAt ? new Date(expiresAt).getTime() : new Date(createdAt).getTime() + 24 * 60 * 60 * 1000;
+  const secs = Math.floor((expiry - Date.now()) / 1000);
+  if (secs <= 0) return null;
+  const days = Math.floor(secs / 86400);
+  if (days >= 1) {
+    return { text: `${days}d ${Math.floor((secs % 86400) / 3600)}h`, urgent: days < 2 };
+  }
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return { text: `${h}h ${m}m`, urgent: true };
+};
+
 const BuyerDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead, negotiateOffer, shortlistOffer } = useData();
+  const { requirements, offers, addRequirement, acceptOffer, rejectOffer, markOfferRead, negotiateOffer, shortlistOffer, refreshData } = useData();
   const { brands } = useCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'active';
@@ -126,7 +140,30 @@ const BuyerDashboard: React.FC = () => {
   const [ownershipPreference, setOwnershipPreference] = useState('Any');
   const [accidentHistoryPreference, setAccidentHistoryPreference] = useState('No Accidents');
 
+  const [expiryDays, setExpiryDays] = useState('7');
+
   const selectedBrand = brands.find((b) => b.name === make);
+
+  const handleExtendRequirement = async (reqId: number) => {
+    try {
+      const token = localStorage.getItem('carmatchr_token');
+      const res = await fetch(`${API_BASE}/api/requirements/${reqId}/extend`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        toast.success('Requirement extended by 3 days!');
+        refreshData();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error || 'Failed to extend requirement.');
+      }
+    } catch (err) {
+      toast.error('Network error. Unable to extend requirement.');
+    }
+  };
 
   useEffect(() => {
     fetch('/api/locations/cities')
@@ -281,6 +318,7 @@ const BuyerDashboard: React.FC = () => {
         budget: budgetMax, // Backward compatibility
         preferredFeature: feature || '',
         description: description || '',
+        expiryDays: parseInt(expiryDays, 10),
         
         // New common fields
         vehicleType,
@@ -306,6 +344,7 @@ const BuyerDashboard: React.FC = () => {
       setMake(''); setModel(''); setFeature(''); setMinYear(''); setMaxYear(''); setDescription('');
       setVariant(''); setBudgetMin(''); setBudgetMax(''); setCityName(''); setFuelType('Any'); setTransmission('Any'); setColorPreference('');
       setPurchaseTimeline('Immediate'); setMaxKmDriven(''); setOwnershipPreference('Any'); setAccidentHistoryPreference('No Accidents');
+      setExpiryDays('7');
     } catch {
       toast.error('Failed to post requirement. Please try again.');
     } finally {
@@ -825,6 +864,21 @@ const BuyerDashboard: React.FC = () => {
                         <CalendarRange size={12} />
                         {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
+                      {(() => {
+                        const expires = expiresIn(req.createdAt, req.expiresAt);
+                        if (!expires) return null;
+                        return (
+                          <span style={{
+                            fontSize: '0.75rem', color: expires.urgent ? '#e63946' : '#d97706',
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            background: expires.urgent ? 'rgba(230,57,70,0.08)' : 'rgba(217,119,6,0.08)',
+                            padding: '2px 8px', borderRadius: '6px', fontWeight: 700
+                          }}>
+                            <Clock size={12} style={{ flexShrink: 0 }} />
+                            {expires.text} left
+                          </span>
+                        );
+                      })()}
                     </div>
                     
                     {/* Budget + Location row */}
@@ -878,6 +932,31 @@ const BuyerDashboard: React.FC = () => {
                   }}>
                     {req.status === 'open' ? 'Active' : 'Completed'}
                   </span>
+                  
+                  {req.status === 'open' && !req.extended && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExtendRequirement(req.id);
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        background: 'rgba(37,99,235,0.08)',
+                        color: '#2563eb',
+                        border: '1px solid rgba(37,99,235,0.2)',
+                        borderRadius: '6px',
+                        fontSize: '0.6875rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        marginTop: '2px',
+                        marginBottom: '6px',
+                        fontFamily: 'var(--font)',
+                        alignSelf: 'flex-end'
+                      }}
+                    >
+                      Extend +3 Days
+                    </button>
+                  )}
                   
                   {bestOffer ? (
                     <>
@@ -2340,6 +2419,28 @@ const BuyerDashboard: React.FC = () => {
                         lineHeight: 1.6,
                       }}
                     />
+                  </div>
+
+                  {/* Expiry Duration */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Requirement Active Duration *
+                    </label>
+                    <select
+                      value={expiryDays}
+                      onChange={e => setExpiryDays(e.target.value)}
+                      style={{
+                        width: '100%', padding: '12px 14px',
+                        borderRadius: '10px', border: '2px solid #e2e8f0',
+                        fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                        color: '#0f172a', outline: 'none',
+                        background: '#fff', boxSizing: 'border-box'
+                      }}
+                    >
+                      <option value="3">3 Days (Urgent)</option>
+                      <option value="7">7 Days (Standard)</option>
+                      <option value="14">14 Days (Extended)</option>
+                    </select>
                   </div>
 
                   {/* Action Buttons */}

@@ -18,6 +18,7 @@ export type NotificationKind =
   | 'exclusive_requirement'
   | 'offer_shortlisted'
   | 'offer_accepted_dealer'
+  | 'offer_rejected_dealer'
   | 'offer_viewed'
   | 'requirement_closed';
 
@@ -56,6 +57,7 @@ const PRIORITY: Record<NotificationKind, NotificationPriority> = {
   exclusive_requirement:  'high',
   offer_shortlisted:      'high',
   offer_accepted_dealer:  'high',
+  offer_rejected_dealer:  'low',
   offer_viewed:           'medium',
   requirement_closed:     'medium',
 };
@@ -221,6 +223,20 @@ function dealerNotifications(
         priority: PRIORITY['offer_accepted_dealer'],
         title: 'Offer Accepted! 🎊',
         message: `Your offer for ${vehicle} has been accepted by the buyer. Close the deal!`,
+        createdAt: offer.createdAt,
+        linkTarget: 'broker-dashboard',
+        offerId: offer.id,
+      });
+    }
+
+    // Offer rejected
+    if (offer.status === 'rejected') {
+      notes.push({
+        id: makeId('offer_rejected_dealer', offer.id),
+        kind: 'offer_rejected_dealer',
+        priority: PRIORITY['offer_rejected_dealer'],
+        title: 'Offer Rejected',
+        message: `Your offer for ${vehicle} was rejected. The buyer accepted another offer or closed the requirement.`,
         createdAt: offer.createdAt,
         linkTarget: 'broker-dashboard',
         offerId: offer.id,

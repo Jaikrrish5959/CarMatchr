@@ -10,10 +10,10 @@ import {
   Gauge, Users, Star, ChevronDown, TrendingDown, TrendingUp,
   FileText, Target, Zap, ArrowRight, Phone, Menu, Settings,
   Bell, MessageSquare, Check, Briefcase, CalendarRange, MapPin,
-  CheckCheck
+  CheckCheck, Bookmark
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
+import { API_BASE } from '../../services/api';
 // ============================================================
 //  HELPER FUNCTIONS & SPECIFICATION GUESSERS
 // ============================================================
@@ -66,13 +66,17 @@ function timeAgo(dateStr: string): string {
   return `${d} day${d > 1 ? 's' : ''} ago`;
 }
 
-function expiresIn(dateStr: string): { text: string; urgent: boolean } | null {
-  const expiry = new Date(dateStr).getTime() + 24 * 60 * 60 * 1000;
+function expiresIn(createdAt: string, expiresAt?: string | null): { text: string; urgent: boolean } | null {
+  const expiry = expiresAt ? new Date(expiresAt).getTime() : new Date(createdAt).getTime() + 24 * 60 * 60 * 1000;
   const secs = Math.floor((expiry - Date.now()) / 1000);
   if (secs <= 0) return null;
+  const days = Math.floor(secs / 86400);
+  if (days >= 1) {
+    return { text: `${days}d ${Math.floor((secs % 86400) / 3600)}h`, urgent: days < 2 };
+  }
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  return { text: `${h}h ${m}m`, urgent: h < 6 };
+  return { text: `${h}h ${m}m`, urgent: true };
 }
 
 interface PriceSuggestion {
@@ -210,12 +214,28 @@ const BrokerDashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, [refreshData]);
 
-  // Save persistent state changes
+  // Sync saved requirements from API on mount
   useEffect(() => {
-    if (user?.id) {
-      localStorage.setItem(`broker_saved_requirements_${user.id}`, JSON.stringify(savedReqIds));
-    }
-  }, [savedReqIds, user?.id]);
+    const syncSavedFromApi = async () => {
+      if (!user?.id) return;
+      try {
+        const token = localStorage.getItem('carmatchr_token');
+        const res = await fetch(`${API_BASE}/api/requirements/saved`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSavedReqIds(data);
+          localStorage.setItem(`broker_saved_requirements_${user.id}`, JSON.stringify(data));
+        }
+      } catch (err) {
+        console.error('Failed to sync saved requirements from API:', err);
+      }
+    };
+    syncSavedFromApi();
+  }, [user?.id]);
 
   useEffect(() => {
     if (user?.id) {
@@ -317,6 +337,15 @@ const BrokerDashboard: React.FC = () => {
 
   // Sort requirements
   const sortedReqs = [...openReqs].sort((a, b) => {
+    switch (sortOrder) {
+      case 'oldest':  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'budget':  return parsePriceToNumber(b.budget) - parsePriceToNumber(a.budget);
+      default:        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+
+  const savedReqs = requirements.filter(r => savedReqIds.includes(r.id) && r.status === 'open');
+  const sortedSavedReqs = [...savedReqs].sort((a, b) => {
     switch (sortOrder) {
       case 'oldest':  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       case 'budget':  return parsePriceToNumber(b.budget) - parsePriceToNumber(a.budget);
@@ -470,17 +499,39 @@ const BrokerDashboard: React.FC = () => {
     toast.success(`Deal status updated to: ${progress}`);
   };
 
-  const toggleSave = (reqId: number) => {
-    setSavedReqIds(prev => {
-      const exists = prev.includes(reqId);
-      if (exists) {
-        toast.success('Requirement removed from Saved');
-        return prev.filter(id => id !== reqId);
+  const toggleSave = async (reqId: number) => {
+    const isSaved = savedReqIds.includes(reqId);
+    const method = isSaved ? 'DELETE' : 'POST';
+    const url = `${API_BASE}/api/requirements/${reqId}/${isSaved ? 'unsave' : 'save'}`;
+    const token = localStorage.getItem('carmatchr_token');
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        setSavedReqIds(prev => {
+          if (isSaved) {
+            toast.success('Requirement removed from Saved');
+            const updated = prev.filter(id => id !== reqId);
+            localStorage.setItem(`broker_saved_requirements_${user?.id}`, JSON.stringify(updated));
+            return updated;
+          } else {
+            toast.success('Requirement saved!');
+            const updated = [...prev, reqId];
+            localStorage.setItem(`broker_saved_requirements_${user?.id}`, JSON.stringify(updated));
+            return updated;
+          }
+        });
       } else {
-        toast.success('Requirement saved!');
-        return [...prev, reqId];
+        toast.error('Failed to update bookmark.');
       }
-    });
+    } catch (err) {
+      toast.error('Network error. Unable to bookmark.');
+    }
   };
 
   const saveProfile = (e: React.FormEvent) => {
@@ -594,6 +645,7 @@ const BrokerDashboard: React.FC = () => {
     }}>
       {[
         { id: 'requirements', label: `Available Requirements (${activeBuyerRequirementsCount})` },
+        { id: 'saved', label: `Saved Requirements (${savedReqIds.length})` },
         { id: 'offers', label: `My Offers (${offersSubmittedCount})` },
         { id: 'accepted', label: `Accepted Deals (${acceptedOffersCount})` },
         { id: 'closed', label: `Closed Deals (${closedDealsCount})` },
@@ -754,7 +806,7 @@ const BrokerDashboard: React.FC = () => {
             {sortedReqs.map(req => {
               const alreadyOffered = myOffers.some(o => o.requirementId === req.id);
               const isSaved = savedReqIds.includes(req.id);
-              const expires = expiresIn(req.createdAt);
+              const expires = expiresIn(req.createdAt, req.expiresAt);
               const responsesCount = offers.filter(o => o.requirementId === req.id).length;
               
               const fuelGuessed = getFuelType(req.model, req.description || '');
@@ -1359,6 +1411,236 @@ const BrokerDashboard: React.FC = () => {
                     );
                   })()}
 
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSavedView = () => {
+    return (
+      <div>
+        {/* Sorting and Filter controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            Saved Buyer Requirements ({sortedSavedReqs.length})
+          </h2>
+          
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowSortMenu(p => !p)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', background: '#fff', border: '1.5px solid #e2e8f0',
+                borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem', color: '#475569',
+                cursor: 'pointer', fontFamily: 'var(--font)'
+              }}
+            >
+              Sort: {SORT_LABELS[sortOrder]} <ChevronDown size={14} />
+            </button>
+            {showSortMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: '6px',
+                background: '#fff', border: '1px solid var(--color-gray-200)',
+                borderRadius: '12px', boxShadow: 'var(--shadow-lg)',
+                zIndex: 50, minWidth: '180px', overflow: 'hidden',
+              }}>
+                {(Object.entries(SORT_LABELS) as [SortOrder, string][]).map(([key, label]) => (
+                  <button key={key} onClick={() => { setSortOrder(key); setShowSortMenu(false); }}
+                    style={{
+                      display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+                      background: sortOrder === key ? 'rgba(230,57,70,0.08)' : '#fff',
+                      color: sortOrder === key ? 'var(--color-primary)' : 'var(--color-gray-700)',
+                      fontWeight: sortOrder === key ? 700 : 500, fontSize: '0.8125rem',
+                      textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font)',
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Grid/List of requirements */}
+        {sortedSavedReqs.length === 0 ? (
+          <div className="empty-state" style={{ padding: '64px 24px', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+            <Bookmark size={32} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>No Saved Requirements</h4>
+            <p style={{ fontSize: '0.8125rem', color: '#64748b' }}>Bookmarked requirements from your available search feed will show up here.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {sortedSavedReqs.map(req => {
+              const alreadyOffered = myOffers.some(o => o.requirementId === req.id);
+              const expires = expiresIn(req.createdAt, req.expiresAt);
+              const locGuessed = extractLocation(req.description || '');
+
+              return (
+                <div key={req.id} className="card animate-in" style={{ padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(15,23,42,0.02)' }}>
+                  
+                  {/* Top row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                          {req.make} {req.model} {req.variant ? `(${req.variant})` : ''}
+                        </h3>
+                        <span style={{
+                          fontSize: '0.6875rem',
+                          color: req.vehicleType === 'new' ? '#0f766e' : '#b45309',
+                          background: req.vehicleType === 'new' ? '#ccfbf1' : '#fef3c7',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em'
+                        }}>
+                          {req.vehicleType === 'new' ? 'New' : 'Used'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>Budget: <strong style={{ color: 'var(--color-primary)' }}>
+                          {req.budgetMin && req.budgetMax ? `₹${req.budgetMin}L - ₹${req.budgetMax}L` : req.budget}
+                        </strong></span>
+                        <span>•</span>
+                        <span>Location: <strong>{req.city && req.state ? `${req.city}, ${req.state}` : locGuessed}</strong></span>
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {expires && (
+                        <span style={{
+                          display: 'flex', alignItems: 'center', gap: '3px',
+                          fontSize: '0.6875rem', fontWeight: 700,
+                          color: expires.urgent ? '#e63946' : '#d97706',
+                          background: expires.urgent ? 'rgba(230,57,70,0.08)' : 'rgba(217,119,6,0.08)',
+                          padding: '3px 8px', borderRadius: '12px'
+                        }}>
+                          <Clock size={11} /> {expires.text} left
+                        </span>
+                      )}
+                      <span style={{
+                        padding: '3px 8px', borderRadius: '12px', fontSize: '0.6875rem', fontWeight: 800,
+                        background: 'rgba(5, 150, 105, 0.08)', color: '#059669', textTransform: 'uppercase'
+                      }}>
+                        Active
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions footer */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '16px', marginTop: '16px' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {alreadyOffered ? (
+                        <span style={{
+                          padding: '6px 14px', borderRadius: '10px', background: 'rgba(5, 150, 105, 0.08)',
+                          color: '#059669', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                        }}>
+                          <Check size={12} /> Offer Submitted
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setActiveReqId(activeReqId === req.id ? null : req.id)}
+                          style={{
+                            padding: '8px 16px', background: 'var(--color-primary)', color: '#fff',
+                            border: 'none', borderRadius: '10px', fontWeight: 800, fontSize: '0.8125rem',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                          }}
+                        >
+                          <Send size={13} /> Send Offer
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => setDetailsDrawerReqId(detailsDrawerReqId === req.id ? null : req.id)}
+                        style={{
+                          padding: '8px 14px', background: '#fff', border: '1.5px solid #cbd5e1',
+                          color: '#475569', borderRadius: '10px', fontWeight: 700, fontSize: '0.8125rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        View Details
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => toggleSave(req.id)}
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '4px',
+                        fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font)'
+                      }}
+                    >
+                      <Star size={14} fill="#fbbf24" />
+                      Remove Bookmark
+                    </button>
+                  </div>
+
+                  {/* Inline Submit Offer Form */}
+                  {activeReqId === req.id && (
+                    <form
+                      onSubmit={e => handleSubmitOffer(e, req.id)}
+                      className="animate-in"
+                      style={{
+                        marginTop: '16px', padding: '20px',
+                        background: '#f8fafc', borderRadius: '12px',
+                        border: '1.5px solid #e2e8f0'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <h4 style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Send size={13} color="var(--color-primary)" /> Send Proposal
+                        </h4>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Offer Price (in Lakhs) *</label>
+                            <input
+                              required
+                              type="text"
+                              placeholder="e.g. 7.8"
+                              value={price}
+                              onChange={e => setPrice(e.target.value)}
+                              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Vehicle Variant *</label>
+                            <input
+                              required
+                              type="text"
+                              placeholder="e.g. VXI / Zeta"
+                              value={variant}
+                              onChange={e => setVariant(e.target.value)}
+                              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Comments / Details *</label>
+                          <textarea
+                            required
+                            placeholder="Describe condition, history, colors, or warranty terms..."
+                            value={details}
+                            onChange={e => setDetails(e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', minHeight: '80px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="submit" className="btn btn-primary btn-sm">Submit Proposal</button>
+                        <button type="button" onClick={() => setActiveReqId(null)} className="btn btn-secondary btn-sm">Cancel</button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               );
             })}
@@ -2090,6 +2372,7 @@ const BrokerDashboard: React.FC = () => {
         {[
           { id: 'dashboard', label: 'Dashboard', icon: <Target size={16} />, badge: 0 },
           { id: 'requirements', label: 'Available Requirements', icon: <Car size={16} />, badge: activeBuyerRequirementsCount },
+          { id: 'saved', label: 'Saved Requirements', icon: <Bookmark size={16} />, badge: savedReqIds.length },
           { id: 'offers', label: 'My Offers', icon: <Send size={16} />, badge: offersSubmittedCount },
           { id: 'accepted', label: 'Accepted Deals', icon: <Star size={16} />, badge: acceptedOffersCount },
           { id: 'closed', label: 'Closed Deals', icon: <CheckCircle2 size={16} />, badge: closedDealsCount },
@@ -2211,6 +2494,7 @@ const BrokerDashboard: React.FC = () => {
               <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '4px' }}>
                 {currentTab === 'dashboard' ? 'Broker Dashboard' :
                  currentTab === 'requirements' ? 'Available Requirements' :
+                 currentTab === 'saved' ? 'Saved Requirements' :
                  currentTab === 'offers' ? 'My Offers' :
                  currentTab === 'accepted' ? 'Accepted Deals' :
                  currentTab === 'closed' ? 'Closed Deals' :
@@ -2221,6 +2505,7 @@ const BrokerDashboard: React.FC = () => {
               <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>
                 {currentTab === 'dashboard' ? 'Overview of your sales progression, pending requirements, and actions.' :
                  currentTab === 'requirements' ? 'Verfied dealer and buyer specifications currently requesting offers.' :
+                 currentTab === 'saved' ? 'Your bookmarked buyer requirements for quick access.' :
                  currentTab === 'offers' ? 'Edit, view, and manage your sent proposals and buyer statuses.' :
                  currentTab === 'accepted' ? 'Fulfill negotiations, contact buyer directly, and close your orders.' :
                  currentTab === 'closed' ? 'Archive log of your completed transactions and sales revenue.' :
@@ -2233,14 +2518,15 @@ const BrokerDashboard: React.FC = () => {
         </div>
 
         {/* Global Stats bar for main dashboard elements */}
-        {(['dashboard', 'requirements', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderStatsRow()}
+        {(['dashboard', 'requirements', 'saved', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderStatsRow()}
 
         {/* Main tabs bar for ease of jumping */}
-        {(['requirements', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderTabsRow()}
+        {(['requirements', 'saved', 'offers', 'accepted', 'closed'].includes(currentTab)) && renderTabsRow()}
 
         {/* Main Content Render Switch */}
         {currentTab === 'dashboard' && renderDashboardView()}
         {currentTab === 'requirements' && renderRequirementsView()}
+        {currentTab === 'saved' && renderSavedView()}
         {currentTab === 'offers' && renderOffersView()}
         {currentTab === 'accepted' && renderAcceptedDealsView()}
         {currentTab === 'closed' && renderClosedDealsView()}

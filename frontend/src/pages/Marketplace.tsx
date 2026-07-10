@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../services/api';
 import {
-  Search, SlidersHorizontal, Heart, Fuel, Gauge,
+  Search, SlidersHorizontal, Fuel, Gauge,
   MapPin, Phone, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -18,6 +19,7 @@ import OtpModal from '../components/OtpModal';
 import toast from 'react-hot-toast';
 
 const Marketplace: React.FC = () => {
+  const navigate = useNavigate();
   const { brokerListings } = useData();
   const { t } = useLanguage();
   const { brands } = useCatalog();
@@ -28,9 +30,6 @@ const Marketplace: React.FC = () => {
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [sort, setSort] = useState<SortOption>('relevance');
-  const [wishlist, setWishlist] = useState<Set<string>>(() => {
-    try { const s = localStorage.getItem('carmatchr_wishlist'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
-  });
   const [contactModal, setContactModal] = useState<{
     brokerName: string;
     listingId: string;
@@ -79,15 +78,6 @@ const Marketplace: React.FC = () => {
   // --- Derived ---
   const filtered = useMemo(() => sortListings(filterListings(allListings, filters), sort), [allListings, filters, sort]);
 
-  const toggleWish = (id: string) => {
-    setWishlist(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
-      localStorage.setItem('carmatchr_wishlist', JSON.stringify([...next]));
-      return next;
-    });
-  };
-
   const handleContactBroker = (car: CarListing) => {
     const numericId = car.id.startsWith('bl-') ? parseInt(car.id.replace('bl-', ''), 10) : parseInt(car.id, 10);
     const bl = brokerListings.find(l => l.id === numericId);
@@ -101,6 +91,22 @@ const Marketplace: React.FC = () => {
       buyerPhone: cleanPhone,
       verified: false
     });
+  };
+
+  const checkOtpBypass = (phoneNum: string) => {
+    const cleanPhone = phoneNum.trim();
+    const fullPhone = `+91${cleanPhone}`;
+    if (user && user.phone === fullPhone && user.phoneVerified) {
+      return true;
+    }
+    const cachedTime = sessionStorage.getItem(`verified_phone_${cleanPhone}`);
+    if (cachedTime) {
+      const parsedTime = parseInt(cachedTime, 10);
+      if (!isNaN(parsedTime) && (Date.now() - parsedTime < 24 * 60 * 60 * 1000)) {
+        return true;
+      }
+    }
+    return false;
   };
 
   const handleVerifyContactRequest = (e: React.FormEvent) => {
@@ -118,7 +124,13 @@ const Marketplace: React.FC = () => {
       toast.error('Please enter a valid 10-digit mobile number.');
       return;
     }
-    setShowContactOtp(true);
+
+    const cleanPhone = contactModal.buyerPhone.trim();
+    if (checkOtpBypass(cleanPhone)) {
+      submitContactLead('BYPASS');
+    } else {
+      setShowContactOtp(true);
+    }
   };
 
   const submitContactLead = async (otp: string) => {
@@ -128,9 +140,17 @@ const Marketplace: React.FC = () => {
     if (!bl) return;
 
     try {
+      const token = localStorage.getItem('carmatchr_token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`${API_BASE}/api/listings/${bl.id}/contact`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           buyerName: contactModal.buyerName.trim(),
           buyerEmail: contactModal.buyerEmail.trim(),
@@ -140,9 +160,14 @@ const Marketplace: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (otp === 'BYPASS') {
+          sessionStorage.removeItem(`verified_phone_${contactModal.buyerPhone.trim()}`);
+        }
         toast.error(data.error || 'Verification failed. Please check the code.');
         return;
       }
+      
+      sessionStorage.setItem(`verified_phone_${contactModal.buyerPhone.trim()}`, Date.now().toString());
       setContactModal(prev => prev ? { ...prev, verified: true } : null);
       toast.success('Contact request successfully verified and logged!');
     } catch {
@@ -161,8 +186,7 @@ const Marketplace: React.FC = () => {
     { value: 'km-low', label: 'Lowest KM' },
   ];
 
-  // --- CAR CARD RENDERER ---
-  const renderCarCard = (car: typeof carListings[0], showWish = true) => {
+  const renderCarCard = (car: typeof carListings[0]) => {
     const hasMultipleImages = car.images && car.images.length > 1;
     const hasImages = car.images && car.images.length > 0;
     const currentIndex = activeImage[car.id] || 0;
@@ -187,7 +211,7 @@ const Marketplace: React.FC = () => {
     };
 
     return (
-      <div key={car.id} className="card card-hoverable" style={{ padding: 0, overflow: 'hidden' }}>
+      <div key={car.id} className="card card-hoverable" onClick={() => navigate(`/marketplace/${car.id}`)} style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
         <div style={{ position: 'relative', height: '180px', overflow: 'hidden' }}>
           <img src={currentImageUrl} alt={`${car.make} ${car.model}`}
             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s' }}
@@ -243,18 +267,6 @@ const Marketplace: React.FC = () => {
               padding: '3px 8px', borderRadius: 'var(--radius-full)',
               letterSpacing: '0.03em', textTransform: 'uppercase',
             }}>🏪 Broker Listed</span>
-          )}
-          {showWish && (
-            <button onClick={e => { e.stopPropagation(); toggleWish(car.id); }}
-              style={{
-                position: 'absolute', top: '10px', right: '10px',
-                background: 'rgba(255,255,255,0.9)', border: 'none', cursor: 'pointer',
-                width: '32px', height: '32px', borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'transform 0.2s',
-              }}>
-              <Heart size={15} fill={wishlist.has(car.id) ? '#e63946' : 'none'} color={wishlist.has(car.id) ? '#e63946' : '#64748b'} />
-            </button>
           )}
         </div>
 

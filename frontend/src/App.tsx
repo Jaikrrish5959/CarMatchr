@@ -14,6 +14,7 @@ const Marketplace = React.lazy(() => import('./pages/Marketplace'));
 const NewCarDealers = React.lazy(() => import('./pages/Dealers/NewCarDealers'));
 const UsedCarDealers = React.lazy(() => import('./pages/Dealers/UsedCarDealers'));
 const DealerProfile = React.lazy(() => import('./pages/Dealers/DealerProfile'));
+const ListingDetails = React.lazy(() => import('./pages/ListingDetails'));
 
 const ProtectedRoute = ({ children, allowedRole }: { children: React.ReactNode, allowedRole?: 'buyer' | 'broker' | 'admin' }) => {
   const { user } = useAuth();
@@ -48,6 +49,7 @@ function App() {
             <Route path="login" element={<Login />} />
             <Route path="register" element={<Register />} />
             <Route path="marketplace" element={<Marketplace />} />
+            <Route path="marketplace/:id" element={<ListingDetails />} />
             <Route path="dealers/new" element={<NewCarDealers />} />
             <Route path="dealers/used" element={<UsedCarDealers />} />
             <Route path="dealers/:id" element={<DealerProfile />} />

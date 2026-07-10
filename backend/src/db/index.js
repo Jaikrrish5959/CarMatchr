@@ -70,6 +70,9 @@ export async function initDb() {
       maps_link TEXT,
       language VARCHAR(50),
       phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      terms_accepted BOOLEAN NOT NULL DEFAULT FALSE,
+      privacy_accepted BOOLEAN NOT NULL DEFAULT FALSE,
+      marketing_consent BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(email, role)
     );
@@ -210,6 +213,20 @@ export async function initDb() {
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_contact_listing
         FOREIGN KEY (listing_id) REFERENCES broker_listings(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS standard_inquiries (
+      id SERIAL PRIMARY KEY,
+      listing_id VARCHAR(50) NOT NULL,
+      buyer_name VARCHAR(150),
+      buyer_email VARCHAR(255),
+      buyer_phone VARCHAR(20),
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS verified_guest_sessions (
+      phone VARCHAR(50) PRIMARY KEY,
+      expires_at TIMESTAMP NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS admin_logs (
@@ -404,6 +421,74 @@ export async function initDb() {
     `);
   } catch (err) {
     console.error('Migration error (phone_verifications table):', err);
+  }
+
+  // Update status CHECK constraint for users soft-delete status
+  try {
+    await db.run("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;");
+  } catch (err) {
+    console.error('Migration error (drop users_status_check constraint):', err);
+  }
+  try {
+    await db.run("ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'pending', 'deleted'));");
+  } catch (err) {
+    if (!err.message.includes('already exists') && !err.message.includes('duplicate constraint')) {
+      console.error('Migration error (add users_status_check constraint):', err);
+    }
+  }
+
+  // Add notification preferences and founding year columns to users table
+  const notifPrefsCols = [
+    { name: 'push_notifications', type: 'BOOLEAN NOT NULL DEFAULT TRUE' },
+    { name: 'email_notifications', type: 'BOOLEAN NOT NULL DEFAULT TRUE' },
+    { name: 'sms_notifications', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+    { name: 'new_requirement_alerts', type: 'BOOLEAN NOT NULL DEFAULT TRUE' },
+    { name: 'offer_updates', type: 'BOOLEAN NOT NULL DEFAULT TRUE' },
+    { name: 'buyer_messages', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+    { name: 'founding_year', type: 'INTEGER' },
+    { name: 'terms_accepted', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+    { name: 'privacy_accepted', type: 'BOOLEAN NOT NULL DEFAULT FALSE' },
+    { name: 'marketing_consent', type: 'BOOLEAN NOT NULL DEFAULT FALSE' }
+  ];
+  for (const col of notifPrefsCols) {
+    try {
+      await db.run(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (users column ${col.name}):`, err);
+      }
+    }
+  }
+
+  // Add expires_at and extended columns to requirements table
+  const reqExpiryCols = [
+    { name: 'expires_at', type: 'TIMESTAMP' },
+    { name: 'extended', type: 'BOOLEAN NOT NULL DEFAULT FALSE' }
+  ];
+  for (const col of reqExpiryCols) {
+    try {
+      await db.run(`ALTER TABLE requirements ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    } catch (err) {
+      if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+        console.error(`Migration error (requirements column ${col.name}):`, err);
+      }
+    }
+  }
+
+  // Create saved_requirements join table
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS saved_requirements (
+        broker_id INTEGER NOT NULL,
+        requirement_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(broker_id, requirement_id),
+        CONSTRAINT fk_saved_req_broker FOREIGN KEY(broker_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_saved_req_requirement FOREIGN KEY(requirement_id) REFERENCES requirements(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (err) {
+    console.error('Migration error (saved_requirements table):', err);
   }
 }
 

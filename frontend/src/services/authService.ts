@@ -15,6 +15,9 @@ export interface AuthUser {
   license?: string;
   city?: string;
   dealerType?: 'new' | 'used' | 'both';
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  marketingConsent?: boolean;
 }
 
 export interface LoginResult {
@@ -221,6 +224,9 @@ export async function registerBrokerWithGoogle(data: {
   credential: string;
   dealerType: 'new' | 'used' | 'both';
   phoneOtp?: string;
+  termsAccepted: boolean;
+  privacyAccepted: boolean;
+  marketingConsent?: boolean;
 }): Promise<LoginResult> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/google/register`, {
@@ -270,6 +276,68 @@ export async function verifyOtp(phone: string, otp: string): Promise<{ ok: boole
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: data.error || 'OTP verification failed.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function sendPhoneLoginOtp(phone: string, role: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/phone-login-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Failed to send phone verification code.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function verifyPhoneLoginOtp(phone: string, role: string, otp: string): Promise<LoginResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/phone-login-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, role, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Verification code failed.' };
+    const { token, user } = data as { token: string; user: AuthUser };
+    saveSession(token, user);
+    return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function forgotPassword(email: string, role: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Failed to send password reset code.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function resetPassword(email: string, role: string, otp: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role, otp, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Failed to reset password.' };
     return { ok: true };
   } catch {
     return { ok: false, error: 'Server unavailable. Please try again.' };

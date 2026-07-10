@@ -26,6 +26,17 @@ export interface User {
   website?: string;
   mapsLink?: string;
   language?: string;
+  pushNotifications?: boolean;
+  emailNotifications?: boolean;
+  smsNotifications?: boolean;
+  newRequirementAlerts?: boolean;
+  offerUpdates?: boolean;
+  buyerMessages?: boolean;
+  foundingYear?: number;
+  isGoogleUser?: boolean;
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  marketingConsent?: boolean;
 }
 
 interface AuthContextType {
@@ -45,10 +56,17 @@ interface AuthContextType {
     credential: string;
     dealerType: 'new' | 'used' | 'both';
     phoneOtp?: string;
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    marketingConsent?: boolean;
   }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   updateStatus: (status: 'active' | 'pending') => Promise<void>;
+  sendPhoneLoginOtp: (phone: string, role: string) => Promise<{ ok: boolean; error?: string }>;
+  verifyPhoneLoginOtp: (phone: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  forgotPassword: (email: string, role: string) => Promise<{ ok: boolean; error?: string }>;
+  resetPassword: (email: string, role: string, otp: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,6 +81,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       authService.clearSession();
     }
+  }, [user]);
+
+  // Sync user language preferences with LanguageProvider
+  useEffect(() => {
+    if (user && user.language) {
+      const event = new CustomEvent('carmatchr_login_sync', { detail: { language: user.language } });
+      window.dispatchEvent(event);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.langName) {
+        updateUser({ language: detail.langName });
+      }
+    };
+    window.addEventListener('carmatchr_user_lang_changed', handler);
+    return () => window.removeEventListener('carmatchr_user_lang_changed', handler);
   }, [user]);
 
   // If the stored session token is missing or no longer valid, clear it early.
@@ -172,6 +209,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       credential: string;
       dealerType: 'new' | 'used' | 'both';
       phoneOtp?: string;
+      termsAccepted: boolean;
+      privacyAccepted: boolean;
+      marketingConsent?: boolean;
     }
   ): Promise<{ ok: boolean; error?: string; user?: User }> => {
     const result = await authService.registerBrokerWithGoogle(data);
@@ -212,6 +252,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateUser({ status });
   };
 
+  const sendPhoneLoginOtp = async (phone: string, role: string) => {
+    return await authService.sendPhoneLoginOtp(phone, role);
+  };
+
+  const verifyPhoneLoginOtp = async (phone: string, role: string, otp: string) => {
+    const result = await authService.verifyPhoneLoginOtp(phone, role, otp);
+    if (result.ok && result.user) {
+      setUser(result.user as User);
+      return { ok: true, user: result.user as User };
+    }
+    return { ok: false, error: result.error };
+  };
+
+  const forgotPassword = async (email: string, role: string) => {
+    return await authService.forgotPassword(email, role);
+  };
+
+  const resetPassword = async (email: string, role: string, otp: string, newPassword: string) => {
+    return await authService.resetPassword(email, role, otp, newPassword);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -225,6 +286,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         updateUser,
         updateStatus,
+        sendPhoneLoginOtp,
+        verifyPhoneLoginOtp,
+        forgotPassword,
+        resetPassword,
       }}
     >
       {children}

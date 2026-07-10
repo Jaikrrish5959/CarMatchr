@@ -39,3 +39,6 @@ backend/db/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+# Postgres local database data
+backend/db/pgdata/

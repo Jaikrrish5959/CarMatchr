@@ -37,6 +37,9 @@ const Login: React.FC = () => {
     dealerType: 'new' as 'new' | 'used' | 'both',
   });
 
+  const [googleTermsAccepted, setGoogleTermsAccepted] = useState(false);
+  const [googleMarketingConsent, setGoogleMarketingConsent] = useState(false);
+
   const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
 
   useEffect(() => {
@@ -79,7 +82,26 @@ const Login: React.FC = () => {
     return citiesList.filter((c) => c.state === brokerForm.state);
   }, [citiesList, brokerForm.state]);
 
-  const { login, verifyLogin, loginWithGoogle, registerBrokerWithGoogle } = useAuth();
+  const [loginMode, setLoginMode] = useState<'email' | 'phone' | 'forgot' | 'reset'>('email');
+  const [phone, setPhone] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const {
+    login,
+    verifyLogin,
+    loginWithGoogle,
+    registerBrokerWithGoogle,
+    sendPhoneLoginOtp,
+    verifyPhoneLoginOtp,
+    forgotPassword,
+    resetPassword
+  } = useAuth();
   const navigate = useNavigate();
 
   // Verification flow states
@@ -199,6 +221,11 @@ const Login: React.FC = () => {
       return;
     }
 
+    if (!googleTermsAccepted) {
+      toast.error('You must accept the Terms of Service & Privacy Policy.');
+      return;
+    }
+
     setLoading(true);
     try {
        const result = await registerBrokerWithGoogle({
@@ -210,6 +237,9 @@ const Login: React.FC = () => {
         phone: brokerForm.phone.trim(),
         credential: googleProfileData.credential,
         dealerType: brokerForm.dealerType,
+        termsAccepted: googleTermsAccepted,
+        privacyAccepted: googleTermsAccepted,
+        marketingConsent: googleMarketingConsent,
       });
 
       if (!result.ok) {
@@ -223,6 +253,119 @@ const Login: React.FC = () => {
       navigate('/broker-dashboard');
     } catch (err: any) {
       toast.error(err.message || 'An error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone.trim()) {
+      toast.error('Please enter your phone number.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await sendPhoneLoginOtp(phone.trim(), role);
+      if (!result.ok) {
+        setError(result.error || 'Failed to send OTP.');
+        toast.error(result.error || 'Failed to send OTP.');
+        return;
+      }
+      setPhoneOtpSent(true);
+      toast.success('SMS verification code sent!');
+    } catch (err: any) {
+      setError(err.message || 'An error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneOtp.trim() || phoneOtp.length < 6) {
+      toast.error('Please enter a valid 6-digit code.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await verifyPhoneLoginOtp(phone.trim(), role, phoneOtp.trim());
+      if (!result.ok || !result.user) {
+        setError(result.error || 'Verification failed.');
+        toast.error(result.error || 'Verification failed.');
+        return;
+      }
+      toast.success('Welcome back!');
+      if (result.user.role === 'broker') {
+        navigate('/broker-dashboard');
+      } else if (result.user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/buyer-dashboard');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      toast.error('Please enter your email.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await forgotPassword(resetEmail.trim(), role);
+      if (!result.ok) {
+        setError(result.error || 'Failed to send reset code.');
+        toast.error(result.error || 'Failed to send reset code.');
+        return;
+      }
+      setLoginMode('reset');
+      toast.success('Reset code sent to your email!');
+    } catch (err: any) {
+      setError(err.message || 'An error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetOtp.trim() || resetOtp.length < 6) {
+      toast.error('Please enter a valid 6-digit code.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await resetPassword(resetEmail.trim(), role, resetOtp.trim(), newPassword);
+      if (!result.ok) {
+        setError(result.error || 'Failed to reset password.');
+        toast.error(result.error || 'Failed to reset password.');
+        return;
+      }
+      setLoginMode('email');
+      setResetOtp('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Password reset successful! You can now log in.');
+    } catch (err: any) {
+      setError(err.message || 'An error occurred.');
     } finally {
       setLoading(false);
     }
@@ -490,6 +633,27 @@ const Login: React.FC = () => {
                   />
                 </div>
 
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px', marginTop: '14px' }}>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={googleTermsAccepted}
+                      onChange={e => { setGoogleTermsAccepted(e.target.checked); setError(''); }}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I agree to the <a href="/terms" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Terms of Service</a> & <a href="/privacy" target="_blank" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Privacy Policy</a> *</span>
+                  </label>
+                  <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-gray-600)' }}>
+                    <input
+                      type="checkbox"
+                      checked={googleMarketingConsent}
+                      onChange={e => setGoogleMarketingConsent(e.target.checked)}
+                      style={{ marginTop: '3px', cursor: 'pointer' }}
+                    />
+                    <span>I consent to receive marketing updates & promotions (optional)</span>
+                  </label>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
                   <button
                     type="button" className="btn btn-outline btn-block"
@@ -505,61 +669,307 @@ const Login: React.FC = () => {
               </form>
             </>
           ) : (
-            /* Standard Login Form */
+            /* Standard Login & Reset Forms */
             <>
-              <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                <div style={{
-                  width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
-                  background: 'var(--color-primary-light)', color: 'var(--color-primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 16px',
-                }}>
-                  <LogIn size={22} />
+              {/* Tab Selector for Login Mode */}
+              {loginMode !== 'reset' && (
+                <div className="tab-group" style={{ marginBottom: '24px' }}>
+                  <button
+                    type="button"
+                    className={`tab-btn ${loginMode === 'email' ? 'active' : ''}`}
+                    onClick={() => { setLoginMode('email'); setError(''); }}
+                  >
+                    Email Login
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-btn ${loginMode === 'phone' ? 'active' : ''}`}
+                    onClick={() => { setLoginMode('phone'); setError(''); }}
+                  >
+                    Phone OTP Login
+                  </button>
                 </div>
-                <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Welcome back</h2>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Log in to your CarMatchr account</p>
-              </div>
+              )}
 
-              <form onSubmit={handleSubmit} noValidate>
-                 <div className="tab-group" style={{ marginBottom: '16px' }}>
-                  <button type="button" className={`tab-btn ${role === 'buyer' ? 'active' : ''}`} onClick={() => setRole('buyer')}>
-                    Buyer
-                  </button>
-                  <button type="button" className={`tab-btn ${role === 'broker' ? 'active' : ''}`} onClick={() => setRole('broker')}>
-                    Broker / Dealer
-                  </button>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <input
-                    type="email" className="form-control"
-                    value={email} onChange={e => { setEmail(e.target.value); setError(''); }}
-                    placeholder="you@example.com" required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Password</label>
-                  <input
-                    type="password" className="form-control"
-                    value={password} onChange={e => { setPassword(e.target.value); setError(''); }}
-                    placeholder="••••••••" required
-                  />
-                </div>
-                <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
-                  {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Logging in…</> : 'Log In'}
-                </button>
-                {error && (
+              {loginMode === 'email' && (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '28px' }}>
                     <div style={{
-                      marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
-                      background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
-                      fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                      width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
+                      background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 16px',
                     }}>
-                      <AlertCircle size={15} /> {error}
+                      <LogIn size={22} />
                     </div>
-                )}
-              </form>
+                    <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Welcome back</h2>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Log in to your CarMatchr account</p>
+                  </div>
 
-              {role !== 'admin' && googleClientId && (
+                  <form onSubmit={handleSubmit} noValidate>
+                    <div className="tab-group" style={{ marginBottom: '16px' }}>
+                      <button type="button" className={`tab-btn ${role === 'buyer' ? 'active' : ''}`} onClick={() => setRole('buyer')}>
+                        Buyer
+                      </button>
+                      <button type="button" className={`tab-btn ${role === 'broker' ? 'active' : ''}`} onClick={() => setRole('broker')}>
+                        Broker / Dealer
+                      </button>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Email Address</label>
+                      <input
+                        type="email" className="form-control"
+                        value={email} onChange={e => { setEmail(e.target.value); setError(''); }}
+                        placeholder="you@example.com" required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label className="form-label" style={{ marginBottom: 0 }}>Password</label>
+                        <button
+                          type="button"
+                          onClick={() => { setLoginMode('forgot'); setError(''); }}
+                          style={{
+                            background: 'none', border: 'none', padding: 0,
+                            color: 'var(--color-primary)', fontSize: '0.75rem', fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'var(--font)'
+                          }}
+                        >
+                          Forgot Password?
+                        </button>
+                      </div>
+                      <input
+                        type="password" className="form-control"
+                        value={password} onChange={e => { setPassword(e.target.value); setError(''); }}
+                        placeholder="••••••••" required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+                      {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Logging in…</> : 'Log In'}
+                    </button>
+                    {error && (
+                      <div style={{
+                        marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                        background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                        fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                      }}>
+                        <AlertCircle size={15} /> {error}
+                      </div>
+                    )}
+                  </form>
+                </>
+              )}
+
+              {loginMode === 'phone' && (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
+                      background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 16px',
+                    }}>
+                      <LogIn size={22} />
+                    </div>
+                    <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Phone OTP Login</h2>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Log in using your registered mobile number</p>
+                  </div>
+
+                  <form onSubmit={phoneOtpSent ? handleVerifyPhoneOtp : handleSendPhoneOtp} noValidate>
+                    <div className="tab-group" style={{ marginBottom: '16px' }}>
+                      <button type="button" className={`tab-btn ${role === 'buyer' ? 'active' : ''}`} onClick={() => setRole('buyer')}>
+                        Buyer
+                      </button>
+                      <button type="button" className={`tab-btn ${role === 'broker' ? 'active' : ''}`} onClick={() => setRole('broker')}>
+                        Broker / Dealer
+                      </button>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Phone Number</label>
+                      <input
+                        type="tel" className="form-control"
+                        value={phone} onChange={e => { setPhone(e.target.value); setError(''); }}
+                        placeholder="+91 9876543210" required
+                        disabled={phoneOtpSent}
+                        style={phoneOtpSent ? { background: '#f5f5f5', color: '#888', cursor: 'not-allowed' } : {}}
+                      />
+                    </div>
+
+                    {phoneOtpSent && (
+                      <div className="form-group">
+                        <label className="form-label">Enter 6-Digit OTP Code</label>
+                        <input
+                          type="text" maxLength={6} className="form-control"
+                          value={phoneOtp} onChange={e => { setPhoneOtp(e.target.value.replace(/\D/g, '')); setError(''); }}
+                          placeholder="000000" required
+                          style={{
+                            fontSize: '1.25rem', letterSpacing: '6px', textAlign: 'center'
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+                      {loading ? (
+                        <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Loading…</>
+                      ) : phoneOtpSent ? (
+                        'Verify & Log In'
+                      ) : (
+                        'Send OTP'
+                      )}
+                    </button>
+
+                    {phoneOtpSent && (
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-block"
+                        style={{ marginTop: '10px' }}
+                        onClick={() => { setPhoneOtpSent(false); setPhoneOtp(''); setError(''); }}
+                        disabled={loading}
+                      >
+                        Change Phone Number
+                      </button>
+                    )}
+
+                    {error && (
+                      <div style={{
+                        marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                        background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                        fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                      }}>
+                        <AlertCircle size={15} /> {error}
+                      </div>
+                    )}
+                  </form>
+                </>
+              )}
+
+              {loginMode === 'forgot' && (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
+                      background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 16px',
+                    }}>
+                      <LogIn size={22} />
+                    </div>
+                    <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Forgot Password</h2>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Enter your email to receive a password reset code</p>
+                  </div>
+
+                  <form onSubmit={handleForgotPasswordSubmit} noValidate>
+                    <div className="tab-group" style={{ marginBottom: '16px' }}>
+                      <button type="button" className={`tab-btn ${role === 'buyer' ? 'active' : ''}`} onClick={() => setRole('buyer')}>
+                        Buyer
+                      </button>
+                      <button type="button" className={`tab-btn ${role === 'broker' ? 'active' : ''}`} onClick={() => setRole('broker')}>
+                        Broker / Dealer
+                      </button>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Email Address</label>
+                      <input
+                        type="email" className="form-control"
+                        value={resetEmail} onChange={e => { setResetEmail(e.target.value); setError(''); }}
+                        placeholder="you@example.com" required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+                      {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Sending Code…</> : 'Send Reset Code'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-block"
+                      style={{ marginTop: '10px' }}
+                      onClick={() => { setLoginMode('email'); setError(''); }}
+                      disabled={loading}
+                    >
+                      Back to Login
+                    </button>
+                    {error && (
+                      <div style={{
+                        marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                        background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                        fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                      }}>
+                        <AlertCircle size={15} /> {error}
+                      </div>
+                    )}
+                  </form>
+                </>
+              )}
+
+              {loginMode === 'reset' && (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: 'var(--radius-lg)',
+                      background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      margin: '0 auto 16px',
+                    }}>
+                      <LogIn size={22} />
+                    </div>
+                    <h2 style={{ fontSize: '1.375rem', fontWeight: 800, marginBottom: '4px' }}>Reset Password</h2>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Enter the code sent to your email and set your new password</p>
+                  </div>
+
+                  <form onSubmit={handleResetPasswordSubmit} noValidate>
+                    <div className="form-group">
+                      <label className="form-label">Reset Code</label>
+                      <input
+                        type="text" maxLength={6} className="form-control"
+                        value={resetOtp} onChange={e => { setResetOtp(e.target.value.replace(/\D/g, '')); setError(''); }}
+                        placeholder="000000" required
+                        style={{
+                          fontSize: '1.25rem', letterSpacing: '6px', textAlign: 'center'
+                        }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">New Password</label>
+                      <input
+                        type="password" className="form-control"
+                        value={newPassword} onChange={e => { setNewPassword(e.target.value); setError(''); }}
+                        placeholder="Min 6 characters" required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Confirm New Password</label>
+                      <input
+                        type="password" className="form-control"
+                        value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
+                        placeholder="••••••••" required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary btn-block btn-lg" style={{ marginTop: '8px' }} disabled={loading}>
+                      {loading ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Resetting…</> : 'Reset Password'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-block"
+                      style={{ marginTop: '10px' }}
+                      onClick={() => { setLoginMode('forgot'); setError(''); }}
+                      disabled={loading}
+                    >
+                      Back
+                    </button>
+                    {error && (
+                      <div style={{
+                        marginTop: '12px', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                        background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+                        fontSize: '0.8125rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px',
+                      }}>
+                        <AlertCircle size={15} /> {error}
+                      </div>
+                    )}
+                  </form>
+                </>
+              )}
+
+              {loginMode !== 'forgot' && loginMode !== 'reset' && role !== 'admin' && googleClientId && (
                 <>
                   <div style={{
                     display: 'flex',

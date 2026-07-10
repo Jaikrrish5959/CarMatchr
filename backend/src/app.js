@@ -132,6 +132,36 @@ async function sendOtpEmail(email, otp) {
   if (usingDevFallback) {
     console.log(`Verification OTP for ${email}: ${otp}`);
   }
+}
+
+async function sendPasswordResetEmail(email, otp) {
+  const mailTransporter = await getTransporter();
+  const usingDevFallback = process.env.NODE_ENV === 'development' && !(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  await mailTransporter.sendMail({
+    from: `"${process.env.SMTP_FROM_NAME || 'CarMatchr Verification'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || testAccount?.user}>`,
+    to: email,
+    subject: 'CarMatchr - Password Reset Code',
+    text: `Your CarMatchr password reset code is: ${otp}. This code is valid for 5 minutes.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #E53935; text-align: center;">CarMatchr</h2>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;" />
+        <p>Hello,</p>
+        <p>You requested to reset your password for your CarMatchr account. Please use the following 6-digit verification code to complete your password reset:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; background: #f1f5f9; padding: 12px 24px; border-radius: 6px; border: 1px dashed #cbd5e1;">${otp}</span>
+        </div>
+        <p style="color: #64748b; font-size: 14px;">This code is valid for <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-top: 30px; margin-bottom: 15px;" />
+        <p style="font-size: 12px; color: #94a3b8; text-align: center;">&copy; ${new Date().getFullYear()} CarMatchr. All rights reserved.</p>
+      </div>
+    `,
+  });
+
+  if (usingDevFallback) {
+    console.log(`Password reset OTP for ${email}: ${otp}`);
+  }
 
   if (usingDevFallback && info?.messageId) {
     const previewUrl = nodemailer.getTestMessageUrl(info);
@@ -157,6 +187,9 @@ const registerSchema = z.object({
   city: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   dealerType: z.enum(['new', 'used', 'both']).optional().nullable(),
+  termsAccepted: z.boolean(),
+  privacyAccepted: z.boolean(),
+  marketingConsent: z.boolean().optional(),
 });
 
 const loginSchema = z.object({
@@ -174,6 +207,9 @@ const googleBrokerRegisterSchema = z.object({
   phone: z.string().min(1, 'Phone number is required.'),
   credential: z.string().min(1, 'Google credential is required.'),
   dealerType: z.enum(['new', 'used', 'both'], { required_error: 'Dealer Type is required.' }),
+  termsAccepted: z.boolean(),
+  privacyAccepted: z.boolean(),
+  marketingConsent: z.boolean().optional(),
 });
 
 const requirementSchema = z.object({
@@ -206,6 +242,7 @@ const requirementSchema = z.object({
   visibility: z.enum(['marketplace', 'exclusive']).optional().default('marketplace'),
   exclusiveDealerId: z.union([z.string(), z.number()]).optional().nullable(),
   exclusiveDealerName: z.string().optional().nullable(),
+  expiryDays: z.union([z.string(), z.number()]).optional().nullable(),
 });
 
 const offerSchema = z.object({
@@ -375,6 +412,17 @@ const mapUser = (row) => ({
   website: row.website ?? undefined,
   mapsLink: row.maps_link ?? undefined,
   language: row.language ?? undefined,
+  pushNotifications: !!row.push_notifications,
+  emailNotifications: !!row.email_notifications,
+  smsNotifications: !!row.sms_notifications,
+  newRequirementAlerts: !!row.new_requirement_alerts,
+  offerUpdates: !!row.offer_updates,
+  buyerMessages: !!row.buyer_messages,
+  foundingYear: row.founding_year ?? undefined,
+  isGoogleUser: !!(row.password && row.password.startsWith('google-dummy-')),
+  termsAccepted: !!row.terms_accepted,
+  privacyAccepted: !!row.privacy_accepted,
+  marketingConsent: !!row.marketing_consent,
 });
 
 function parseBudgetNumber(value) {
@@ -472,12 +520,14 @@ app.post('/api/auth/google', async (req, res) => {
     const email = payload.email.toLowerCase();
     const name = payload.name || '';
 
-    // Check if the user exists with this email and role
     const found = await db.get(
       'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
       [email, role]
     );
     if (found) {
+      if (found.status === 'deleted') {
+        return res.status(403).json({ error: 'This account has been deleted or is scheduled for deletion.' });
+      }
       // User exists! Sign token and return.
       const token = signToken(found);
       return res.json({ token, user: mapUser(found) });
@@ -490,8 +540,8 @@ app.post('/api/auth/google', async (req, res) => {
 
       const created = await db.get(
         `
-          INSERT INTO users (email, password, role, status, name)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO users (email, password, role, status, name, terms_accepted, privacy_accepted, marketing_consent)
+          VALUES ($1, $2, $3, $4, $5, TRUE, TRUE, FALSE)
           RETURNING *
         `,
         [
@@ -526,7 +576,7 @@ app.post('/api/auth/google/register', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
-  const { email, businessName, license, city, state, phone, credential, dealerType, phoneOtp } = result.data;
+  const { email, businessName, license, city, state, phone, credential, dealerType, phoneOtp, termsAccepted, privacyAccepted, marketingConsent } = result.data;
 
   try {
     const payload = await verifyGoogleToken(credential);
@@ -566,8 +616,8 @@ app.post('/api/auth/google/register', async (req, res) => {
 
     const created = await db.get(
       `
-        INSERT INTO users (email, password, role, status, business_name, license, city, state, phone, dealer_type, phone_verified)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO users (email, password, role, status, business_name, license, city, state, phone, dealer_type, phone_verified, terms_accepted, privacy_accepted, marketing_consent)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `,
       [
@@ -582,6 +632,9 @@ app.post('/api/auth/google/register', async (req, res) => {
         phone,
         dealerType,
         phoneVerified,
+        termsAccepted ?? false,
+        privacyAccepted ?? false,
+        marketingConsent ?? false,
       ]
     );
     const token = signToken(created);
@@ -642,8 +695,8 @@ app.post('/api/auth/register', async (req, res) => {
 
   const created = await db.get(
     `
-      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, state, dealer_type, phone_verified)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, state, dealer_type, phone_verified, terms_accepted, privacy_accepted, marketing_consent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `,
     [
@@ -659,6 +712,9 @@ app.post('/api/auth/register', async (req, res) => {
       user.state ?? null,
       user.dealerType ?? null,
       phoneVerified,
+      user.termsAccepted ?? false,
+      user.privacyAccepted ?? false,
+      user.marketingConsent ?? false,
     ]
   );
   const token = signToken(created);
@@ -679,6 +735,10 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials. Please check your email, password, and selected role.' });
   }
 
+  if (found.status === 'deleted') {
+    return res.status(403).json({ error: 'This account has been deleted or is scheduled for deletion.' });
+  }
+
   // Always use bcrypt — no plaintext fallback
   const passwordMatch = await bcrypt.compare(password, found.password);
 
@@ -691,30 +751,9 @@ app.post('/api/auth/login', async (req, res) => {
     return res.json({ token, user: mapUser(found) });
   }
 
-  // Generate 6-digit verification code
-  const otp = String(100000 + Math.floor(Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-  await db.run(
-    'UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3',
-    [otp, expiresAt, found.id]
-  );
-
-  // Send the verification code email and fail fast if delivery is unavailable.
-  try {
-    await sendOtpEmail(found.email, otp);
-  } catch (err) {
-    console.error('Error sending verification email:', err.message);
-    return res.status(503).json({
-      error: 'Unable to send verification code email right now. Please check SMTP settings and try again.',
-    });
-  }
-
-  return res.json({
-    requiresVerification: true,
-    email: found.email,
-    role: found.role
-  });
+  // Directly log the user in without OTP verification
+  const token = signToken(found);
+  return res.json({ token, user: mapUser(found) });
 });
 
 app.post('/api/auth/verify-login', async (req, res) => {
@@ -729,6 +768,10 @@ app.post('/api/auth/verify-login', async (req, res) => {
   );
   if (!found) {
     return res.status(401).json({ error: 'Invalid credentials or role.' });
+  }
+
+  if (found.status === 'deleted') {
+    return res.status(403).json({ error: 'This account has been deleted or is scheduled for deletion.' });
   }
 
   if (!found.otp_code || found.otp_code !== otp) {
@@ -748,6 +791,151 @@ app.post('/api/auth/verify-login', async (req, res) => {
 
   const token = signToken(found);
   return res.json({ token, user: mapUser(found) });
+});
+
+app.post('/api/auth/phone-login-send', async (req, res) => {
+  const { phone, role } = req.body;
+  if (!phone || !role) {
+    return res.status(400).json({ error: 'Phone number and role are required.' });
+  }
+  const normalizedPhone = phone.trim();
+  const found = await db.get(
+    'SELECT * FROM users WHERE phone = $1 AND role = $2 LIMIT 1',
+    [normalizedPhone, role]
+  );
+  if (!found) {
+    return res.status(404).json({ error: 'No account found with this phone number and selected role.' });
+  }
+  if (found.status === 'deleted') {
+    return res.status(403).json({ error: 'This account has been deleted.' });
+  }
+
+  const otp = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  // Upsert OTP record
+  await db.run(
+    `INSERT INTO phone_verifications (phone, otp_code, expires_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (phone) DO UPDATE SET otp_code = $2, expires_at = $3, created_at = CURRENT_TIMESTAMP`,
+    [normalizedPhone, otp, expiresAt]
+  );
+
+  try {
+    await sendOtpSms(normalizedPhone, otp);
+  } catch (err) {
+    console.error('Phone login SMS send error:', err.message);
+    return res.status(503).json({ error: 'Unable to send SMS code. Please try again.' });
+  }
+
+  return res.json({ ok: true, message: 'Verification OTP sent to your phone.' });
+});
+
+app.post('/api/auth/phone-login-verify', async (req, res) => {
+  const { phone, role, otp } = req.body;
+  if (!phone || !role || !otp) {
+    return res.status(400).json({ error: 'Phone number, role, and verification code are required.' });
+  }
+  const normalizedPhone = phone.trim();
+  const otpRow = await db.get(
+    'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+    [normalizedPhone]
+  );
+  if (!otpRow || otpRow.otp_code !== String(otp)) {
+    return res.status(400).json({ error: 'Invalid verification code.' });
+  }
+  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+  }
+
+  // Find user
+  const found = await db.get(
+    'SELECT * FROM users WHERE phone = $1 AND role = $2 LIMIT 1',
+    [normalizedPhone, role]
+  );
+  if (!found) {
+    return res.status(404).json({ error: 'Account not found.' });
+  }
+
+  // Clean up OTP
+  await db.run('DELETE FROM phone_verifications WHERE phone = $1', [normalizedPhone]);
+
+  // Mark as phone verified if not verified yet
+  if (!found.phone_verified) {
+    await db.run('UPDATE users SET phone_verified = TRUE WHERE id = $1', [found.id]);
+    found.phone_verified = true;
+  }
+
+  const token = signToken(found);
+  return res.json({ token, user: mapUser(found) });
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email, role } = req.body;
+  if (!email || !role) {
+    return res.status(400).json({ error: 'Email and role are required.' });
+  }
+  const normalizedEmail = email.toLowerCase().trim();
+  const found = await db.get(
+    'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+    [normalizedEmail, role]
+  );
+  if (!found) {
+    return res.status(404).json({ error: 'No account found with this email and selected role.' });
+  }
+  if (found.status === 'deleted') {
+    return res.status(403).json({ error: 'This account has been deleted.' });
+  }
+
+  const otp = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  await db.run(
+    'UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3',
+    [otp, expiresAt, found.id]
+  );
+
+  try {
+    await sendPasswordResetEmail(normalizedEmail, otp);
+  } catch (err) {
+    console.error('Password reset email send error:', err.message);
+    return res.status(503).json({ error: 'Unable to send password reset email. Please try again.' });
+  }
+
+  return res.json({ ok: true, message: 'Password reset code sent to your email.' });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, role, otp, newPassword } = req.body;
+  if (!email || !role || !otp || !newPassword) {
+    return res.status(400).json({ error: 'Email, role, OTP, and new password are required.' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+  const normalizedEmail = email.toLowerCase().trim();
+  const found = await db.get(
+    'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+    [normalizedEmail, role]
+  );
+  if (!found) {
+    return res.status(404).json({ error: 'Account not found.' });
+  }
+  if (!found.otp_code || found.otp_code !== String(otp)) {
+    return res.status(400).json({ error: 'Invalid verification code.' });
+  }
+  const expiresAt = parseTimestampAsUtc(found.otp_expires_at);
+  if (expiresAt < new Date()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await db.run(
+    'UPDATE users SET password = $1, otp_code = NULL, otp_expires_at = NULL WHERE id = $2',
+    [hashedPassword, found.id]
+  );
+
+  return res.json({ ok: true, message: 'Password has been reset successfully.' });
 });
 
 // ========== USERS (authenticated) ==========
@@ -799,6 +987,16 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
     return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
   }
+
+  // Cache successful verification for 24h trust duration
+  const guestSessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  await db.run(
+    `INSERT INTO verified_guest_sessions (phone, expires_at)
+     VALUES ($1, $2)
+     ON CONFLICT (phone) DO UPDATE SET expires_at = $2`,
+    [normalizedPhone, guestSessionExpiry]
+  );
+
   return res.json({ ok: true });
 });
 
@@ -861,6 +1059,23 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
   const updatedMapsLink = maps_link !== undefined ? (maps_link || null) : row.maps_link;
   const updatedLanguage = language !== undefined ? (language || null) : row.language;
 
+  // Resolve notification inputs & founding year
+  const incomingPush = req.body.pushNotifications !== undefined ? req.body.pushNotifications : req.body.push_notifications;
+  const incomingEmail = req.body.emailNotifications !== undefined ? req.body.emailNotifications : req.body.email_notifications;
+  const incomingSms = req.body.smsNotifications !== undefined ? req.body.smsNotifications : req.body.sms_notifications;
+  const incomingNewReq = req.body.newRequirementAlerts !== undefined ? req.body.newRequirementAlerts : req.body.new_requirement_alerts;
+  const incomingOffer = req.body.offerUpdates !== undefined ? req.body.offerUpdates : req.body.offer_updates;
+  const incomingBuyerMsgs = req.body.buyerMessages !== undefined ? req.body.buyerMessages : req.body.buyer_messages;
+  const incomingFoundingYear = req.body.foundingYear !== undefined ? req.body.foundingYear : req.body.founding_year;
+
+  const updatedPush = incomingPush !== undefined ? !!incomingPush : row.push_notifications;
+  const updatedEmail = incomingEmail !== undefined ? !!incomingEmail : row.email_notifications;
+  const updatedSms = incomingSms !== undefined ? !!incomingSms : row.sms_notifications;
+  const updatedNewReq = incomingNewReq !== undefined ? !!incomingNewReq : row.new_requirement_alerts;
+  const updatedOffer = incomingOffer !== undefined ? !!incomingOffer : row.offer_updates;
+  const updatedBuyerMsgs = incomingBuyerMsgs !== undefined ? !!incomingBuyerMsgs : row.buyer_messages;
+  const updatedFoundingYear = incomingFoundingYear !== undefined ? (incomingFoundingYear ? parseInt(incomingFoundingYear, 10) : null) : row.founding_year;
+
   if (row.role === 'broker') {
     if (!updatedCity || !updatedCity.trim()) {
       return res.status(400).json({ error: 'City is required for brokers.' });
@@ -883,8 +1098,15 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
         description = $10, 
         website = $11, 
         maps_link = $12, 
-        language = $13
-       WHERE id = $14`,
+        language = $13,
+        push_notifications = $14,
+        email_notifications = $15,
+        sms_notifications = $16,
+        new_requirement_alerts = $17,
+        offer_updates = $18,
+        buyer_messages = $19,
+        founding_year = $20
+       WHERE id = $21`,
       [
         updatedPhone,
         updatedPhoneVerified,
@@ -899,6 +1121,13 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
         updatedWebsite,
         updatedMapsLink,
         updatedLanguage,
+        updatedPush,
+        updatedEmail,
+        updatedSms,
+        updatedNewReq,
+        updatedOffer,
+        updatedBuyerMsgs,
+        updatedFoundingYear,
         id,
       ]
     );
@@ -913,8 +1142,15 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
         state = $5, 
         address = $6, 
         description = $7, 
-        language = $8
-       WHERE id = $9`,
+        language = $8,
+        push_notifications = $9,
+        email_notifications = $10,
+        sms_notifications = $11,
+        new_requirement_alerts = $12,
+        offer_updates = $13,
+        buyer_messages = $14,
+        founding_year = $15
+       WHERE id = $16`,
       [
         updatedPhone,
         updatedPhoneVerified,
@@ -924,6 +1160,13 @@ app.patch('/api/users/:id/profile', authenticate, requireOwnership('id'), async 
         updatedAddress,
         updatedDescription,
         updatedLanguage,
+        updatedPush,
+        updatedEmail,
+        updatedSms,
+        updatedNewReq,
+        updatedOffer,
+        updatedBuyerMsgs,
+        updatedFoundingYear,
         id,
       ]
     );
@@ -992,6 +1235,17 @@ app.get('/api/catalog/features', async (_req, res) => {
 // ========== DATA (authenticated, bulk fetch) ==========
 
 app.get('/api/data', authenticate, async (_req, res) => {
+  // Auto-close expired requirements
+  try {
+    await db.run(`
+      UPDATE requirements
+      SET status = 'closed'
+      WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP
+    `);
+  } catch (err) {
+    console.error('Error auto-closing requirements:', err);
+  }
+
   const reqRows = await db.all(`
     SELECT r.*, b.name AS brand_name, m.name AS model_name
     FROM requirements r
@@ -1024,6 +1278,8 @@ app.get('/api/data', authenticate, async (_req, res) => {
     maxKmDriven: r.max_km_driven ?? null,
     ownershipPreference: r.ownership_preference ?? '',
     accidentHistoryPreference: r.accident_history_preference ?? '',
+    expiresAt: r.expires_at ?? null,
+    extended: !!r.extended,
   }));
 
   const offerRows = await db.all(`
@@ -1062,7 +1318,7 @@ app.get('/api/data', authenticate, async (_req, res) => {
   }));
 
   const listingRows = await db.all(`
-    SELECT bl.*, b.name AS brand_name, m.name AS model_name, u.business_name, u.name
+    SELECT bl.*, b.name AS brand_name, m.name AS model_name, u.business_name, u.name, u.phone AS broker_phone
     FROM broker_listings bl
     LEFT JOIN brands b ON b.id = bl.brand_id
     LEFT JOIN models m ON m.id = bl.model_id
@@ -1081,6 +1337,7 @@ app.get('/api/data', authenticate, async (_req, res) => {
         id: l.id,
         brokerId: l.broker_id,
         brokerName: l.business_name ?? l.name ?? '',
+        brokerPhone: l.broker_phone ?? '',
         make: l.brand_name ?? '',
         model: l.model_name ?? '',
         variant: l.variant ?? '',
@@ -1121,14 +1378,18 @@ app.post('/api/requirements', authenticate, async (req, res) => {
   const brandId = payload.brandId ?? resolved.brandId;
   const modelId = payload.modelId ?? resolved.modelId;
 
+  const days = payload.expiryDays ? Number(payload.expiryDays) : 7;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
   const created = await db.get(
     `
       INSERT INTO requirements (
         buyer_id, brand_id, model_id, min_year, max_year, budget, preferred_feature, description, status,
         vehicle_type, variant, budget_min, budget_max, state, city, fuel_type, transmission,
-        color_preference, purchase_timeline, max_km_driven, ownership_preference, accident_history_preference
+        color_preference, purchase_timeline, max_km_driven, ownership_preference, accident_history_preference,
+        expires_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING id
     `,
     [
@@ -1152,7 +1413,8 @@ app.post('/api/requirements', authenticate, async (req, res) => {
       payload.purchaseTimeline ?? null,
       payload.maxKmDriven ? Number(payload.maxKmDriven) : null,
       payload.ownershipPreference ?? null,
-      payload.accidentHistoryPreference ?? null
+      payload.accidentHistoryPreference ?? null,
+      expiresAt
     ]
   );
   res.json({ ok: true, id: created.id });
@@ -1167,6 +1429,114 @@ app.patch('/api/requirements/:id/close', authenticate, async (req, res) => {
   }
   await db.run("UPDATE requirements SET status = 'closed' WHERE id = $1", [req.params.id]);
   res.json({ ok: true });
+});
+
+// Extend a requirement by 3 days (once)
+app.post('/api/requirements/:id/extend', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const requirement = await db.get('SELECT buyer_id, extended, expires_at, status FROM requirements WHERE id = $1', [id]);
+  if (!requirement) return res.status(404).json({ error: 'Requirement not found.' });
+  if (Number(requirement.buyer_id) !== Number(req.user.sub) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only the creator can extend a requirement.' });
+  }
+  if (requirement.status !== 'open') {
+    return res.status(400).json({ error: 'Only open requirements can be extended.' });
+  }
+  if (requirement.extended) {
+    return res.status(400).json({ error: 'This requirement has already been extended once.' });
+  }
+  
+  const currentExpiry = requirement.expires_at ? new Date(requirement.expires_at).getTime() : Date.now();
+  const newExpiry = new Date(currentExpiry + 3 * 24 * 60 * 60 * 1000).toISOString();
+  
+  await db.run('UPDATE requirements SET expires_at = $1, extended = TRUE WHERE id = $2', [newExpiry, id]);
+  res.json({ ok: true, expiresAt: newExpiry });
+});
+
+// Save a requirement (bookmark)
+app.post('/api/requirements/:id/save', authenticate, requireRole('broker'), async (req, res) => {
+  const { id } = req.params;
+  const brokerId = Number(req.user.sub);
+  
+  const requirement = await db.get('SELECT 1 FROM requirements WHERE id = $1', [id]);
+  if (!requirement) return res.status(404).json({ error: 'Requirement not found.' });
+  
+  try {
+    await db.run(
+      'INSERT INTO saved_requirements (broker_id, requirement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [brokerId, id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error saving requirement:', err);
+    res.status(500).json({ error: 'Failed to save requirement.' });
+  }
+});
+
+// Unsave a requirement (remove bookmark)
+app.delete('/api/requirements/:id/unsave', authenticate, requireRole('broker'), async (req, res) => {
+  const { id } = req.params;
+  const brokerId = Number(req.user.sub);
+  
+  try {
+    await db.run(
+      'DELETE FROM saved_requirements WHERE broker_id = $1 AND requirement_id = $2',
+      [brokerId, id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error unsaving requirement:', err);
+    res.status(500).json({ error: 'Failed to unsave requirement.' });
+  }
+});
+
+// Fetch all saved requirement IDs for the logged in broker
+app.get('/api/requirements/saved', authenticate, requireRole('broker'), async (req, res) => {
+  const brokerId = Number(req.user.sub);
+  try {
+    const rows = await db.all('SELECT requirement_id FROM saved_requirements WHERE broker_id = $1', [brokerId]);
+    res.json(rows.map(r => r.requirement_id));
+  } catch (err) {
+    console.error('Error fetching saved requirement IDs:', err);
+    res.status(500).json({ error: 'Failed to fetch saved requirement IDs.' });
+  }
+});
+
+// Delete account (soft delete)
+app.post('/api/users/:id/delete', authenticate, requireOwnership('id'), async (req, res) => {
+  const { id } = req.params;
+  const { password, confirmText } = req.body;
+  
+  const user = await db.get('SELECT * FROM users WHERE id = $1', [id]);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  
+  const requiresPassword = user.password && !user.password.startsWith('google-dummy-');
+  
+  if (requiresPassword) {
+    if (!password) {
+      return res.status(400).json({ error: 'Please enter your password to confirm account deletion.' });
+    }
+    const matches = await bcrypt.compare(password, user.password);
+    if (!matches) {
+      return res.status(400).json({ error: 'Incorrect password.' });
+    }
+  } else {
+    if (confirmText !== 'DELETE') {
+      return res.status(400).json({ error: 'Please type "DELETE" to confirm account deletion.' });
+    }
+  }
+  
+  // Soft delete status update
+  await db.run("UPDATE users SET status = 'deleted' WHERE id = $1", [id]);
+  
+  // Clean up requirements and offers
+  if (user.role === 'buyer') {
+    await db.run("UPDATE requirements SET status = 'closed' WHERE buyer_id = $1", [id]);
+  } else if (user.role === 'broker') {
+    await db.run("UPDATE offers SET status = 'rejected' WHERE broker_id = $1 AND status = 'pending'", [id]);
+  }
+  
+  res.json({ ok: true, message: 'Your account has been successfully scheduled for deletion. You will be logged out.' });
 });
 
 // ========== OFFERS (authenticated) ==========
@@ -1504,7 +1874,7 @@ app.get('/api/listings/:id/images', async (req, res) => {
 app.get('/api/dealers', async (req, res) => {
   const { type, city, sort } = req.query;
   
-  let query = "SELECT id, email, role, status, business_name, phone, city, dealer_type, created_at FROM users WHERE role = 'broker' AND status = 'active'";
+  let query = "SELECT id, email, role, status, business_name, phone, city, dealer_type, created_at, founding_year FROM users WHERE role = 'broker' AND status = 'active'";
   const params = [];
   let paramIndex = 1;
 
@@ -1532,6 +1902,13 @@ app.get('/api/dealers', async (req, res) => {
     // Fetch stats for each dealer (number of listings, etc.)
     const dealers = await Promise.all(rows.map(async (row) => {
       const listingCountRow = await db.get('SELECT COUNT(*) as count FROM broker_listings WHERE broker_id = $1 AND status = $2', [row.id, 'active']);
+      const currentYear = new Date().getFullYear();
+      const foundingYear = row.founding_year;
+      const registrationYear = new Date(row.created_at).getFullYear();
+      const yearsInBusiness = foundingYear
+        ? Math.max(1, currentYear - foundingYear)
+        : Math.max(1, currentYear - registrationYear);
+
       return {
         id: row.id,
         businessName: row.business_name,
@@ -1543,7 +1920,7 @@ app.get('/api/dealers', async (req, res) => {
         // Placeholder values for directory UI
         rating: (Math.random() * (5.0 - 4.0) + 4.0).toFixed(1),
         reviews: Math.floor(Math.random() * 500) + 10,
-        yearsInBusiness: Math.floor(Math.random() * 20) + 1,
+        yearsInBusiness,
         verified: true,
       };
     }));
@@ -1567,7 +1944,7 @@ app.get('/api/dealers/:id', async (req, res) => {
     const row = await db.get(
       `SELECT id, email, role, status, business_name, name, phone, city, state, address,
               dealer_type, created_at, license, description, website, maps_link,
-              authorized_brands, showroom_address, business_type
+              authorized_brands, showroom_address, business_type, founding_year
        FROM users WHERE id = $1 AND role = 'broker' AND status = 'active'`,
       [id]
     );
@@ -1612,6 +1989,13 @@ app.get('/api/dealers/:id', async (req, res) => {
       })
     );
 
+    const currentYear = new Date().getFullYear();
+    const foundingYear = row.founding_year;
+    const registrationYear = new Date(row.created_at).getFullYear();
+    const yearsInBusiness = foundingYear
+      ? Math.max(1, currentYear - foundingYear)
+      : Math.max(1, currentYear - registrationYear);
+
     const dealerProfile = {
        id: row.id,
        businessName: row.business_name,
@@ -1633,7 +2017,7 @@ app.get('/api/dealers/:id', async (req, res) => {
        // Placeholders (would be replaced by a real ratings table later)
        rating: (Math.random() * (5.0 - 4.0) + 4.0).toFixed(1),
        reviews: Math.floor(Math.random() * 500) + 10,
-       yearsInBusiness: Math.floor(Math.random() * 20) + 1,
+       yearsInBusiness,
        verified: true,
        listings: listingsWithExtras
     };
@@ -1647,8 +2031,12 @@ app.get('/api/dealers/:id', async (req, res) => {
 
 app.post('/api/listings/:id/contact', async (req, res) => {
   const listingId = req.params.id;
-  const listing = await db.get('SELECT id FROM broker_listings WHERE id = $1', [listingId]);
-  if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+  const isStandard = String(listingId).startsWith('car-');
+
+  if (!isStandard) {
+    const listing = await db.get('SELECT id FROM broker_listings WHERE id = $1', [listingId]);
+    if (!listing) return res.status(404).json({ error: 'Listing not found.' });
+  }
 
   const { buyerName, buyerEmail, buyerPhone, phoneOtp } = req.body;
 
@@ -1656,26 +2044,65 @@ app.post('/api/listings/:id/contact', async (req, res) => {
   if (!buyerPhone) {
     return res.status(400).json({ error: 'A phone number is required to contact a dealer.' });
   }
-  if (!phoneOtp) {
-    return res.status(400).json({ error: 'Phone verification is required to contact a dealer.' });
-  }
-  const otpRow = await db.get(
-    'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
-    [buyerPhone.trim()]
-  );
-  if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
-    return res.status(400).json({ error: 'Invalid phone verification code.' });
-  }
-  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
-    return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
-  }
-  // Clean up used OTP
-  await db.run('DELETE FROM phone_verifications WHERE phone = $1', [buyerPhone.trim()]);
 
-  await db.run(
-    'INSERT INTO contact_events (listing_id, buyer_name, buyer_email, buyer_phone, created_at) VALUES ($1, $2, $3, $4, $5)',
-    [listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone.trim(), new Date().toISOString()]
-  );
+  let bypassAuthorized = false;
+  if (phoneOtp === 'BYPASS') {
+    // Check if buyer has a logged-in verified account matching this phone
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const authUser = await db.get('SELECT * FROM users WHERE id = $1 LIMIT 1', [decoded.id]);
+        if (authUser && authUser.phone_verified && authUser.phone === buyerPhone.trim()) {
+          bypassAuthorized = true;
+        }
+      } catch (e) {
+        // Continue to check guest session
+      }
+    }
+
+    // Check if phone matches a verified guest session
+    if (!bypassAuthorized) {
+      const guestSession = await db.get(
+        'SELECT * FROM verified_guest_sessions WHERE phone = $1 LIMIT 1',
+        [buyerPhone.trim()]
+      );
+      if (guestSession && parseTimestampAsUtc(guestSession.expires_at) > new Date()) {
+        bypassAuthorized = true;
+      }
+    }
+  }
+
+  if (!bypassAuthorized) {
+    if (!phoneOtp) {
+      return res.status(400).json({ error: 'Phone verification is required to contact a dealer.' });
+    }
+    const otpRow = await db.get(
+      'SELECT * FROM phone_verifications WHERE phone = $1 LIMIT 1',
+      [buyerPhone.trim()]
+    );
+    if (!otpRow || otpRow.otp_code !== String(phoneOtp)) {
+      return res.status(400).json({ error: 'Invalid phone verification code.' });
+    }
+    if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Phone verification code has expired. Please request a new one.' });
+    }
+    // Clean up used OTP
+    await db.run('DELETE FROM phone_verifications WHERE phone = $1', [buyerPhone.trim()]);
+  }
+
+  if (isStandard) {
+    await db.run(
+      'INSERT INTO standard_inquiries (listing_id, buyer_name, buyer_email, buyer_phone, created_at) VALUES ($1, $2, $3, $4, $5)',
+      [listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone.trim(), new Date().toISOString()]
+    );
+  } else {
+    await db.run(
+      'INSERT INTO contact_events (listing_id, buyer_name, buyer_email, buyer_phone, created_at) VALUES ($1, $2, $3, $4, $5)',
+      [listingId, buyerName || 'Anonymous', buyerEmail || '', buyerPhone.trim(), new Date().toISOString()]
+    );
+  }
 
   res.json({ ok: true });
 });

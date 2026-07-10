@@ -7,6 +7,7 @@ import {
   BadgeCheck, Languages, MessageSquare, FileText,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../hooks/useLanguage';
 import { API_BASE } from '../services/api';
 import { getToken } from '../services/authService';
 import toast from 'react-hot-toast';
@@ -27,24 +28,6 @@ interface NotifPrefs {
   buyerMessages: boolean;
 }
 
-const defaultNotifPrefs = (userId: number): NotifPrefs => {
-  try {
-    const raw = localStorage.getItem(`notif_prefs_${userId}`);
-    if (raw) return JSON.parse(raw);
-  } catch { /* */ }
-  return {
-    pushNotifications: true,
-    emailNotifications: true,
-    smsNotifications: false,
-    newRequirementAlerts: true,
-    offerUpdates: true,
-    buyerMessages: false,
-  };
-};
-
-const saveNotifPrefs = (userId: number, prefs: NotifPrefs) => {
-  localStorage.setItem(`notif_prefs_${userId}`, JSON.stringify(prefs));
-};
 
 // ─── Common helpers ────────────────────────────────────────────────────────────
 
@@ -151,6 +134,7 @@ const LANGUAGES = ['English', 'Tamil', 'Hindi', 'Telugu', 'Malayalam', 'Kannada'
 
 const ProfileSettings: React.FC = () => {
   const { user, updateUser, logout } = useAuth();
+  const { setLang } = useLanguage();
   const navigate = useNavigate();
   const isBuyer = user?.role === 'buyer';
 
@@ -176,11 +160,17 @@ const ProfileSettings: React.FC = () => {
     website: user?.website ?? '',
     mapsLink: user?.mapsLink ?? '',
     language: user?.language ?? 'English',
+    foundingYear: user?.foundingYear ? String(user.foundingYear) : '',
   });
 
-  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(() =>
-    user ? defaultNotifPrefs(user.id) : defaultNotifPrefs(0)
-  );
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>({
+    pushNotifications: user?.pushNotifications ?? true,
+    emailNotifications: user?.emailNotifications ?? true,
+    smsNotifications: user?.smsNotifications ?? false,
+    newRequirementAlerts: user?.newRequirementAlerts ?? true,
+    offerUpdates: user?.offerUpdates ?? true,
+    buyerMessages: user?.buyerMessages ?? false,
+  });
 
   const [saving, setSaving] = useState(false);
 
@@ -195,6 +185,9 @@ const ProfileSettings: React.FC = () => {
 
   // ── Delete account modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const [citiesList, setCitiesList] = useState<{ id: number; name: string; state: string }[]>([]);
 
@@ -239,13 +232,47 @@ const ProfileSettings: React.FC = () => {
     return citiesList.filter((c) => c.state === form.state);
   }, [citiesList, form.state]);
 
-  const handleChange = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const handleChange = (k: string, v: string) => {
+    setForm(f => ({ ...f, [k]: v }));
+    if (k === 'language') {
+      const nameToCode: Record<string, string> = {
+        'English': 'en',
+        'Tamil': 'ta',
+        'Hindi': 'hi',
+        'Telugu': 'te',
+        'Kannada': 'kn'
+      };
+      const code = nameToCode[v];
+      if (code) {
+        setLang(code as any);
+      }
+    }
+  };
   const handleStateChange = (stateVal: string) => setForm(f => ({ ...f, state: stateVal, city: '' }));
 
-  const handleNotifChange = (k: keyof NotifPrefs, v: boolean) => {
+  const handleNotifChange = async (k: keyof NotifPrefs, v: boolean) => {
     const updated = { ...notifPrefs, [k]: v };
     setNotifPrefs(updated);
-    if (user) saveNotifPrefs(user.id, updated);
+    try {
+      localStorage.setItem(`notif_prefs_${user?.id}`, JSON.stringify(updated));
+    } catch {}
+
+    if (!user) return;
+    try {
+      const token = getToken();
+      const apiField = k.replace(/([A-Z])/g, "_$1").toLowerCase();
+      await fetch(`${API_BASE}/api/users/${user.id}/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ [apiField]: v }),
+      });
+      updateUser({ [k]: v });
+    } catch (err) {
+      console.error("Failed to sync notification preference:", err);
+    }
   };
 
   const handleSave = async (phoneOtp?: string | React.MouseEvent) => {
@@ -261,7 +288,7 @@ const ProfileSettings: React.FC = () => {
         return;
       }
 
-      const payload: Record<string, string | null> = {
+      const payload: Record<string, any> = {
         phone: form.phone.trim() ? `+91${form.phone.trim()}` : null,
         city: form.city.trim() || null,
         state: form.state.trim() || null,
@@ -290,6 +317,7 @@ const ProfileSettings: React.FC = () => {
         payload.business_type = form.businessType || null;
         payload.website = form.website.trim() || null;
         payload.maps_link = form.mapsLink.trim() || null;
+        payload.founding_year = form.foundingYear ? parseInt(form.foundingYear, 10) : null;
       }
 
       const res = await fetch(`${API_BASE}/api/users/${user.id}/profile`, {
@@ -324,12 +352,46 @@ const ProfileSettings: React.FC = () => {
               businessType: form.businessType || undefined,
               website: form.website.trim() || undefined,
               mapsLink: form.mapsLink.trim() || undefined,
+              foundingYear: form.foundingYear ? parseInt(form.foundingYear, 10) : undefined,
             }),
       });
 
       toast.success('Profile saved!');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/api/users/${user.id}/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          password: deleteConfirmPassword,
+          confirmText: deleteConfirmText,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to delete account.');
+        return;
+      }
+      toast.success(data.message || 'Account successfully deleted.');
+      setShowDeleteModal(false);
+      // Log out
+      localStorage.removeItem('carmatchr_token');
+      window.location.href = '/login';
+    } catch (err) {
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -640,6 +702,17 @@ const ProfileSettings: React.FC = () => {
             </div>
           </FormField>
         )}
+        <FormField label="Founding Year">
+          <input
+            style={input}
+            type="number"
+            value={form.foundingYear}
+            onChange={e => handleChange('foundingYear', e.target.value.replace(/\D/g, ''))}
+            placeholder="e.g. 2018"
+            min={1900}
+            max={new Date().getFullYear()}
+          />
+        </FormField>
       </div>
 
       <button
@@ -984,22 +1057,64 @@ const ProfileSettings: React.FC = () => {
               <AlertTriangle size={24} color="#e63946" />
             </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 900, color: 'var(--color-gray-900)', marginBottom: '8px' }}>
-              {isBuyer ? 'Delete Account?' : 'Deactivate Account?'}
+              Delete Account?
             </h3>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: '24px' }}>
-              {isBuyer
-                ? 'This will permanently delete your account and all your requirements. This cannot be undone.'
-                : 'Your dealer account will be deactivated. You can reactivate it by contacting support.'}
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: '16px' }}>
+              This will soft-delete your account and close/reject all active requirements or pending offers. Your data will be anonymized after a 30-day retention period.
             </p>
+            {user?.isGoogleUser ? (
+              <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '6px' }}>
+                  Please type "DELETE" to confirm:
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            ) : (
+              <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-gray-700)', marginBottom: '6px' }}>
+                  Enter your password to confirm:
+                </label>
+                <input
+                  type="password"
+                  className="form-control"
+                  value={deleteConfirmPassword}
+                  onChange={e => setDeleteConfirmPassword(e.target.value)}
+                  placeholder="Your password"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setShowDeleteModal(false)} style={{ flex: 1, padding: '11px', border: '1px solid var(--color-gray-200)', borderRadius: '10px', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmPassword('');
+                  setDeleteConfirmText('');
+                }}
+                style={{ flex: 1, padding: '11px', border: '1px solid var(--color-gray-200)', borderRadius: '10px', background: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              >
                 Cancel
               </button>
               <button
-                onClick={() => { toast.error('Account deletion requires contacting support.'); setShowDeleteModal(false); }}
-                style={{ flex: 1, padding: '11px', border: 'none', borderRadius: '10px', background: '#e63946', color: '#fff', fontWeight: 800, cursor: 'pointer' }}
+                onClick={handleDeleteAccount}
+                disabled={deleting || (user?.isGoogleUser ? deleteConfirmText !== 'DELETE' : !deleteConfirmPassword)}
+                style={{
+                  flex: 1, padding: '11px', border: 'none', borderRadius: '10px',
+                  background: '#e63946', color: '#fff', fontWeight: 800,
+                  cursor: (deleting || (user?.isGoogleUser ? deleteConfirmText !== 'DELETE' : !deleteConfirmPassword)) ? 'not-allowed' : 'pointer',
+                  opacity: (deleting || (user?.isGoogleUser ? deleteConfirmText !== 'DELETE' : !deleteConfirmPassword)) ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                }}
               >
-                {isBuyer ? 'Delete' : 'Deactivate'}
+                {deleting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : null}
+                Delete
               </button>
             </div>
           </div>
