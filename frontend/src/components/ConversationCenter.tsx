@@ -7,7 +7,7 @@ import { API_BASE } from '../services/api';
 import { authHeaders } from '../services/authService';
 
 type ConversationMode = 'buyer' | 'broker';
-type SenderRole = 'buyer' | 'broker' | 'system';
+type SenderRole = 'buyer' | 'broker' | 'admin' | 'system';
 
 interface ConversationMessage {
   id: string;
@@ -30,8 +30,68 @@ interface ConversationThread {
   requirement?: Requirement;
 }
 
+function threadIdFor(requirementId: number, brokerId: number) {
+  return `req-${requirementId}-broker-${brokerId}`;
+}
+
+function parseServerDate(value: string) {
+  if (!value) return new Date(NaN);
+
+  // Treat bare database timestamps as UTC so they render correctly in the browser's local time.
+  const utcMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
+  if (utcMatch) {
+    const [, year, month, day, hour, minute, second = '0', millisecond = '0'] = utcMatch;
+    return new Date(Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(millisecond.padEnd(3, '0')),
+    ));
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+
+  // Some DB adapters can return "YYYY-MM-DD HH:mm:ss" without timezone.
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  return new Date(normalized);
+}
+
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const date = parseServerDate(iso);
+  if (Number.isNaN(date.getTime())) return '--:--';
+
+  const now = new Date();
+  const minutesAgo = Math.floor((now.getTime() - date.getTime()) / 60000);
+  if (minutesAgo < 1) return 'just now';
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+
+  const isSameDay = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (isSameDay) return time;
+
+  const dateLabel = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  return `${dateLabel} ${time}`;
+}
+
+function sameMessages(left: ConversationMessage[], right: ConversationMessage[]) {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    if (
+      left[i].id !== right[i].id ||
+      left[i].body !== right[i].body ||
+      left[i].createdAt !== right[i].createdAt
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function buildThreads(mode: ConversationMode, userId: number | undefined, requirements: Requirement[], offers: Offer[]) {
@@ -94,9 +154,11 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const userScrolledUpRef = useRef(false);
+  const lastThreadKeyRef = useRef('');
+  const initialLoadPendingRef = useRef(false);
 
   useEffect(() => {
     if (!threads.length) {
@@ -116,56 +178,61 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   }, [activeThreadId]);
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || null;
-
   useEffect(() => {
     if (!activeThread) {
       setMessages([]);
+      setIsLoadingMessages(false);
+      setMessageLoadError(null);
+      lastThreadKeyRef.current = '';
+      initialLoadPendingRef.current = false;
       return;
     }
 
     let cancelled = false;
-    let isFirstLoad = true;
+    let inFlight = false;
+    const threadKey = `${activeThread.requirementId}:${activeThread.brokerId}`;
+
+    if (lastThreadKeyRef.current !== threadKey) {
+      setIsLoadingMessages(true);
+      setMessageLoadError(null);
+      initialLoadPendingRef.current = true;
+      lastThreadKeyRef.current = threadKey;
+    }
 
     const loadMessages = async () => {
-      if (isFirstLoad) {
-        setIsLoadingMessages(true);
-      }
+      if (inFlight) return;
+      inFlight = true;
+      const shouldResolveInitialLoad = initialLoadPendingRef.current;
       try {
         const url = `${API_BASE}/api/messages?requirementId=${activeThread.requirementId}&brokerId=${activeThread.brokerId}`;
         const response = await fetch(url, { headers: authHeaders() });
         if (!response.ok) {
-          if (!cancelled) setMessages([]);
+          if (!cancelled && shouldResolveInitialLoad) {
+            setMessageLoadError('Unable to load messages right now. Please try again.');
+          }
           return;
         }
         const data = await response.json();
         if (!cancelled) {
-          const incoming: ConversationMessage[] = Array.isArray(data) ? data : [];
-          setMessages((prev) => {
-            // Only update if the last message ID differs (avoids re-render on same data)
-            const lastPrev = prev.at(-1)?.id;
-            const lastNext = incoming.at(-1)?.id;
-            if (lastPrev === lastNext && prev.length === incoming.length) return prev;
-            // Scroll to bottom only if user hasn't manually scrolled up
-            if (!userScrolledUpRef.current) {
-              requestAnimationFrame(() => {
-                endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-              });
-            }
-            return incoming;
-          });
+          const next = Array.isArray(data) ? data : [];
+          setMessages((prev) => (sameMessages(prev, next) ? prev : next));
+          setMessageLoadError(null);
         }
       } catch {
-        if (!cancelled) setMessages([]);
-      } finally {
-        if (!cancelled) {
-          setIsLoadingMessages(false);
-          isFirstLoad = false;
+        if (!cancelled && shouldResolveInitialLoad) {
+          setMessageLoadError('Unable to load messages right now. Please try again.');
         }
+      } finally {
+        if (shouldResolveInitialLoad && !cancelled) {
+          setIsLoadingMessages(false);
+          initialLoadPendingRef.current = false;
+        }
+        inFlight = false;
       }
     };
 
     loadMessages();
-    const timer = window.setInterval(loadMessages, 3000);
+    const timer = window.setInterval(loadMessages, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -184,7 +251,9 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
 
   const sendMessage = async () => {
     const text = draft.trim();
-    if (!activeThread || !text) return;
+    if (!activeThread || !text || isSending) return;
+
+    setIsSending(true);
 
     try {
       const response = await fetch(`${API_BASE}/api/messages`, {
@@ -201,6 +270,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       });
 
       if (!response.ok) {
+        setIsSending(false);
         return;
       }
 
@@ -213,13 +283,15 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       );
       if (reload.ok) {
         const data = await reload.json();
-        setMessages(Array.isArray(data) ? data : []);
-        requestAnimationFrame(() => {
-          endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        });
+        const next = Array.isArray(data) ? data : [];
+        setMessages((prev) => (sameMessages(prev, next) ? prev : next));
+        setMessageLoadError(null);
       }
     } catch {
+      setIsSending(false);
       return;
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -340,6 +412,14 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                   <div style={{ width: '34px', height: '34px', margin: '0 auto 12px', borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#e63946', animation: 'spin 0.8s linear infinite' }} />
                   <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a' }}>Loading messages</div>
                 </div>
+              ) : messageLoadError && messages.length === 0 ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
+                  <BadgeInfo size={28} style={{ color: '#f59e0b', marginBottom: '10px' }} />
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Messages unavailable</div>
+                  <p style={{ margin: '8px auto 0', maxWidth: '360px', fontSize: '0.875rem', lineHeight: 1.7 }}>
+                    {messageLoadError}
+                  </p>
+                </div>
               ) : messages.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
                   <User size={30} style={{ color: '#cbd5e1', marginBottom: '10px' }} />
@@ -406,7 +486,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                 <button
                   type="button"
                   onClick={sendMessage}
-                  disabled={!draft.trim()}
+                  disabled={!draft.trim() || isSending}
                   style={{
                     minWidth: '132px',
                     border: 'none',
@@ -415,17 +495,17 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                     fontFamily: 'var(--font)',
                     fontWeight: 800,
                     fontSize: '0.9375rem',
-                    cursor: draft.trim() ? 'pointer' : 'not-allowed',
-                    background: draft.trim() ? 'linear-gradient(135deg, #e63946, #c81e1e)' : '#e2e8f0',
-                    color: draft.trim() ? '#fff' : '#94a3b8',
-                    boxShadow: draft.trim() ? '0 10px 24px rgba(230,57,70,0.18)' : 'none',
+                    cursor: draft.trim() && !isSending ? 'pointer' : 'not-allowed',
+                    background: draft.trim() && !isSending ? 'linear-gradient(135deg, #e63946, #c81e1e)' : '#e2e8f0',
+                    color: draft.trim() && !isSending ? '#fff' : '#94a3b8',
+                    boxShadow: draft.trim() && !isSending ? '0 10px 24px rgba(230,57,70,0.18)' : 'none',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
                   }}
                 >
-                  <Send size={16} /> Send
+                  <Send size={16} /> {isSending ? 'Sending...' : 'Send'}
                 </button>
               </div>
             </div>

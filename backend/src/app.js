@@ -174,6 +174,33 @@ async function sendPasswordResetEmail(email, otp) {
   return info;
 }
 
+function parseUtcTimestamp(value) {
+  if (!value) return new Date(NaN);
+  if (value instanceof Date) return new Date(value.getTime());
+
+  const raw = String(value);
+  const utcMatch = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
+  if (utcMatch) {
+    const [, year, month, day, hour, minute, second = '0', millisecond = '0'] = utcMatch;
+    return new Date(Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(millisecond.padEnd(3, '0')),
+    ));
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+
+  return new Date(NaN);
+}
+
 
 // ========== ZOD SCHEMAS ==========
 const registerSchema = z.object({
@@ -763,7 +790,7 @@ app.post('/api/auth/verify-login', async (req, res) => {
   }
 
   const found = await db.get(
-    'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+    'SELECT *, otp_expires_at::text AS otp_expires_at_text FROM users WHERE email = $1 AND role = $2 LIMIT 1',
     [email.toLowerCase(), role]
   );
   if (!found) {
@@ -778,7 +805,7 @@ app.post('/api/auth/verify-login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid verification code.' });
   }
 
-  const expiresAt = parseTimestampAsUtc(found.otp_expires_at);
+  const expiresAt = parseUtcTimestamp(found.otp_expires_at_text || found.otp_expires_at);
   if (expiresAt < new Date()) {
     return res.status(401).json({ error: 'Verification code has expired. Please log in again to request a new code.' });
   }

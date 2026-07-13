@@ -6,7 +6,6 @@ import {
   ArrowLeft, Fuel, Settings, Navigation,
 } from 'lucide-react';
 import { API_BASE } from '../../services/api';
-import { tamilNaduDealers } from '../../data/tamilNaduDealers';
 
 interface Listing {
   id: number;
@@ -56,31 +55,12 @@ const DealerProfile = () => {
     const fetchProfile = async () => {
       setLoading(true);
       try {
-        if (id && id.startsWith('tn-')) {
-          const staticDealer = tamilNaduDealers.find(d => d.id === id);
-          if (staticDealer) {
-            setProfile({
-              id: staticDealer.id,
-              businessName: staticDealer.name,
-              city: staticDealer.city,
-              phone: staticDealer.phone || 'Contact for details',
-              email: 'dealer@example.com',
-              dealerType: staticDealer.type === 'multi' ? 'both' : staticDealer.type,
-              createdAt: new Date(new Date().setFullYear(new Date().getFullYear() - staticDealer.yearsInBusiness)).toISOString(),
-              license: 'Verified',
-              rating: staticDealer.rating.toFixed(1),
-              reviews: staticDealer.reviews,
-              yearsInBusiness: staticDealer.yearsInBusiness,
-              verified: staticDealer.verified,
-              listings: [],
-            });
-          }
+        const res = await fetch(`${API_BASE}/api/dealers/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data);
         } else {
-          const res = await fetch(`${API_BASE}/api/dealers/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            setProfile(data);
-          }
+          setProfile(null);
         }
       } catch (err) {
         console.error('Error fetching dealer profile:', err);

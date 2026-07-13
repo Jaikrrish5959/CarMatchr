@@ -6,7 +6,6 @@ import {
   Award, TrendingUp, Users, CheckCircle, X, Sparkles,
 } from 'lucide-react';
 import { API_BASE } from '../../services/api';
-import { tamilNaduDealers } from '../../data/tamilNaduDealers';
 
 interface Dealer {
   id: string | number;
@@ -93,28 +92,12 @@ const NewCarDealers = () => {
       const url = new URL(API_BASE ? `${API_BASE}/api/dealers` : '/api/dealers', window.location.origin);
       url.searchParams.append('type', 'new');
       const res = await fetch(url.toString());
-      let apiDealers: Dealer[] = [];
-      if (res.ok) apiDealers = await res.json();
+      if (!res.ok) {
+        setDealers([]);
+        return;
+      }
 
-      const staticDealers = tamilNaduDealers
-        .filter(d => ['new', 'multi'].includes(d.type))
-        .map(d => ({
-          id: d.id,
-          businessName: d.name,
-          city: d.city,
-          phone: d.phone || '9876543210',
-          dealerType: (d.type === 'multi' ? 'both' : d.type) as 'new' | 'both',
-          createdAt: new Date().toISOString(),
-          activeListings: d.vehicles,
-          rating: d.rating.toFixed(1),
-          reviews: d.reviews,
-          yearsInBusiness: d.yearsInBusiness,
-          verified: d.verified,
-          brand: d.brand,
-          initials: d.initials,
-        }));
-
-      setDealers([...apiDealers, ...staticDealers]);
+      setDealers(await res.json());
     } catch (err) {
       console.error('Error fetching new car dealers:', err);
     } finally {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Zap, Award, ArrowRight, Star,
@@ -10,9 +10,24 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import { useCatalog } from '../hooks/useCatalog';
-import { tamilNaduDealers } from '../data/tamilNaduDealers';
+import { API_BASE } from '../services/api';
 import { useLocation } from '../contexts/LocationContext';
 import toast from 'react-hot-toast';
+
+interface DealerCard {
+  id: string | number;
+  businessName: string;
+  city: string;
+  phone: string;
+  dealerType: 'new' | 'used' | 'both';
+  createdAt: string;
+  activeListings: number;
+  rating: string;
+  reviews: number;
+  yearsInBusiness: number;
+  verified: boolean;
+  brand?: string;
+}
 
 
 const Home: React.FC = () => {
@@ -21,6 +36,7 @@ const Home: React.FC = () => {
   const { brands } = useCatalog();
   const { user } = useAuth();
   const { location: selectedLocation, setLocation } = useLocation();
+  const [dealers, setDealers] = useState<DealerCard[]>([]);
   const [heroMake, setHeroMake] = useState('');
   const [heroModel, setHeroModel] = useState('');
   const [heroBudget, setHeroBudget] = useState('');
@@ -62,16 +78,46 @@ const Home: React.FC = () => {
       });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDealers = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/dealers`);
+        if (!res.ok) {
+          if (!cancelled) setDealers([]);
+          return;
+        }
+
+        const data = await res.json();
+        if (!cancelled) {
+          setDealers(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error('Failed to load dealers:', error);
+        if (!cancelled) setDealers([]);
+      }
+    };
+
+    loadDealers();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Derived filtered dealer lists
   const isFiltered = selectedLocation !== 'Tamil Nadu';
-  const allNewDealers = tamilNaduDealers.filter(d => d.type === 'new');
-  const allUsedDealers = tamilNaduDealers.filter(d => d.type === 'used');
+  const allNewDealers = dealers.filter((dealer) => dealer.dealerType !== 'used');
+  const allUsedDealers = dealers.filter((dealer) => dealer.dealerType !== 'new');
   const newDealers = isFiltered
-    ? allNewDealers.filter(d => d.city === selectedLocation)
+    ? allNewDealers.filter((dealer) => dealer.city === selectedLocation)
     : allNewDealers;
   const usedDealers = isFiltered
-    ? allUsedDealers.filter(d => d.city === selectedLocation)
+    ? allUsedDealers.filter((dealer) => dealer.city === selectedLocation)
     : allUsedDealers;
+  const totalDealers = dealers.length;
+  const totalCities = new Set(dealers.map((dealer) => dealer.city)).size;
+  const totalListings = dealers.reduce((sum, dealer) => sum + dealer.activeListings, 0);
 
   const handlePostRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,15 +178,15 @@ const Home: React.FC = () => {
     return { bg: '#f8fafc', text: '#475569', initials: initials || 'DL', border: '#e2e8f0' };
   };
 
-  const renderDealerCard = (dealer: typeof tamilNaduDealers[0], idx: number) => {
-    const logoInfo = getDealerLogoInfo(dealer.name);
-    const isTopRated = dealer.rating >= 4.8;
+  const renderDealerCard = (dealer: DealerCard, idx: number) => {
+    const logoInfo = getDealerLogoInfo(dealer.businessName);
+    const isTopRated = Number(dealer.rating) >= 4.8;
 
     return (
       <div
         key={`${dealer.id}-${idx}`}
         onClick={() => navigate(`/dealers/${dealer.id}`)}
-        title={`View profile of ${dealer.name}`}
+        title={`View profile of ${dealer.businessName}`}
         style={{
           flexShrink: 0,
           width: '200px',
@@ -197,7 +243,7 @@ const Home: React.FC = () => {
           display: 'flex', alignItems: 'center', gap: '3px',
           marginBottom: '3px', justifyContent: 'center', lineHeight: 1.3,
         }}>
-          {dealer.name}
+          {dealer.businessName}
           {dealer.verified && <BadgeCheck size={10} color="#E53935" />}
         </h3>
 
@@ -208,14 +254,14 @@ const Home: React.FC = () => {
 
         {/* Stars — 11px */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#fbbf24', fontSize: '11px', fontWeight: 600 }}>
-          <Star size={9} fill="currentColor" /> {dealer.rating.toFixed(1)}
+          <Star size={9} fill="currentColor" /> {Number(dealer.rating).toFixed(1)}
           <span style={{ fontWeight: 400, color: '#aaa', marginLeft: '2px' }}>({dealer.reviews})</span>
         </div>
 
         {/* Meta row — 11px #666, margin-top 10px, gap 10px */}
         <div style={{ display: 'flex', gap: '10px', color: '#666', fontSize: '11px', marginTop: '10px', width: '100%', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <BadgeDollarSign size={9} color="#E53935" /> {dealer.vehicles}+ Offers
+            <BadgeDollarSign size={9} color="#E53935" /> {dealer.activeListings}+ Offers
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
             <Clock size={9} color="#E53935" /> {dealer.yearsInBusiness}yr Exp
@@ -536,7 +582,11 @@ const Home: React.FC = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', gap: '16px' }}>
-                {[{ value: '500+', label: 'Dealers' }, { value: '36', label: 'Districts' }, { value: '15', label: 'Brands' }].map(stat => (
+                {[
+                  { value: totalDealers, label: 'Dealers' },
+                  { value: totalCities, label: 'Districts' },
+                  { value: totalListings, label: 'Listings' },
+                ].map(stat => (
                   <div key={stat.label} style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: '#ff6b7a', lineHeight: 1 }}>{stat.value}</div>
                     <div style={{ fontSize: '0.625rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>{stat.label}</div>

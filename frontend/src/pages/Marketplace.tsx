@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import { useLanguage } from '../hooks/useLanguage';
 import {
-  carListings, filterListings, sortListings,
+  filterListings, sortListings,
   defaultFilters, type Filters, type SortOption, type CarListing
 } from '../data/carDatabase';
 import CitySelector from '../components/CitySelector';
@@ -72,8 +72,8 @@ const Marketplace: React.FC = () => {
     }))
   , [brokerListings, brands]);
 
-  // --- Merge seed + broker listings ---
-  const allListings = useMemo(() => [...brokerCarsAsListings, ...carListings], [brokerCarsAsListings]);
+  // --- Table-backed listings only ---
+  const allListings = useMemo(() => brokerCarsAsListings, [brokerCarsAsListings]);
 
   // --- Derived ---
   const filtered = useMemo(() => sortListings(filterListings(allListings, filters), sort), [allListings, filters, sort]);
@@ -186,7 +186,8 @@ const Marketplace: React.FC = () => {
     { value: 'km-low', label: 'Lowest KM' },
   ];
 
-  const renderCarCard = (car: typeof carListings[0]) => {
+  // --- CAR CARD RENDERER ---
+  const renderCarCard = (car: CarListing, showWish = true) => {
     const hasMultipleImages = car.images && car.images.length > 1;
     const hasImages = car.images && car.images.length > 0;
     const currentIndex = activeImage[car.id] || 0;
