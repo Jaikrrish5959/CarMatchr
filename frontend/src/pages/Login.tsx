@@ -95,6 +95,7 @@ const Login: React.FC = () => {
   const {
     login,
     verifyLogin,
+    verifyEmailLogin,
     loginWithGoogle,
     registerBrokerWithGoogle,
     sendPhoneLoginOtp,
@@ -106,6 +107,7 @@ const Login: React.FC = () => {
 
   // Verification flow states
   const [verificationPending, setVerificationPending] = useState(false);
+  const [isEmailVerification, setIsEmailVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [verificationRole, setVerificationRole] = useState<'buyer' | 'broker' | 'admin'>('buyer');
   const [otp, setOtp] = useState('');
@@ -394,6 +396,14 @@ const Login: React.FC = () => {
       const roleForLogin = normalizedEmail === 'admin@carmatchr.com' ? 'admin' : role;
       const result = await login(normalizedEmail, password, roleForLogin);
       if (!result.ok) {
+        if (result.requiresEmailVerification) {
+          setVerificationEmail(result.email || normalizedEmail);
+          setVerificationRole(roleForLogin);
+          setVerificationPending(true);
+          setIsEmailVerification(true);
+          toast.success('Your email is not verified. Verification code sent to your email!');
+          return;
+        }
         const msg = result.error ?? 'Unable to log in. Please try again.';
         setError(msg);
         toast.error(msg);
@@ -404,6 +414,7 @@ const Login: React.FC = () => {
         setVerificationEmail(result.email || normalizedEmail);
         setVerificationRole(roleForLogin);
         setVerificationPending(true);
+        setIsEmailVerification(false);
         toast.success('Verification code sent to your email!');
         return;
       }
@@ -434,7 +445,10 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const result = await verifyLogin(verificationEmail, verificationRole, otp.trim());
+      const result = isEmailVerification 
+        ? await verifyEmailLogin(verificationEmail, verificationRole, otp.trim())
+        : await verifyLogin(verificationEmail, verificationRole, otp.trim());
+        
       if (!result.ok || !result.user) {
         const msg = result.error ?? 'Verification failed. Please try again.';
         setError(msg);

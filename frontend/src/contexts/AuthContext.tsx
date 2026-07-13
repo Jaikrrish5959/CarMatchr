@@ -14,6 +14,7 @@ export interface User {
   businessName?: string;
   phone?: string;
   phoneVerified?: boolean;
+  emailVerified?: boolean;
   license?: string;
   city?: string;
   dealerType?: 'new' | 'used' | 'both';
@@ -42,8 +43,9 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; email?: string; role?: string }>;
+  login: (email: string, password: string, roleHint?: string) => Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; requiresEmailVerification?: boolean; email?: string; role?: string }>;
   verifyLogin: (email: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
+  verifyEmailLogin: (email: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: User }>;
   register: (user: Omit<User, 'id'> & { password: string }) => Promise<{ ok: boolean; error?: string; user?: User }>;
   loginWithGoogle: (credential: string, role: string) => Promise<authService.GoogleLoginResult>;
   registerBrokerWithGoogle: (data: {
@@ -141,10 +143,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     roleHint?: string
-  ): Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; email?: string; role?: string }> => {
+  ): Promise<{ ok: boolean; error?: string; user?: User; requiresVerification?: boolean; requiresEmailVerification?: boolean; email?: string; role?: string }> => {
     const result = await authService.login(email, password, roleHint);
 
     if (!result.ok) {
+      // Check if backend sent 403 with requiresEmailVerification
+      if ((result as any).requiresEmailVerification) {
+        return { ok: false, requiresEmailVerification: true, email: (result as any).email, role: (result as any).role, error: result.error };
+      }
       return { ok: false, error: result.error };
     }
 
@@ -152,6 +158,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { ok: true, requiresVerification: true, email: result.email, role: result.role };
     }
 
+    setUser(result.user as User);
+    return { ok: true, user: result.user as User };
+  };
+
+  const verifyEmailLogin = async (
+    email: string,
+    role: string,
+    otp: string
+  ): Promise<{ ok: boolean; error?: string; user?: User }> => {
+    const result = await authService.verifyEmailLogin(email, role, otp);
+    if (!result.ok || !result.user) {
+      return { ok: false, error: result.error };
+    }
     setUser(result.user as User);
     return { ok: true, user: result.user as User };
   };
@@ -280,6 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         login,
         verifyLogin,
+        verifyEmailLogin,
         register,
         loginWithGoogle,
         registerBrokerWithGoogle,

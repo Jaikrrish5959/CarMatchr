@@ -108,7 +108,7 @@ function buildThreads(mode: ConversationMode, userId: number | undefined, requir
     if (mode === 'buyer' && requirement.buyerId !== userId) return;
     if (mode === 'broker' && offer.brokerId !== userId) return;
 
-    const id = `buyer-${requirement.buyerId}-broker-${offer.brokerId}`;
+    const id = threadIdFor(requirement.id, offer.brokerId);
     const title = mode === 'buyer'
       ? (offer.dealerName || offer.brokerName || 'Dealer')
       : `${requirement.make} ${requirement.model}`;
@@ -156,6 +156,8 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const lastThreadKeyRef = useRef('');
   const initialLoadPendingRef = useRef(false);
@@ -174,23 +176,21 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
   // When the active thread changes, reset the userScrolledUp flag and scroll to bottom
   useEffect(() => {
     userScrolledUpRef.current = false;
-    endRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+    endRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [activeThreadId]);
 
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) || null;
+  const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0] || null;
+  const activeRequirementId = activeThread?.requirementId;
+  const activeBrokerId = activeThread?.brokerId;
+
   useEffect(() => {
-    if (!activeThread) {
-      setMessages([]);
-      setIsLoadingMessages(false);
-      setMessageLoadError(null);
-      lastThreadKeyRef.current = '';
-      initialLoadPendingRef.current = false;
+    if (!activeRequirementId || !activeBrokerId) {
       return;
     }
 
     let cancelled = false;
     let inFlight = false;
-    const threadKey = `${activeThread.requirementId}:${activeThread.brokerId}`;
+    const threadKey = `${activeRequirementId}:${activeBrokerId}`;
 
     if (lastThreadKeyRef.current !== threadKey) {
       setIsLoadingMessages(true);
@@ -204,7 +204,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       inFlight = true;
       const shouldResolveInitialLoad = initialLoadPendingRef.current;
       try {
-        const url = `${API_BASE}/api/messages?requirementId=${activeThread.requirementId}&brokerId=${activeThread.brokerId}`;
+        const url = `${API_BASE}/api/messages?requirementId=${activeRequirementId}&brokerId=${activeBrokerId}`;
         const response = await fetch(url, { headers: authHeaders() });
         if (!response.ok) {
           if (!cancelled && shouldResolveInitialLoad) {
@@ -237,7 +237,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeThread?.requirementId, activeThread?.brokerId]);
+  }, [activeRequirementId, activeBrokerId]);
 
   if (!user) {
     return (

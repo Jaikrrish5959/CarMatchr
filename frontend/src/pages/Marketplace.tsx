@@ -187,7 +187,7 @@ const Marketplace: React.FC = () => {
   ];
 
   // --- CAR CARD RENDERER ---
-  const renderCarCard = (car: CarListing, showWish = true) => {
+  const renderCarCard = (car: CarListing) => {
     const hasMultipleImages = car.images && car.images.length > 1;
     const hasImages = car.images && car.images.length > 0;
     const currentIndex = activeImage[car.id] || 0;

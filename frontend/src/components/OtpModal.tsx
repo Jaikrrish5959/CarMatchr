@@ -4,21 +4,27 @@ import { sendOtp, verifyOtp } from '../services/authService';
 import toast from 'react-hot-toast';
 
 interface OtpModalProps {
-  phone: string;
+  phone?: string;
+  email?: string;
   title?: string;
   subtitle?: string;
   onVerified: (otp: string) => void;
   onClose: () => void;
+  sendCodeOverride?: () => Promise<{ ok: boolean; error?: string }>;
+  verifyCodeOverride?: (otp: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const RESEND_COOLDOWN = 60; // seconds
 
 const OtpModal: React.FC<OtpModalProps> = ({
   phone,
+  email,
   title = 'Verify Your Phone',
   subtitle,
   onVerified,
   onClose,
+  sendCodeOverride,
+  verifyCodeOverride,
 }) => {
   const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
   const [sending, setSending] = useState(false);
@@ -31,16 +37,16 @@ const OtpModal: React.FC<OtpModalProps> = ({
   // ── Send OTP on mount ────────────────────────────────────────────────────────
   const doSendOtp = useCallback(async () => {
     setSending(true);
-    const result = await sendOtp(phone);
+    const result = sendCodeOverride ? await sendCodeOverride() : await sendOtp(phone || '');
     setSending(false);
     if (!result.ok) {
-      toast.error(result.error || 'Failed to send OTP.');
+      toast.error(result.error || 'Failed to send verification code.');
       return;
     }
     setOtpSent(true);
     setCountdown(RESEND_COOLDOWN);
-    toast.success(`OTP sent to ${phone}`);
-  }, [phone]);
+    toast.success(email ? `Verification code sent to ${email}` : `OTP sent to ${phone}`);
+  }, [phone, email, sendCodeOverride]);
 
   useEffect(() => {
     doSendOtp();
@@ -104,16 +110,16 @@ const OtpModal: React.FC<OtpModalProps> = ({
       return;
     }
     setVerifying(true);
-    const result = await verifyOtp(phone, otp);
+    const result = verifyCodeOverride ? await verifyCodeOverride(otp) : await verifyOtp(phone || '', otp);
     setVerifying(false);
     if (!result.ok) {
-      toast.error(result.error || 'Invalid OTP. Please try again.');
+      toast.error(result.error || 'Invalid code. Please try again.');
       setDigits(Array(6).fill(''));
       inputRefs.current[0]?.focus();
       return;
     }
     setVerified(true);
-    toast.success('Phone verified!');
+    toast.success(email ? 'Email verified!' : 'Phone verified!');
     setTimeout(() => onVerified(otp), 800);
   };
 
@@ -196,15 +202,15 @@ const OtpModal: React.FC<OtpModalProps> = ({
             }
           </div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--color-gray-900)', marginBottom: '6px' }}>
-            {verified ? 'Phone Verified!' : title}
+            {verified ? (email ? 'Email Verified!' : 'Phone Verified!') : title}
           </h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', lineHeight: 1.6 }}>
             {verified
-              ? 'Your phone number has been verified successfully.'
+              ? (email ? 'Your email address has been verified successfully.' : 'Your phone number has been verified successfully.')
               : (subtitle || (
                 <>
                   We sent a 6-digit code to<br />
-                  <strong style={{ color: 'var(--color-gray-800)', fontWeight: 700 }}>{phone}</strong>
+                  <strong style={{ color: 'var(--color-gray-800)', fontWeight: 700 }}>{email || phone}</strong>
                 </>
               ))
             }
@@ -281,7 +287,7 @@ const OtpModal: React.FC<OtpModalProps> = ({
                 >
                   {verifying
                     ? <><Loader2 size={17} style={{ animation: 'spin 0.8s linear infinite' }} /> Verifying…</>
-                    : <><Shield size={17} /> Verify Phone Number</>
+                    : <><Shield size={17} /> Verify {email ? 'Email Address' : 'Phone Number'}</>
                   }
                 </button>
 

@@ -343,3 +343,50 @@ export async function resetPassword(email: string, role: string, otp: string, ne
     return { ok: false, error: 'Server unavailable. Please try again.' };
   }
 }
+
+export async function sendRegisterEmailOtp(email: string, role: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/register-email-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Failed to send verification code.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function verifyRegisterEmailOtp(email: string, role: string, otp: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/register-email-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Verification code failed.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}
+
+export async function verifyEmailLogin(email: string, role: string, otp: string): Promise<LoginResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/verify-email-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data.error || 'Verification failed.' };
+    const { token, user } = data as { token: string; user: AuthUser };
+    saveSession(token, user);
+    return { ok: true, token, user };
+  } catch {
+    return { ok: false, error: 'Server unavailable. Please try again.' };
+  }
+}

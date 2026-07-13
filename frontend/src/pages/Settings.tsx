@@ -176,6 +176,7 @@ const ProfileSettings: React.FC = () => {
 
   // ── Phone OTP verification
   const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
 
   // ── Password modal
   const [showPwdModal, setShowPwdModal] = useState(false);
@@ -809,7 +810,7 @@ const ProfileSettings: React.FC = () => {
       <SectionTitle subtitle="Your account verification status">Verification Status</SectionTitle>
       {[
         { label: 'Mobile Verified', done: !!user?.phoneVerified, sub: user?.phoneVerified ? user?.phone ?? 'Verified' : (user?.phone ? 'Phone added but not verified' : 'Not added') },
-        { label: 'Email Verified', done: true, sub: user?.email ?? '' },
+        { label: 'Email Verified', done: !!user?.emailVerified, sub: user?.email ? `${user.email}${!user.emailVerified ? ' (Not Verified)' : ''}` : '' },
         { label: 'Business Verified', done: user?.status === 'active', sub: user?.status === 'active' ? 'Your business is verified' : 'Pending admin review' },
       ].map(v => (
         <div key={v.label} style={{
@@ -829,7 +830,7 @@ const ProfileSettings: React.FC = () => {
           </div>
           {v.done
             ? <BadgeCheck size={16} color="#16a34a" style={{ marginLeft: 'auto' }} />
-            : (v.label === 'Mobile Verified' && user?.phone && (
+            : ((v.label === 'Mobile Verified' && user?.phone && (
               <button
                 onClick={() => setShowPhoneOtpModal(true)}
                 style={{
@@ -840,7 +841,18 @@ const ProfileSettings: React.FC = () => {
               >
                 Verify Now
               </button>
-            ))
+            )) || (v.label === 'Email Verified' && user?.email && (
+              <button
+                onClick={() => setShowEmailOtpModal(true)}
+                style={{
+                  padding: '7px 16px', background: 'var(--color-primary)',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                }}
+              >
+                Verify Now
+              </button>
+            )))
           }
         </div>
       ))}
@@ -930,6 +942,32 @@ const ProfileSettings: React.FC = () => {
           <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--color-gray-900)' }}>Profile Settings</h1>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>Manage your account, preferences, and security settings</p>
         </div>
+
+        {/* Email verification warning banner */}
+        {user && !user.emailVerified && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '12px',
+            padding: '14px 18px', marginBottom: '24px'
+          }}>
+            <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, fontSize: '0.875rem', color: '#b45309', fontWeight: 600 }}>
+              Your email address is not verified. Some features might be restricted until your email is verified.
+            </div>
+            <button
+              onClick={() => setShowEmailOtpModal(true)}
+              style={{
+                padding: '6px 14px', background: '#d97706', color: '#fff',
+                border: 'none', borderRadius: '8px', fontSize: '0.75rem',
+                fontWeight: 700, cursor: 'pointer', transition: 'background 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#b45309'}
+              onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
+            >
+              Verify Now
+            </button>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '24px', alignItems: 'start' }}>
 
@@ -1140,6 +1178,57 @@ const ProfileSettings: React.FC = () => {
             handleSave(otp);
           }}
           onClose={() => setShowPhoneOtpModal(false)}
+        />
+      )}
+      {/* Email OTP Modal (triggered on Verify Now under Email) */}
+      {showEmailOtpModal && (
+        <OtpModal
+          phone=""
+          email={user?.email || ''}
+          title="Verify Email Address"
+          subtitle="Enter the 6-digit code sent to your email to confirm ownership."
+          onVerified={async (otp) => {
+            try {
+              // Direct validation against verify-email-login/register-email-verify or equivalent backend call
+              const res = await fetch(`${API_BASE}/api/auth/verify-email-login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user?.email, role: user?.role, otp }),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                toast.error(data.error || 'Verification failed.');
+                return;
+              }
+              toast.success('Email verified successfully!');
+              if (data.token) {
+                localStorage.setItem('carmatchr_token', data.token);
+              }
+              updateUser(data.user || { emailVerified: true });
+              setShowEmailOtpModal(false);
+            } catch (err) {
+              toast.error('An error occurred. Please try again.');
+            }
+          }}
+          onClose={() => setShowEmailOtpModal(false)}
+          sendCodeOverride={async () => {
+            try {
+              const res = await fetch(`${API_BASE}/api/auth/register-email-send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user?.email, role: user?.role, allowExisting: true }),
+              });
+              const data = await res.json();
+              if (!res.ok) return { ok: false, error: data.error || 'Failed to send email verification.' };
+              return { ok: true };
+            } catch (err: any) {
+              return { ok: false, error: err.message || 'Failed to send email verification.' };
+            }
+          }}
+          verifyCodeOverride={async () => {
+            // Already handled by onVerified, but needs to return valid format to satisfy TypeScript type contract
+            return { ok: true };
+          }}
         />
       )}
     </div>

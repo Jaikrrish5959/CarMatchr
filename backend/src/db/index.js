@@ -85,6 +85,16 @@ export async function initDb() {
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS email_verifications (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(255) NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      otp_code VARCHAR(10) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(email, role)
+    );
+
     CREATE TABLE IF NOT EXISTS brands (
       id SERIAL PRIMARY KEY,
       name VARCHAR(100) NOT NULL UNIQUE,
@@ -408,6 +418,15 @@ export async function initDb() {
     }
   }
 
+  // Migrate: add email_verified column — existing users are treated as unverified by default
+  try {
+    await db.run('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;');
+  } catch (err) {
+    if (!err.message.includes('already exists') && !err.message.includes('duplicate column')) {
+      console.error('Migration error (email_verified):', err);
+    }
+  }
+
   // Create phone_verifications table for temporary OTP storage (if not exists)
   try {
     await db.run(`
@@ -421,6 +440,23 @@ export async function initDb() {
     `);
   } catch (err) {
     console.error('Migration error (phone_verifications table):', err);
+  }
+
+  // Create email_verifications table for temporary OTP storage (if not exists)
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS email_verifications (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        role VARCHAR(20) NOT NULL,
+        otp_code VARCHAR(10) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(email, role)
+      );
+    `);
+  } catch (err) {
+    console.error('Migration error (email_verifications table):', err);
   }
 
   // Update status CHECK constraint for users soft-delete status

@@ -427,6 +427,7 @@ const mapUser = (row) => ({
   businessName: row.business_name ?? undefined,
   phone: row.phone ?? undefined,
   phoneVerified: !!row.phone_verified,
+  emailVerified: !!row.email_verified,
   license: row.license ?? undefined,
   city: row.city ?? undefined,
   dealerType: row.dealer_type ?? undefined,
@@ -678,7 +679,24 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: result.error?.issues?.[0]?.message || 'Invalid input data.' });
   }
   const user = result.data;
-  const { phoneOtp } = req.body;
+  const { phoneOtp, emailOtp } = req.body;
+
+  // Verify the email OTP before creating the account
+  if (!emailOtp) {
+    return res.status(400).json({ error: 'Email verification is required. Please verify your email address.' });
+  }
+  const emailOtpRow = await db.get(
+    'SELECT * FROM email_verifications WHERE email = $1 AND role = $2 LIMIT 1',
+    [user.email.trim().toLowerCase(), user.role]
+  );
+  if (!emailOtpRow || emailOtpRow.otp_code !== String(emailOtp)) {
+    return res.status(400).json({ error: 'Invalid email verification code.' });
+  }
+  if (parseTimestampAsUtc(emailOtpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Email verification code has expired. Please request a new one.' });
+  }
+  // Clean up used email OTP
+  await db.run('DELETE FROM email_verifications WHERE email = $1 AND role = $2', [user.email.trim().toLowerCase(), user.role]);
 
   // Verify the phone OTP before creating the account
   let phoneVerified = false;
@@ -722,8 +740,8 @@ app.post('/api/auth/register', async (req, res) => {
 
   const created = await db.get(
     `
-      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, state, dealer_type, phone_verified, terms_accepted, privacy_accepted, marketing_consent)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO users (email, password, role, status, name, business_name, phone, license, city, state, dealer_type, phone_verified, email_verified, terms_accepted, privacy_accepted, marketing_consent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `,
     [
@@ -739,6 +757,7 @@ app.post('/api/auth/register', async (req, res) => {
       user.state ?? null,
       user.dealerType ?? null,
       phoneVerified,
+      true, // email was verified via OTP during registration
       user.termsAccepted ?? false,
       user.privacyAccepted ?? false,
       user.marketingConsent ?? false,
@@ -753,6 +772,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: 'Email, password and role are required.' });
   }
+
   const { email, password, role } = result.data;
   const found = await db.get(
     'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
@@ -766,9 +786,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(403).json({ error: 'This account has been deleted or is scheduled for deletion.' });
   }
 
-  // Always use bcrypt — no plaintext fallback
   const passwordMatch = await bcrypt.compare(password, found.password);
-
   if (!passwordMatch) {
     return res.status(401).json({ error: 'Invalid credentials. Please check your password.' });
   }
@@ -778,7 +796,30 @@ app.post('/api/auth/login', async (req, res) => {
     return res.json({ token, user: mapUser(found) });
   }
 
-  // Directly log the user in without OTP verification
+  // If email not yet verified, send an OTP and ask frontend to verify
+  if (!found.email_verified) {
+    const otp = String(100000 + Math.floor(Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    await db.run(
+      `INSERT INTO email_verifications (email, role, otp_code, expires_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email, role) DO UPDATE SET otp_code = $3, expires_at = $4, created_at = CURRENT_TIMESTAMP`,
+      [found.email, found.role, otp, expiresAt]
+    );
+    try {
+      await sendOtpEmail(found.email, otp);
+    } catch (err) {
+      console.error('Email verification send error during login:', err.message);
+      // Still proceed — OTP is in DB
+    }
+    return res.status(403).json({
+      requiresEmailVerification: true,
+      email: found.email,
+      role: found.role,
+      error: 'Your email address is not verified. A verification code has been sent to your email.',
+    });
+  }
+
   const token = signToken(found);
   return res.json({ token, user: mapUser(found) });
 });
@@ -810,7 +851,6 @@ app.post('/api/auth/verify-login', async (req, res) => {
     return res.status(401).json({ error: 'Verification code has expired. Please log in again to request a new code.' });
   }
 
-  // Clear OTP on successful verification
   await db.run(
     'UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = $1',
     [found.id]
@@ -818,6 +858,114 @@ app.post('/api/auth/verify-login', async (req, res) => {
 
   const token = signToken(found);
   return res.json({ token, user: mapUser(found) });
+});
+
+app.post('/api/auth/verify-email-login', async (req, res) => {
+  const { email, role, otp } = req.body;
+  if (!email || !role || !otp) {
+    return res.status(400).json({ error: 'Email, role, and verification code are required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const found = await db.get(
+    'SELECT * FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+    [normalizedEmail, role]
+  );
+  if (!found) {
+    return res.status(401).json({ error: 'Account not found.' });
+  }
+
+  if (found.status === 'deleted') {
+    return res.status(403).json({ error: 'This account has been deleted or is scheduled for deletion.' });
+  }
+
+  const otpRow = await db.get(
+    'SELECT * FROM email_verifications WHERE email = $1 AND role = $2 LIMIT 1',
+    [normalizedEmail, role]
+  );
+
+  if (!otpRow || otpRow.otp_code !== String(otp)) {
+    return res.status(400).json({ error: 'Invalid verification code.' });
+  }
+
+  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please log in again to request a new one.' });
+  }
+
+  // Mark email as verified and clean up the OTP record
+  await db.run('UPDATE users SET email_verified = TRUE WHERE id = $1', [found.id]);
+  await db.run('DELETE FROM email_verifications WHERE email = $1 AND role = $2', [normalizedEmail, role]);
+
+  // Reload the user with updated email_verified
+  const updated = await db.get('SELECT * FROM users WHERE id = $1', [found.id]);
+  const token = signToken(updated);
+  return res.json({ token, user: mapUser(updated) });
+});
+
+
+app.post('/api/auth/register-email-send', async (req, res) => {
+  const { email, role, allowExisting } = req.body;
+  if (!email || !role) {
+    return res.status(400).json({ error: 'Email and role are required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Check if user already exists (skip if allowExisting is true)
+  if (!allowExisting) {
+    const exists = await db.get(
+      'SELECT 1 FROM users WHERE email = $1 AND role = $2 LIMIT 1',
+      [normalizedEmail, role]
+    );
+    if (exists) {
+      return res.status(409).json({ error: `An ${role} account already exists for this email.` });
+    }
+  }
+
+  const otp = String(100000 + Math.floor(Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  // Upsert OTP record
+  await db.run(
+    `INSERT INTO email_verifications (email, role, otp_code, expires_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email, role) DO UPDATE SET otp_code = $3, expires_at = $4, created_at = CURRENT_TIMESTAMP`,
+    [normalizedEmail, role, otp, expiresAt]
+  );
+
+  try {
+    await sendOtpEmail(normalizedEmail, otp);
+  } catch (err) {
+    console.error('Email send error:', err.message);
+    return res.status(503).json({ error: 'Unable to send verification email. Please try again.' });
+  }
+
+  return res.json({ ok: true, message: 'Verification OTP sent to your email.' });
+});
+
+app.post('/api/auth/register-email-verify', async (req, res) => {
+  const { email, role, otp } = req.body;
+  if (!email || !role || !otp) {
+    return res.status(400).json({ error: 'Email, role, and verification code are required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const otpRow = await db.get(
+    'SELECT * FROM email_verifications WHERE email = $1 AND role = $2 LIMIT 1',
+    [normalizedEmail, role]
+  );
+
+  if (!otpRow || otpRow.otp_code !== String(otp)) {
+    return res.status(400).json({ error: 'Invalid verification code.' });
+  }
+
+  if (parseTimestampAsUtc(otpRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+  }
+
+  return res.json({ ok: true, message: 'Email successfully verified.' });
 });
 
 app.post('/api/auth/phone-login-send', async (req, res) => {
@@ -1218,45 +1366,55 @@ app.patch('/api/users/:id/status', authenticate, requireRole('admin'), async (re
 // ========== CATALOG (public read) ==========
 
 app.get('/api/catalog/brands', async (_req, res) => {
-  // Single query with JOINs instead of N+1
-  const rows = await db.all(`
-    SELECT b.id AS "brandId", b.name AS "brandName", b.logo_url AS "logoUrl",
-           m.id AS "modelId", m.name AS "modelName", m.image_url AS "imageUrl",
-           f.id AS "featureId", f.name AS "featureName"
-    FROM brands b
-    LEFT JOIN models m ON m.brand_id = b.id
-    LEFT JOIN model_features mf ON mf.model_id = m.id
-    LEFT JOIN features f ON f.id = mf.feature_id
-    ORDER BY b.name, m.name, f.name
-  `);
+  try {
+    // Single query with JOINs instead of N+1
+    const rows = await db.all(`
+      SELECT b.id AS "brandId", b.name AS "brandName", b.logo_url AS "logoUrl",
+             m.id AS "modelId", m.name AS "modelName", m.image_url AS "imageUrl",
+             f.id AS "featureId", f.name AS "featureName"
+      FROM brands b
+      LEFT JOIN models m ON m.brand_id = b.id
+      LEFT JOIN model_features mf ON mf.model_id = m.id
+      LEFT JOIN features f ON f.id = mf.feature_id
+      ORDER BY b.name, m.name, f.name
+    `);
 
-  const brandsMap = new Map();
-  for (const row of rows) {
-    if (!brandsMap.has(row.brandId)) {
-      brandsMap.set(row.brandId, { id: row.brandId, name: row.brandName, logoUrl: row.logoUrl, models: new Map() });
-    }
-    const brand = brandsMap.get(row.brandId);
-    if (row.modelId && !brand.models.has(row.modelId)) {
-      brand.models.set(row.modelId, { id: row.modelId, name: row.modelName, imageUrl: row.imageUrl, features: [] });
-    }
-    if (row.modelId && row.featureId) {
-      const model = brand.models.get(row.modelId);
-      if (!model.features.some(f => f.id === row.featureId)) {
-        model.features.push({ id: row.featureId, name: row.featureName });
+    const brandsMap = new Map();
+    for (const row of rows) {
+      if (!brandsMap.has(row.brandId)) {
+        brandsMap.set(row.brandId, { id: row.brandId, name: row.brandName, logoUrl: row.logoUrl, models: new Map() });
+      }
+      const brand = brandsMap.get(row.brandId);
+      if (row.modelId && !brand.models.has(row.modelId)) {
+        brand.models.set(row.modelId, { id: row.modelId, name: row.modelName, imageUrl: row.imageUrl, features: [] });
+      }
+      if (row.modelId && row.featureId) {
+        const model = brand.models.get(row.modelId);
+        if (!model.features.some(f => f.id === row.featureId)) {
+          model.features.push({ id: row.featureId, name: row.featureName });
+        }
       }
     }
-  }
 
-  const response = Array.from(brandsMap.values()).map(b => ({
-    ...b,
-    models: Array.from(b.models.values()),
-  }));
-  res.json(response);
+    const response = Array.from(brandsMap.values()).map(b => ({
+      ...b,
+      models: Array.from(b.models.values()),
+    }));
+    res.json(response);
+  } catch (err) {
+    console.error('Error fetching catalog brands:', err);
+    res.status(500).json([]);
+  }
 });
 
 app.get('/api/catalog/features', async (_req, res) => {
-  const rows = await db.all('SELECT id, name FROM features ORDER BY name');
-  res.json(rows);
+  try {
+    const rows = await db.all('SELECT id, name FROM features ORDER BY name');
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching catalog features:', err);
+    res.status(500).json([]);
+  }
 });
 
 // ========== DATA (authenticated, bulk fetch) ==========
@@ -1903,11 +2061,16 @@ app.post('/api/listings/:id/images', authenticate, upload.array('images', 10), a
 });
 
 app.get('/api/listings/:id/images', async (req, res) => {
-  const images = (await db.all(
-    'SELECT image_url FROM listing_images WHERE listing_id = $1 ORDER BY sort_order',
-    [req.params.id]
-  )).map((r) => r.image_url);
-  res.json(images);
+  try {
+    const images = (await db.all(
+      'SELECT image_url FROM listing_images WHERE listing_id = $1 ORDER BY sort_order',
+      [req.params.id]
+    )).map((r) => r.image_url);
+    res.json(images);
+  } catch (err) {
+    console.error('Error fetching listing images:', err);
+    res.status(500).json([]);
+  }
 });
 
 // ========== CONTACT EVENTS (public — buyers contact brokers) ==========
@@ -2275,8 +2438,13 @@ function parseBulkPayload(req) {
 }
 
 app.get('/api/admin/brands', authenticate, requireRole('admin'), async (_req, res) => {
-  const rows = await db.all('SELECT id, name, logo_url AS "logoUrl" FROM brands ORDER BY name');
-  res.json(rows);
+  try {
+    const rows = await db.all('SELECT id, name, logo_url AS "logoUrl" FROM brands ORDER BY name');
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching admin brands:', err);
+    res.status(500).json([]);
+  }
 });
 
 app.post('/api/admin/brands', authenticate, requireRole('admin'), async (req, res) => {
@@ -2340,18 +2508,23 @@ app.post('/api/admin/brands/bulk', authenticate, requireRole('admin'), csvUpload
 });
 
 app.get('/api/admin/models', authenticate, requireRole('admin'), async (req, res) => {
-  const brandId = req.query.brandId ? Number(req.query.brandId) : null;
-  const rows = await db.all(
-    `
-      SELECT m.id, m.brand_id AS "brandId", m.name, m.image_url AS "imageUrl", b.name AS "brandName"
-      FROM models m
-      JOIN brands b ON b.id = m.brand_id
-      ${brandId ? 'WHERE m.brand_id = $1' : ''}
-      ORDER BY b.name, m.name
-    `,
-    brandId ? [brandId] : []
-  );
-  res.json(rows);
+  try {
+    const brandId = req.query.brandId ? Number(req.query.brandId) : null;
+    const rows = await db.all(
+      `
+        SELECT m.id, m.brand_id AS "brandId", m.name, m.image_url AS "imageUrl", b.name AS "brandName"
+        FROM models m
+        JOIN brands b ON b.id = m.brand_id
+        ${brandId ? 'WHERE m.brand_id = $1' : ''}
+        ORDER BY b.name, m.name
+      `,
+      brandId ? [brandId] : []
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching admin models:', err);
+    res.status(500).json([]);
+  }
 });
 
 app.post('/api/admin/models', authenticate, requireRole('admin'), async (req, res) => {
@@ -2832,10 +3005,15 @@ app.delete('/api/admin/listings/:id', adminAuth, async (req, res) => {
 
 // GET /api/admin/logs — View admin action audit log
 app.get('/api/admin/logs', adminAuth, async (_req, res) => {
-  const rows = await db.all(
-    'SELECT id, action, target_type AS "targetType", target_id AS "targetId", created_at AS "createdAt" FROM admin_logs ORDER BY created_at DESC LIMIT 500'
-  );
-  res.json(rows);
+  try {
+    const rows = await db.all(
+      'SELECT id, action, target_type AS "targetType", target_id AS "targetId", created_at AS "createdAt" FROM admin_logs ORDER BY created_at DESC LIMIT 500'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching admin logs:', err);
+    res.status(500).json([]);
+  }
 });
 
 
