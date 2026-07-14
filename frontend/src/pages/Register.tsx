@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../contexts/AuthContext';
-import { UserPlus, Loader2, AlertCircle, Phone, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Loader2, AlertCircle, Phone, CheckCircle2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OtpModal from '../components/OtpModal';
+import { sendRegisterEmailOtp, verifyRegisterEmailOtp } from '../services/authService';
 
 const Register: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -22,6 +23,10 @@ const Register: React.FC = () => {
   const [phoneVerifiedOtp, setPhoneVerifiedOtp] = useState<string | null>(null);  // otp code confirmed
   const [brokerPhoneVerifiedOtp, setBrokerPhoneVerifiedOtp] = useState<string | null>(null);
   const [showBrokerOtpModal, setShowBrokerOtpModal] = useState(false);
+
+  // Email OTP verification states
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
+  const [emailVerifiedOtp, setEmailVerifiedOtp] = useState<string | null>(null);
 
   // Google OAuth specific states
   const [googleProfileData, setGoogleProfileData] = useState<{
@@ -271,6 +276,7 @@ const Register: React.FC = () => {
 
     if (!form.email.trim()) return 'Please enter your email address.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Please enter a valid email address.';
+    if (!emailVerifiedOtp) return 'Please verify your email address before creating your account.';
     if (!form.password) return 'Please enter a password.';
     if (form.password.length < 6) return 'Password must be at least 6 characters.';
     if (!termsAccepted) return 'You must accept the Terms of Service & Privacy Policy to register.';
@@ -302,6 +308,8 @@ const Register: React.FC = () => {
         dealerType: role === 'broker' ? (form.dealerType as 'new' | 'used' | 'both') : undefined,
         // @ts-ignore — phoneOtp passed to backend
         phoneOtp: phoneVerifiedOtp || undefined,
+        // @ts-ignore — emailOtp passed to backend
+        emailOtp: emailVerifiedOtp || undefined,
         termsAccepted: termsAccepted,
         privacyAccepted: termsAccepted,
         marketingConsent: marketingConsent,
@@ -653,7 +661,49 @@ const Register: React.FC = () => {
 
                 <div className="form-group">
                   <label className="form-label">Email Address *</label>
-                  <input type="email" name="email" className="form-control" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="email" name="email" className="form-control"
+                      placeholder="you@example.com"
+                      value={form.email}
+                      onChange={e => {
+                        handleChange(e);
+                        setEmailVerifiedOtp(null);
+                      }}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) && (
+                      emailVerifiedOtp ? (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0',
+                          borderRadius: '10px', color: '#16a34a', fontWeight: 700, fontSize: '0.8125rem',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <CheckCircle2 size={15} /> Verified
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailOtpModal(true)}
+                          style={{
+                            padding: '8px 16px', background: 'var(--color-primary)',
+                            color: '#fff', border: 'none', borderRadius: '10px',
+                            fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                            whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px',
+                          }}
+                        >
+                          <Mail size={13} /> Verify
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {!emailVerifiedOtp && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) && (
+                    <p style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '4px', fontWeight: 600 }}>
+                      ⚠ Email verification is required before registration.
+                    </p>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password * <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)', fontWeight: 400 }}>(min. 6 characters)</span></label>
@@ -729,7 +779,7 @@ const Register: React.FC = () => {
         </div>
       </div>
 
-      {/* OTP Modal for standard broker registration */}
+      {/* OTP Modal for standard buyer/broker registration */}
       {showOtpModal && (
         <OtpModal
           phone={`+91${form.phone.trim()}`}
@@ -741,6 +791,23 @@ const Register: React.FC = () => {
             toast.success('Mobile number verified successfully!');
           }}
           onClose={() => setShowOtpModal(false)}
+        />
+      )}
+
+      {/* Email OTP Modal for standard registration */}
+      {showEmailOtpModal && (
+        <OtpModal
+          email={form.email.trim().toLowerCase()}
+          title="Verify Email Address"
+          subtitle={`Enter the 6-digit code sent to ${form.email.trim()} to verify your address.`}
+          sendCodeOverride={() => sendRegisterEmailOtp(form.email.trim().toLowerCase(), role)}
+          verifyCodeOverride={(otp) => verifyRegisterEmailOtp(form.email.trim().toLowerCase(), role, otp)}
+          onVerified={(otp) => {
+            setEmailVerifiedOtp(otp);
+            setShowEmailOtpModal(false);
+            toast.success('Email address verified successfully!');
+          }}
+          onClose={() => setShowEmailOtpModal(false)}
         />
       )}
 

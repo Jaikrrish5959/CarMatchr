@@ -33,6 +33,8 @@ const OtpModal: React.FC<OtpModalProps> = ({
   const [otpSent, setOtpSent] = useState(false);
   const [verified, setVerified] = useState(false);
   const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(6).fill(null));
+  // Guard to prevent double-send in React StrictMode (double-invoke of useEffect)
+  const hasSentRef = useRef(false);
 
   // ── Send OTP on mount ────────────────────────────────────────────────────────
   const doSendOtp = useCallback(async () => {
@@ -49,8 +51,12 @@ const OtpModal: React.FC<OtpModalProps> = ({
   }, [phone, email, sendCodeOverride]);
 
   useEffect(() => {
+    // Only send OTP once per mount. The hasSentRef guard prevents the double-call
+    // that React StrictMode triggers in development (mount → unmount → remount).
+    if (hasSentRef.current) return;
+    hasSentRef.current = true;
     doSendOtp();
-  }, [doSendOtp]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Countdown timer ──────────────────────────────────────────────────────────
   useEffect(() => {

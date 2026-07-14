@@ -26,6 +26,7 @@ export interface LoginResult {
   token?: string;
   error?: string;
   requiresVerification?: boolean;
+  requiresEmailVerification?: boolean;
   email?: string;
   role?: string;
 }
@@ -90,6 +91,10 @@ export async function login(
     const data = await res.json();
 
     if (!res.ok) {
+      // Backend returns 403 with requiresEmailVerification when email is unverified
+      if (data.requiresEmailVerification) {
+        return { ok: false, requiresEmailVerification: true, email: data.email, role: data.role, error: data.error };
+      }
       return { ok: false, error: data.error || `Login failed. Please check your credentials.` };
     }
 

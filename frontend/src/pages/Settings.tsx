@@ -475,7 +475,31 @@ const ProfileSettings: React.FC = () => {
         </div>
       </FormField>
       <FormField label="Email Address" icon={<Mail size={13} />} hint="Email cannot be changed.">
-        <input style={inputDisabled} value={form.email} readOnly />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input style={{ ...inputDisabled, flex: 1 }} value={form.email} readOnly />
+          {user?.emailVerified ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              padding: '7px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0',
+              borderRadius: '10px', color: '#16a34a', fontWeight: 700, fontSize: '0.8rem',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              <CheckCircle2 size={14} /> Verified
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowEmailOtpModal(true)}
+              style={{
+                padding: '7px 12px', background: 'var(--color-primary)',
+                color: '#fff', border: 'none', borderRadius: '10px',
+                fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >
+              Verify Email
+            </button>
+          )}
+        </div>
       </FormField>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
         <FormField label="State" icon={<MapPin size={13} />}>
@@ -656,7 +680,31 @@ const ProfileSettings: React.FC = () => {
           </div>
         </FormField>
         <FormField label="Email Address" icon={<Mail size={13} />} hint="Cannot be changed.">
-          <input style={inputDisabled} value={form.email} readOnly />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input style={{ ...inputDisabled, flex: 1 }} value={form.email} readOnly />
+            {user?.emailVerified ? (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '7px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0',
+                borderRadius: '10px', color: '#16a34a', fontWeight: 700, fontSize: '0.8rem',
+                whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                <CheckCircle2 size={14} /> Verified
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowEmailOtpModal(true)}
+                style={{
+                  padding: '7px 12px', background: 'var(--color-primary)',
+                  color: '#fff', border: 'none', borderRadius: '10px',
+                  fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >
+                Verify Email
+              </button>
+            )}
+          </div>
         </FormField>
         <FormField label="State" icon={<MapPin size={13} />}>
           <select style={input} value={form.state} onChange={e => handleStateChange(e.target.value)}>
