@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, BadgeInfo, Car, Clock, MessageSquare, Send, User } from 'lucide-react';
+import { ArrowRight, BadgeInfo, Car, CheckCircle2, Clock, MessageSquare, Send, User } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useData } from '../hooks/useData';
 import type { Offer, Requirement } from '../contexts/DataContext';
@@ -17,6 +17,8 @@ interface ConversationMessage {
   senderName: string;
   body: string;
   createdAt: string;
+  /** true while we're waiting for server confirmation */
+  optimistic?: boolean;
 }
 
 interface ConversationThread {
@@ -34,36 +36,14 @@ function threadIdFor(requirementId: number, brokerId: number) {
   return `req-${requirementId}-broker-${brokerId}`;
 }
 
-function parseServerDate(value: string) {
-  if (!value) return new Date(NaN);
-
-  // Treat bare database timestamps as UTC so they render correctly in the browser's local time.
-  const utcMatch = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
-  );
-  if (utcMatch) {
-    const [, year, month, day, hour, minute, second = '0', millisecond = '0'] = utcMatch;
-    return new Date(Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second),
-      Number(millisecond.padEnd(3, '0')),
-    ));
-  }
-
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) return parsed;
-
-  // Some DB adapters can return "YYYY-MM-DD HH:mm:ss" without timezone.
-  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
-  return new Date(normalized);
-}
-
+/**
+ * Format a UTC ISO-8601 string (e.g. "2026-07-14T08:13:00.000Z") for display.
+ * new Date(isoString) always produces the correct instant when the string
+ * ends with Z (UTC). toLocaleTimeString then converts to the user's local timezone.
+ */
 function formatTime(iso: string) {
-  const date = parseServerDate(iso);
+  if (!iso) return '--:--';
+  const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '--:--';
 
   const now = new Date();
@@ -73,71 +53,55 @@ function formatTime(iso: string) {
 
   const isSameDay = date.toDateString() === now.toDateString();
   const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
   if (isSameDay) return time;
 
   const dateLabel = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
-  return `${dateLabel} ${time}`;
+  return `${dateLabel}, ${time}`;
 }
 
-function sameMessages(left: ConversationMessage[], right: ConversationMessage[]) {
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) {
-    if (
-      left[i].id !== right[i].id ||
-      left[i].body !== right[i].body ||
-      left[i].createdAt !== right[i].createdAt
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function buildThreads(mode: ConversationMode, userId: number | undefined, requirements: Requirement[], offers: Offer[]) {
+function buildThreads(
+  mode: ConversationMode,
+  userId: number | undefined,
+  requirements: Requirement[],
+  offers: Offer[]
+) {
   if (!userId) return [] as ConversationThread[];
 
   const grouped = new Map<string, ConversationThread>();
 
   offers.forEach((offer) => {
-    if (offer.status !== 'accepted') return;
-
     const requirement = requirements.find((item) => item.id === offer.requirementId);
     if (!requirement) return;
-
     if (mode === 'buyer' && requirement.buyerId !== userId) return;
     if (mode === 'broker' && offer.brokerId !== userId) return;
 
     const id = threadIdFor(requirement.id, offer.brokerId);
-    const title = mode === 'buyer'
-      ? (offer.dealerName || offer.brokerName || 'Dealer')
-      : `${requirement.make} ${requirement.model}`;
-    const subtitle = mode === 'buyer'
-      ? `${requirement.make} ${requirement.model} • ${offer.price}`
-      : `Buyer #${requirement.buyerId} • ${offer.price}`;
-    const counterpartyLabel = mode === 'buyer'
-      ? (offer.dealerName || offer.brokerName || 'Dealer')
-      : `Buyer #${requirement.buyerId}`;
+    const title =
+      mode === 'buyer'
+        ? offer.dealerName || offer.brokerName || 'Dealer'
+        : `${requirement.make} ${requirement.model}`;
+    const subtitle =
+      mode === 'buyer'
+        ? `${requirement.make} ${requirement.model} \u2022 ${offer.price}`
+        : `Buyer #${requirement.buyerId} \u2022 ${offer.price}`;
+    const counterpartyLabel =
+      mode === 'buyer'
+        ? offer.dealerName || offer.brokerName || 'Dealer'
+        : `Buyer #${requirement.buyerId}`;
 
     const existing = grouped.get(id);
     if (!existing || new Date(offer.createdAt).getTime() > new Date(existing.offer.createdAt).getTime()) {
-      grouped.set(id, {
-        id,
-        requirementId: requirement.id,
-        brokerId: offer.brokerId,
-        title,
-        subtitle,
-        counterpartyLabel,
-        offer,
-        requirement,
-      });
+      grouped.set(id, { id, requirementId: requirement.id, brokerId: offer.brokerId, title, subtitle, counterpartyLabel, offer, requirement });
     }
   });
 
   return Array.from(grouped.values()).sort(
-    (left, right) => new Date(right.offer.createdAt).getTime() - new Date(left.offer.createdAt).getTime()
+    (l, r) => new Date(r.offer.createdAt).getTime() - new Date(l.offer.createdAt).getTime()
   );
 }
+
+/** Poll every 15 seconds — reduces DB load by 3x vs the original 5s. */
+const POLL_INTERVAL_MS = 15_000;
 
 interface Props {
   mode: ConversationMode;
@@ -150,43 +114,59 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     () => buildThreads(mode, user?.id, requirements, offers),
     [mode, user?.id, requirements, offers]
   );
+
   const [activeThreadId, setActiveThreadId] = useState('');
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const lastThreadKeyRef = useRef('');
   const initialLoadPendingRef = useRef(false);
+  /** Timestamp of the last confirmed message — used for delta polling. */
+  const lastTimestampRef = useRef('');
+  /** Set of real message IDs we already have — prevents duplicates on merge. */
+  const knownIdsRef = useRef(new Set<string>());
 
+  // Auto-select first thread
   useEffect(() => {
-    if (!threads.length) {
-      setActiveThreadId('');
-      return;
-    }
-
-    if (!activeThreadId || !threads.some((thread) => thread.id === activeThreadId)) {
+    if (!threads.length) { setActiveThreadId(''); return; }
+    if (!activeThreadId || !threads.some((t) => t.id === activeThreadId)) {
       setActiveThreadId(threads[0].id);
     }
   }, [threads, activeThreadId]);
 
-  // When the active thread changes, reset the userScrolledUp flag and scroll to bottom
+  // When thread changes: reset scroll + per-thread tracking refs
   useEffect(() => {
     userScrolledUpRef.current = false;
+    lastTimestampRef.current = '';
+    knownIdsRef.current = new Set();
     endRef.current?.scrollIntoView({ behavior: 'instant' });
+    
+    // Sync active chat thread to global window object so notification toast knows to be quiet for it
+    (window as any).__activeChatThreadId = activeThreadId;
+    return () => {
+      (window as any).__activeChatThreadId = null;
+    };
   }, [activeThreadId]);
 
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0] || null;
+  // Auto-scroll to bottom when new messages arrive (unless user scrolled up)
+  useEffect(() => {
+    if (!userScrolledUpRef.current) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0] || null;
   const activeRequirementId = activeThread?.requirementId;
   const activeBrokerId = activeThread?.brokerId;
 
   useEffect(() => {
-    if (!activeRequirementId || !activeBrokerId) {
-      return;
-    }
+    if (!activeRequirementId || !activeBrokerId) return;
 
     let cancelled = false;
     let inFlight = false;
@@ -197,33 +177,56 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
       setMessageLoadError(null);
       initialLoadPendingRef.current = true;
       lastThreadKeyRef.current = threadKey;
+      lastTimestampRef.current = '';
+      knownIdsRef.current = new Set();
     }
 
     const loadMessages = async () => {
       if (inFlight) return;
       inFlight = true;
-      const shouldResolveInitialLoad = initialLoadPendingRef.current;
+      const isInitial = initialLoadPendingRef.current;
+
       try {
-        const url = `${API_BASE}/api/messages?requirementId=${activeRequirementId}&brokerId=${activeBrokerId}`;
+        // Delta polling: on subsequent polls, only request messages newer than last known.
+        const since = isInitial ? '' : lastTimestampRef.current;
+        let url = `${API_BASE}/api/messages?requirementId=${activeRequirementId}&brokerId=${activeBrokerId}`;
+        if (since) url += `&since=${encodeURIComponent(since)}`;
+
         const response = await fetch(url, { headers: authHeaders() });
         if (!response.ok) {
-          if (!cancelled && shouldResolveInitialLoad) {
-            setMessageLoadError('Unable to load messages right now. Please try again.');
-          }
+          if (!cancelled && isInitial) setMessageLoadError('Unable to load messages right now. Please try again.');
           return;
         }
+
         const data = await response.json();
         if (!cancelled) {
-          const next = Array.isArray(data) ? data : [];
-          setMessages((prev) => (sameMessages(prev, next) ? prev : next));
+          const incoming: ConversationMessage[] = (Array.isArray(data) ? data : []);
+
+          if (isInitial) {
+            setMessages(incoming);
+            knownIdsRef.current = new Set(incoming.map((m) => m.id));
+          } else {
+            const newOnes = incoming.filter((m) => !knownIdsRef.current.has(m.id));
+            if (newOnes.length > 0) {
+              newOnes.forEach((m) => knownIdsRef.current.add(m.id));
+              setMessages((prev) => {
+                // Remove any optimistic messages that the confirmed messages replace
+                const confirmedIds = new Set(newOnes.map((m) => m.id));
+                return [...prev.filter((m) => !m.optimistic || !confirmedIds.has(m.id)), ...newOnes];
+              });
+            }
+          }
+
+          // Update delta cursor to latest message timestamp
+          if (incoming.length > 0) {
+            lastTimestampRef.current = incoming[incoming.length - 1].createdAt;
+          }
           setMessageLoadError(null);
         }
       } catch {
-        if (!cancelled && shouldResolveInitialLoad) {
-          setMessageLoadError('Unable to load messages right now. Please try again.');
-        }
+        if (!cancelled && isInitial) setMessageLoadError('Unable to load messages right now. Please try again.');
       } finally {
-        if (shouldResolveInitialLoad && !cancelled) {
+        if (isInitial && !cancelled) {
           setIsLoadingMessages(false);
           initialLoadPendingRef.current = false;
         }
@@ -232,11 +235,8 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     };
 
     loadMessages();
-    const timer = window.setInterval(loadMessages, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(loadMessages, POLL_INTERVAL_MS);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [activeRequirementId, activeBrokerId]);
 
   if (!user) {
@@ -254,14 +254,27 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
     if (!activeThread || !text || isSending) return;
 
     setIsSending(true);
+    setDraft('');
+    userScrolledUpRef.current = false;
+
+    // Optimistic update: show the message instantly before server confirms
+    const optimisticId = `opt-${Date.now()}`;
+    const optimisticMsg: ConversationMessage = {
+      id: optimisticId,
+      requirementId: activeThread.requirementId,
+      brokerId: activeThread.brokerId,
+      senderRole: mode,
+      senderName: (user as any).name || (user as any).businessName || 'You',
+      body: text,
+      createdAt: new Date().toISOString(),
+      optimistic: true,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
       const response = await fetch(`${API_BASE}/api/messages`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders(),
-        },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
           requirementId: activeThread.requirementId,
           brokerId: activeThread.brokerId,
@@ -269,34 +282,40 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
         }),
       });
 
-      if (!response.ok) {
-        setIsSending(false);
-        return;
-      }
+      if (response.ok) {
+        const data = await response.json();
+        const realId = String(data.id);
+        const realCreatedAt: string = data.createdAt;
 
-      setDraft('');
-      userScrolledUpRef.current = false;
+        // Register real ID so delta poll skips it
+        knownIdsRef.current.add(realId);
+        if (realCreatedAt) lastTimestampRef.current = realCreatedAt;
 
-      const reload = await fetch(
-        `${API_BASE}/api/messages?requirementId=${activeThread.requirementId}&brokerId=${activeThread.brokerId}`,
-        { headers: authHeaders() }
-      );
-      if (reload.ok) {
-        const data = await reload.json();
-        const next = Array.isArray(data) ? data : [];
-        setMessages((prev) => (sameMessages(prev, next) ? prev : next));
-        setMessageLoadError(null);
+        // Swap optimistic placeholder for the confirmed message
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === optimisticId
+              ? { ...m, id: realId, createdAt: realCreatedAt || m.createdAt, optimistic: false }
+              : m
+          )
+        );
+      } else {
+        // Server rejected — remove optimistic, restore draft
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setDraft(text);
       }
     } catch {
-      setIsSending(false);
-      return;
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setDraft(text);
     } finally {
       setIsSending(false);
     }
   };
 
   const previewText = (thread: ConversationThread) => {
-    const last = messages.filter((message) => message.requirementId === thread.requirementId && message.brokerId === thread.brokerId).at(-1);
+    const last = messages
+      .filter((m) => m.requirementId === thread.requirementId && m.brokerId === thread.brokerId)
+      .at(-1);
     if (last) return last.body;
     return mode === 'buyer'
       ? 'Start a conversation with this dealer about pricing, availability, or delivery.'
@@ -305,6 +324,7 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) minmax(0, 1fr)', gap: '18px' }}>
+      {/* Thread list */}
       <aside style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '18px', boxShadow: '0 4px 20px rgba(15,23,42,0.05)', overflow: 'hidden' }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
@@ -336,14 +356,10 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                   type="button"
                   onClick={() => setActiveThreadId(thread.id)}
                   style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    border: 'none',
+                    width: '100%', textAlign: 'left', border: 'none',
                     background: isActive ? '#fff5f5' : '#fff',
                     borderBottom: '1px solid #f1f5f9',
-                    padding: '16px 18px',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s',
+                    padding: '16px 18px', cursor: 'pointer', transition: 'background 0.15s',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
@@ -352,7 +368,18 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                         <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {thread.title}
                         </span>
-                        <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#e63946', background: 'rgba(230,57,70,0.08)', padding: '2px 6px', borderRadius: '999px', textTransform: 'uppercase' }}>
+                        <span style={{
+                          fontSize: '0.625rem',
+                          fontWeight: 800,
+                          color: thread.offer.status === 'accepted' ? '#059669' : thread.offer.status === 'rejected' ? '#dc2626' : '#d97706',
+                          background: thread.offer.status === 'accepted' ? '#ecfdf5' : thread.offer.status === 'rejected' ? '#fef2f2' : '#fffbeb',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          textTransform: 'uppercase',
+                          border: `1px solid ${thread.offer.status === 'accepted' ? '#a7f3d0' : thread.offer.status === 'rejected' ? '#fecaca' : '#fef3c7'}`,
+                          display: 'inline-block',
+                          lineHeight: '1.2'
+                        }}>
                           {thread.offer.status}
                         </span>
                       </div>
@@ -370,9 +397,11 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
         </div>
       </aside>
 
+      {/* Chat panel */}
       <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '18px', boxShadow: '0 4px 20px rgba(15,23,42,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '680px' }}>
         {activeThread ? (
           <>
+            {/* Header */}
             <div style={{ padding: '20px 22px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -397,13 +426,13 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
               </div>
             </div>
 
+            {/* Messages */}
             <div
               ref={scrollContainerRef}
               onScroll={() => {
                 const el = scrollContainerRef.current;
                 if (!el) return;
-                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-                userScrolledUpRef.current = !isNearBottom;
+                userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 80;
               }}
               style={{ flex: 1, minHeight: 0, padding: '20px', background: 'linear-gradient(180deg, #fff 0%, #fafafa 100%)', overflowY: 'auto' }}
             >
@@ -411,14 +440,13 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
                   <div style={{ width: '34px', height: '34px', margin: '0 auto 12px', borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#e63946', animation: 'spin 0.8s linear infinite' }} />
                   <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a' }}>Loading messages</div>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
               ) : messageLoadError && messages.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
                   <BadgeInfo size={28} style={{ color: '#f59e0b', marginBottom: '10px' }} />
                   <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Messages unavailable</div>
-                  <p style={{ margin: '8px auto 0', maxWidth: '360px', fontSize: '0.875rem', lineHeight: 1.7 }}>
-                    {messageLoadError}
-                  </p>
+                  <p style={{ margin: '8px auto 0', maxWidth: '360px', fontSize: '0.875rem', lineHeight: 1.7 }}>{messageLoadError}</p>
                 </div>
               ) : messages.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
@@ -446,11 +474,26 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
 
                     return (
                       <div key={message.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '78%', background: isMine ? 'linear-gradient(135deg, #e63946, #c81e1e)' : '#fff', color: isMine ? '#fff' : '#0f172a', border: `1px solid ${isMine ? 'transparent' : '#e2e8f0'}`, borderRadius: '18px', padding: '14px 16px', boxShadow: isMine ? '0 10px 24px rgba(230,57,70,0.18)' : '0 6px 18px rgba(15,23,42,0.04)' }}>
+                        <div style={{
+                          maxWidth: '78%',
+                          background: isMine ? 'linear-gradient(135deg, #e63946, #c81e1e)' : '#fff',
+                          color: isMine ? '#fff' : '#0f172a',
+                          border: `1px solid ${isMine ? 'transparent' : '#e2e8f0'}`,
+                          borderRadius: '18px',
+                          padding: '14px 16px',
+                          boxShadow: isMine ? '0 10px 24px rgba(230,57,70,0.18)' : '0 6px 18px rgba(15,23,42,0.04)',
+                          opacity: message.optimistic ? 0.75 : 1,
+                          transition: 'opacity 0.2s',
+                        }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 800, opacity: isMine ? 0.9 : 1 }}>{message.senderName}</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, opacity: isMine ? 0.9 : 1 }}>
+                              {message.senderName}
+                            </span>
                             <span style={{ fontSize: '0.6875rem', fontWeight: 700, opacity: isMine ? 0.85 : 0.7, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <Clock size={11} /> {formatTime(message.createdAt)}
+                              {message.optimistic
+                                ? <><Clock size={11} /> Sending&hellip;</>
+                                : <><CheckCircle2 size={11} /> {formatTime(message.createdAt)}</>
+                              }
                             </span>
                           </div>
                           <p style={{ margin: 0, fontSize: '0.9375rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{message.body}</p>
@@ -463,24 +506,25 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
               )}
             </div>
 
+            {/* Input */}
             <div style={{ padding: '18px 20px 20px', borderTop: '1px solid #e2e8f0', background: '#fff' }}>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
                 <textarea
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder={mode === 'buyer' ? 'Message the dealer about this offer...' : 'Reply to the buyer...'}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder={mode === 'buyer' ? 'Message the dealer\u2026 (Enter to send, Shift+Enter for newline)' : 'Reply to the buyer\u2026 (Enter to send, Shift+Enter for newline)'}
                   rows={3}
                   style={{
-                    flex: 1,
-                    resize: 'none',
-                    borderRadius: '14px',
-                    border: '1px solid #cbd5e1',
-                    padding: '14px 16px',
-                    fontFamily: 'var(--font)',
-                    fontSize: '0.9375rem',
-                    outline: 'none',
-                    color: '#0f172a',
-                    background: '#fff',
+                    flex: 1, resize: 'none', borderRadius: '14px',
+                    border: '1px solid #cbd5e1', padding: '14px 16px',
+                    fontFamily: 'var(--font)', fontSize: '0.9375rem',
+                    outline: 'none', color: '#0f172a', background: '#fff',
                   }}
                 />
                 <button
@@ -488,24 +532,18 @@ const ConversationCenter: React.FC<Props> = ({ mode }) => {
                   onClick={sendMessage}
                   disabled={!draft.trim() || isSending}
                   style={{
-                    minWidth: '132px',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '14px 18px',
-                    fontFamily: 'var(--font)',
-                    fontWeight: 800,
-                    fontSize: '0.9375rem',
+                    minWidth: '132px', border: 'none', borderRadius: '14px',
+                    padding: '14px 18px', fontFamily: 'var(--font)',
+                    fontWeight: 800, fontSize: '0.9375rem',
                     cursor: draft.trim() && !isSending ? 'pointer' : 'not-allowed',
                     background: draft.trim() && !isSending ? 'linear-gradient(135deg, #e63946, #c81e1e)' : '#e2e8f0',
                     color: draft.trim() && !isSending ? '#fff' : '#94a3b8',
                     boxShadow: draft.trim() && !isSending ? '0 10px 24px rgba(230,57,70,0.18)' : 'none',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    transition: 'all 0.15s',
                   }}
                 >
-                  <Send size={16} /> {isSending ? 'Sending...' : 'Send'}
+                  <Send size={16} /> {isSending ? 'Sending\u2026' : 'Send'}
                 </button>
               </div>
             </div>

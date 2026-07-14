@@ -360,7 +360,7 @@ app.use(express.json({ limit: '2mb' }));
 // Rate limiting — auth endpoints
 app.use('/api/auth/', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: process.env.NODE_ENV === 'production' ? 30 : 500,
   message: { error: 'Too many attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -369,7 +369,7 @@ app.use('/api/auth/', rateLimit({
 // Rate limiting — general API
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: process.env.NODE_ENV === 'production' ? 300 : 5000,
   message: { error: 'Too many requests. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -1887,51 +1887,75 @@ app.patch('/api/offers/:id/respond-counter', authenticate, async (req, res) => {
 // ========== MESSAGES (authenticated) ==========
 
 app.get('/api/messages', authenticate, async (req, res) => {
-  const requirementId = Number(req.query.requirementId);
-  const brokerId = Number(req.query.brokerId);
+  const requirementId = req.query.requirementId ? Number(req.query.requirementId) : null;
+  const brokerId = req.query.brokerId ? Number(req.query.brokerId) : null;
+  const since = req.query.since ? String(req.query.since) : null;
 
-  if (!requirementId || !brokerId) {
-    return res.status(400).json({ error: 'requirementId and brokerId are required.' });
-  }
+  const currentUserId = Number(req.user.sub);
+  const role = req.user.role;
 
-  const requirement = await db.get('SELECT id, buyer_id FROM requirements WHERE id = $1', [requirementId]);
-  if (!requirement) {
-    return res.status(404).json({ error: 'Requirement not found.' });
-  }
-  const buyerId = requirement.buyer_id;
+  let query = `
+    SELECT
+      m.id,
+      m.requirement_id,
+      m.broker_id,
+      m.sender_id,
+      m.sender_role,
+      m.body,
+      to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+      u.name,
+      u.business_name
+    FROM messages m
+    INNER JOIN requirements r ON r.id = m.requirement_id
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE 1=1
+  `;
+  const params = [];
 
-  if (req.user.role !== 'admin') {
-    const userId = Number(req.user.sub);
-    const isBuyer = Number(buyerId) === userId;
-    const isBroker = Number(brokerId) === userId;
-    if (!isBuyer && !isBroker) {
-      return res.status(403).json({ error: 'You can only view your own conversation threads.' });
+  // Filter by user role/permissions
+  if (role !== 'admin') {
+    if (role === 'buyer') {
+      params.push(currentUserId);
+      query += ` AND r.buyer_id = $${params.length}`;
+    } else if (role === 'broker') {
+      params.push(currentUserId);
+      query += ` AND m.broker_id = $${params.length}`;
+    } else {
+      return res.status(403).json({ error: 'Unauthorized role.' });
     }
   }
 
-  const rows = await db.all(
-    `
-      SELECT
-        m.id,
-        m.requirement_id,
-        m.broker_id,
-        m.sender_id,
-        m.sender_role,
-        m.body,
-        m.created_at,
-        u.name,
-        u.business_name
-      FROM messages m
-      INNER JOIN requirements r ON r.id = m.requirement_id
-      LEFT JOIN users u ON u.id = m.sender_id
-      WHERE r.buyer_id = $1 AND m.broker_id = $2
-      ORDER BY m.created_at ASC, m.id ASC
-    `,
-    [buyerId, brokerId]
-  );
+  // Filter by specific thread if requested
+  if (requirementId && brokerId) {
+    const requirement = await db.get('SELECT id, buyer_id FROM requirements WHERE id = $1', [requirementId]);
+    if (!requirement) {
+      return res.status(404).json({ error: 'Requirement not found.' });
+    }
+    if (role !== 'admin') {
+      const isBuyer = Number(requirement.buyer_id) === currentUserId;
+      const isBroker = Number(brokerId) === currentUserId;
+      if (!isBuyer && !isBroker) {
+        return res.status(403).json({ error: 'You can only view your own conversation threads.' });
+      }
+    }
+    params.push(requirement.buyer_id);
+    query += ` AND r.buyer_id = $${params.length}`;
+    params.push(brokerId);
+    query += ` AND m.broker_id = $${params.length}`;
+  }
+
+  // Support delta polling
+  if (since) {
+    params.push(since);
+    query += ` AND m.created_at > $${params.length}::timestamp`;
+  }
+
+  query += ` ORDER BY m.created_at ASC, m.id ASC`;
+
+  const rows = await db.all(query, params);
 
   res.json(rows.map((row) => ({
-    id: row.id,
+    id: String(row.id),
     requirementId: row.requirement_id,
     brokerId: row.broker_id,
     senderId: row.sender_id,
@@ -1971,15 +1995,15 @@ app.post('/api/messages', authenticate, async (req, res) => {
     `
       INSERT INTO messages (requirement_id, broker_id, sender_id, sender_role, body)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, created_at
+      RETURNING id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
     `,
     [payload.requirementId, payload.brokerId, senderId, senderRole, payload.body.trim()]
   );
 
   res.json({
     ok: true,
-    id: created.id,
-    createdAt: created.created_at,
+    id: String(created.id),
+    createdAt: created.created_at, // Always unambiguous UTC ISO-8601
   });
 });
 

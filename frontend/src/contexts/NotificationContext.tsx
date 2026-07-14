@@ -1,7 +1,10 @@
-import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { DataContext } from './DataContext';
 import type { Requirement, Offer } from './DataContext';
+import toast from 'react-hot-toast';
+import { API_BASE } from '../services/api';
+import { authHeaders } from '../services/authService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -252,6 +255,77 @@ function dealerNotifications(
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const dataCtx = useContext(DataContext);
+
+  // --- Global Message Polling & Toast Alerts ---
+  const lastMessageTimestampRef = useRef<string>(new Date().toISOString());
+
+  useEffect(() => {
+    // Reset cursor to current time when user logs in or switches
+    lastMessageTimestampRef.current = new Date().toISOString();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let inFlight = false;
+    let timer: number;
+
+    const pollNewMessages = async () => {
+      if (inFlight) return;
+      inFlight = true;
+
+      try {
+        const url = `${API_BASE}/api/messages?since=${encodeURIComponent(lastMessageTimestampRef.current)}`;
+        const response = await fetch(url, { headers: authHeaders() });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          // Filter out messages sent by the logged-in user themselves
+          const otherMessages = data.filter(msg => Number(msg.senderId) !== Number(user.id));
+          
+          otherMessages.forEach(msg => {
+            // If the user is actively viewing this specific conversation thread right now,
+            // we should not pop a distracting toast notification since it appears directly on their chat screen.
+            const threadId = `req-${msg.requirementId}-broker-${msg.brokerId}`;
+            if ((window as any).__activeChatThreadId === threadId) {
+              return;
+            }
+
+            // Trigger a clean, beautiful toast notification
+            toast(`✉️ New message from ${msg.senderName}:\n"${msg.body}"`, {
+              duration: 6000,
+              position: 'top-right',
+              style: {
+                background: '#fff',
+                color: '#1e293b',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+                whiteSpace: 'pre-line',
+              }
+            });
+          });
+
+          // Move the cursor forward to the timestamp of the latest message
+          lastMessageTimestampRef.current = data[data.length - 1].createdAt;
+        }
+      } catch (err) {
+        console.error('Error polling for new messages:', err);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    // Poll every 15 seconds to fetch new messages globally
+    timer = window.setInterval(pollNewMessages, 15000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [user]);
 
   // Read IDs persisted per user
   const storageKey = user ? `notif_read_${user.id}` : null;
