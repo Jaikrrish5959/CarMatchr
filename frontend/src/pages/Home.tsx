@@ -534,6 +534,187 @@ const Home: React.FC = () => {
       {/* ===== ALL CONTENT — single unified section ===== */}
       <section style={{ position: 'relative', background: '#f8fafc', paddingTop: '40px' }}>
 
+        {/* ── Featured Dealers Grid ── */}
+        <div className="container" style={{ marginBottom: '40px' }}>
+          {/* Section header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Award size={18} color="#E53935" />
+              <span style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1A1A1A' }}>Featured Dealers</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Tamil Nadu</span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => navigate('/dealers/new')}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', border: '1px solid #E53935', borderRadius: '20px', background: 'transparent', color: '#E53935', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }}
+              >
+                New Cars <ArrowRight size={12} />
+              </button>
+              <button
+                onClick={() => navigate('/dealers/used')}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', border: '1px solid #34d399', borderRadius: '20px', background: 'transparent', color: '#059669', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }}
+              >
+                Pre-Owned <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+
+          {/* New Car Showrooms sub-label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E53935', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#E53935', letterSpacing: '0.08em', textTransform: 'uppercase' }}>New Car Showrooms</span>
+          </div>
+
+          {/* New dealer cards grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '28px' }}>
+            {allNewDealers.filter(d => d.rating >= 4.7 && d.verified).sort((a, b) => b.rating - a.rating).slice(0, 4).map((dealer, idx) => {
+              const logoInfo = getDealerLogoInfo(dealer.name);
+              const isTopRated = dealer.rating >= 4.8;
+              return (
+                <div
+                  key={`feat-new-${dealer.id}-${idx}`}
+                  onClick={() => navigate(`/dealers/${dealer.id}`)}
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #eee',
+                    borderRadius: '12px',
+                    padding: '18px 16px 14px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(229,57,53,0.10)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  {/* Type badge */}
+                  <div style={{ position: 'absolute', top: '10px', right: '10px', background: isTopRated ? '#fef3c7' : '#dcfce7', color: isTopRated ? '#d97706' : '#15803d', padding: '2px 7px', borderRadius: '6px', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', textTransform: 'uppercase' }}>
+                    {isTopRated ? <Star size={7} fill="currentColor" /> : <Zap size={7} />}
+                    {isTopRated ? 'Top Rated' : 'Active'}
+                  </div>
+                  {/* Logo */}
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: logoInfo.bg, border: `1.5px solid ${logoInfo.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 800, color: logoInfo.text, marginBottom: '6px' }}>
+                    {logoInfo.initials}
+                  </div>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#1A1A1A', lineHeight: 1.3, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {dealer.name}
+                    {dealer.verified && <BadgeCheck size={11} color="#E53935" />}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#888', fontSize: '11px' }}>
+                    <MapPin size={10} />{dealer.city}
+                    <span style={{ marginLeft: '6px', color: '#94a3b8', fontSize: '10px' }}>{dealer.brand}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#fbbf24', fontSize: '11px', fontWeight: 700 }}>
+                    <Star size={10} fill="currentColor" />
+                    {dealer.rating.toFixed(1)}
+                    <span style={{ color: '#aaa', fontWeight: 400, marginLeft: '2px' }}>({dealer.reviews})</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); navigate(`/dealers/${dealer.id}`); }}
+                      style={{ flex: 1, padding: '7px', border: '1px solid #DDD', borderRadius: '7px', background: '#fff', color: '#333', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)' }}
+                    >View Profile</button>
+                    <a href={`tel:${dealer.phone || '9876543210'}`} onClick={e => e.stopPropagation()} style={{ textDecoration: 'none' }}>
+                      <button style={{ width: '32px', height: '32px', border: '1px solid #DDD', borderRadius: '7px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <Phone size={12} color="#E53935" />
+                      </button>
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pre-Owned dealers sub-label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34d399', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#059669', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pre-Owned Car Dealers</span>
+          </div>
+
+          {/* Used dealer cards grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+            {allUsedDealers.filter(d => d.rating >= 4.5).sort((a, b) => b.rating - a.rating).slice(0, 4).map((dealer, idx) => {
+              const logoInfo = getDealerLogoInfo(dealer.name);
+              return (
+                <div
+                  key={`feat-used-${dealer.id}-${idx}`}
+                  onClick={() => navigate(`/dealers/${dealer.id}`)}
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #eee',
+                    borderRadius: '12px',
+                    padding: '18px 16px 14px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(52,211,153,0.10)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  {/* Type badge */}
+                  <div style={{ position: 'absolute', top: '10px', right: '10px', background: '#f0fdf4', color: '#15803d', padding: '2px 7px', borderRadius: '6px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Pre-Owned
+                  </div>
+                  {/* Logo */}
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: logoInfo.bg, border: `1.5px solid ${logoInfo.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 800, color: logoInfo.text, marginBottom: '6px' }}>
+                    {logoInfo.initials}
+                  </div>
+                  <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#1A1A1A', lineHeight: 1.3, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {dealer.name}
+                    {dealer.verified && <BadgeCheck size={11} color="#059669" />}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#888', fontSize: '11px' }}>
+                    <MapPin size={10} />{dealer.city}
+                    <span style={{ marginLeft: '6px', color: '#94a3b8', fontSize: '10px' }}>{dealer.brand}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#fbbf24', fontSize: '11px', fontWeight: 700 }}>
+                    <Star size={10} fill="currentColor" />
+                    {dealer.rating.toFixed(1)}
+                    <span style={{ color: '#aaa', fontWeight: 400, marginLeft: '2px' }}>({dealer.reviews})</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); navigate(`/dealers/${dealer.id}`); }}
+                      style={{ flex: 1, padding: '7px', border: '1px solid #DDD', borderRadius: '7px', background: '#fff', color: '#333', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)' }}
+                    >View Profile</button>
+                    <a href={`tel:${dealer.phone || '9876543210'}`} onClick={e => e.stopPropagation()} style={{ textDecoration: 'none' }}>
+                      <button style={{ width: '32px', height: '32px', border: '1px solid #DDD', borderRadius: '7px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <Phone size={12} color="#059669" />
+                      </button>
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom CTAs */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
+            <button
+              onClick={() => navigate('/dealers/new')}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 22px', border: 'none', borderRadius: '8px', background: '#E53935', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }}
+            >
+              View All New Car Dealers <ArrowRight size={13} />
+            </button>
+            <button
+              onClick={() => navigate('/dealers/used')}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 22px', border: '1px solid #34d399', borderRadius: '8px', background: '#fff', color: '#059669', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }}
+            >
+              View All Pre-Owned Dealers <ArrowRight size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* thin glass divider */}
+        <div className="container" style={{ marginBottom: '32px' }}>
+          <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, rgba(15,23,42,0.08), transparent)' }} />
+        </div>
+
         {/* ── Trusted Dealers strip — normal flow ── */}
         <div style={{ width: '100%', marginBottom: '40px' }}>
           {/* Label row */}

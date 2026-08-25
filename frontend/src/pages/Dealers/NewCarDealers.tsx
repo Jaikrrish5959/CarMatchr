@@ -49,7 +49,15 @@ const getLogoInfo = (name: string, brand?: string) => {
   return { ...colors, initials: inits || 'DL' };
 };
 
-const CITIES = ['Chennai', 'Coimbatore', 'Madurai', 'Salem', 'Trichy', 'Tirunelveli', 'Tiruppur', 'Vellore', 'Erode', 'Thanjavur'];
+const CITIES = [
+  'Ariyalur', 'Chengalpattu', 'Chennai', 'Coimbatore', 'Cuddalore',
+  'Dharmapuri', 'Dindigul', 'Erode', 'Kallakurichi', 'Kanyakumari',
+  'Krishnagiri', 'Madurai', 'Mayiladuthurai', 'Nagapattinam', 'Namakkal',
+  'Nilgiris', 'Perambalur', 'Pudukkottai', 'Ramanathapuram', 'Ranipet',
+  'Salem', 'Sivaganga', 'Tenkasi', 'Thanjavur', 'Theni', 'Thoothukudi',
+  'Tiruchirappalli', 'Tirunelveli', 'Tirupattur', 'Tiruppur', 'Tiruvallur',
+  'Tiruvannamalai', 'Vellore', 'Villupuram', 'Virudhunagar',
+];
 const ALL_BRANDS = ['Maruti Suzuki', 'Hyundai', 'Tata Motors', 'Mahindra', 'Toyota', 'Honda', 'Kia', 'MG', 'Nissan', 'Volkswagen', 'Skoda', 'Jaguar Land Rover'];
 
 const TOP_BRANDS = [

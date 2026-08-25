@@ -47,7 +47,12 @@ const getLogoInfo = (name: string, brand?: string) => {
   return { ...colors, initials: inits || 'DL' };
 };
 
-const CITIES = ['Chennai', 'Coimbatore', 'Madurai', 'Salem', 'Trichy', 'Tirunelveli', 'Tiruppur', 'Vellore', 'Erode', 'Thanjavur'];
+const CITIES = [
+  'Chennai', 'Chengalpattu', 'Coimbatore', 'Dindigul', 'Erode',
+  'Kanyakumari', 'Krishnagiri', 'Madurai', 'Namakkal', 'Pudukkottai',
+  'Ramanathapuram', 'Salem', 'Thanjavur', 'Thoothukudi', 'Tiruchirappalli',
+  'Tirunelveli', 'Tiruppur', 'Vellore',
+];
 
 const UsedCarDealers = () => {
   const navigate = useNavigate();
