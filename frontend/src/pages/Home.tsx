@@ -567,9 +567,9 @@ const Home: React.FC = () => {
 
           {/* New dealer cards grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '28px' }}>
-            {allNewDealers.filter(d => d.rating >= 4.7 && d.verified).sort((a, b) => b.rating - a.rating).slice(0, 4).map((dealer, idx) => {
-              const logoInfo = getDealerLogoInfo(dealer.name);
-              const isTopRated = dealer.rating >= 4.8;
+            {allNewDealers.filter(d => Number(d.rating) >= 4.7 && d.verified).sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 4).map((dealer, idx) => {
+              const logoInfo = getDealerLogoInfo(dealer.businessName);
+              const isTopRated = Number(dealer.rating) >= 4.8;
               return (
                 <div
                   key={`feat-new-${dealer.id}-${idx}`}
@@ -599,7 +599,7 @@ const Home: React.FC = () => {
                     {logoInfo.initials}
                   </div>
                   <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#1A1A1A', lineHeight: 1.3, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {dealer.name}
+                    {dealer.businessName}
                     {dealer.verified && <BadgeCheck size={11} color="#E53935" />}
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#888', fontSize: '11px' }}>
@@ -608,7 +608,7 @@ const Home: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#fbbf24', fontSize: '11px', fontWeight: 700 }}>
                     <Star size={10} fill="currentColor" />
-                    {dealer.rating.toFixed(1)}
+                    {Number(dealer.rating).toFixed(1)}
                     <span style={{ color: '#aaa', fontWeight: 400, marginLeft: '2px' }}>({dealer.reviews})</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
@@ -635,8 +635,8 @@ const Home: React.FC = () => {
 
           {/* Used dealer cards grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-            {allUsedDealers.filter(d => d.rating >= 4.5).sort((a, b) => b.rating - a.rating).slice(0, 4).map((dealer, idx) => {
-              const logoInfo = getDealerLogoInfo(dealer.name);
+            {allUsedDealers.filter(d => Number(d.rating) >= 4.5).sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 4).map((dealer, idx) => {
+              const logoInfo = getDealerLogoInfo(dealer.businessName);
               return (
                 <div
                   key={`feat-used-${dealer.id}-${idx}`}
@@ -665,7 +665,7 @@ const Home: React.FC = () => {
                     {logoInfo.initials}
                   </div>
                   <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#1A1A1A', lineHeight: 1.3, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {dealer.name}
+                    {dealer.businessName}
                     {dealer.verified && <BadgeCheck size={11} color="#059669" />}
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#888', fontSize: '11px' }}>
@@ -674,7 +674,7 @@ const Home: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#fbbf24', fontSize: '11px', fontWeight: 700 }}>
                     <Star size={10} fill="currentColor" />
-                    {dealer.rating.toFixed(1)}
+                    {Number(dealer.rating).toFixed(1)}
                     <span style={{ color: '#aaa', fontWeight: 400, marginLeft: '2px' }}>({dealer.reviews})</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
